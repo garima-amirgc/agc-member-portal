@@ -11,6 +11,7 @@ const { managerLeaveInboxWithTeam } = require("../handlers/managerInbox.handler"
 const userDeptSvc = require("../services/userDepartments.service");
 const inviteSvc = require("../services/invite.service");
 const emailSvc = require("../services/email.service");
+const { issueInviteAndEmail } = require("../services/inviteResend.service");
 
 const router = express.Router();
 router.use(authRequired);
@@ -185,38 +186,18 @@ router.post("/:id/resend-invite", allowRoles(ROLES.ADMIN), async (req, res) => {
   if (!Number.isFinite(userId) || userId < 1) {
     return res.status(400).json({ message: "Invalid user id" });
   }
-  const row = await db.prepare("SELECT id, email, name FROM users WHERE id = ?").get(userId);
-  if (!row) return res.status(404).json({ message: "User not found" });
-
-  const rawInviteToken = inviteSvc.generateInviteRawToken();
-  const inviteHash = inviteSvc.hashInviteToken(rawInviteToken);
-  const inviteExpires = inviteSvc.inviteExpiresAtIso();
-  const pwHash = inviteSvc.randomPasswordPlaceholder();
-
   try {
-    await db
-      .prepare(
-        "UPDATE users SET password = ?, invite_token_hash = ?, invite_expires_at = ? WHERE id = ?"
-      )
-      .run(pwHash, inviteHash, inviteExpires, userId);
+    const { setup_url, email_sent } = await issueInviteAndEmail(db, userId);
+    return res.json({
+      setup_url,
+      email_sent,
+      invite_status: "active",
+    });
   } catch (e) {
+    if (e.statusCode === 404) return res.status(404).json({ message: "User not found" });
     console.error("[users] resend-invite:", e);
     return res.status(500).json({ message: "Could not create invite" });
   }
-
-  const setupUrl = `${inviteSvc.publicAppBaseUrl()}/invite?token=${encodeURIComponent(rawInviteToken)}`;
-  const mail = await emailSvc.sendAccountInviteEmail({
-    to: String(row.email).trim(),
-    name: String(row.name || "").trim(),
-    setupUrl,
-    validDays: inviteSvc.INVITE_DAYS,
-  });
-
-  return res.json({
-    setup_url: setupUrl,
-    email_sent: mail.sent === true,
-    invite_status: "active",
-  });
 });
 
 // Admin: fetch a specific user + facilities

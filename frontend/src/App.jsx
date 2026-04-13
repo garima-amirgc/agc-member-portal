@@ -7,6 +7,8 @@ import AuthenticatedLayout from "./components/layout/AuthenticatedLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import InviteSetupPage from "./pages/InviteSetupPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import DashboardIndex from "./pages/DashboardIndex";
 import DashboardPage from "./pages/DashboardPage";
 import AdminUpcomingPage from "./pages/AdminUpcomingPage";
@@ -80,6 +82,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/invite" element={<InviteSetupPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<AuthenticatedLayout darkMode={darkMode} setDarkMode={setDarkMode} />}>
         <Route index element={<DashboardIndex />} />
         <Route path="dashboard" element={<DashboardPage />} />

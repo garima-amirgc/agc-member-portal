@@ -2,15 +2,15 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import api, { apiBaseURL } from "../services/api";
+import api from "../services/api";
 
-export default function InviteSetupPage() {
+export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const navigate = useNavigate();
   const { establishSession } = useAuth();
 
-  const [status, setStatus] = useState("checking"); // checking | ready | invalid
+  const [status, setStatus] = useState("checking");
   const [maskedEmail, setMaskedEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -25,7 +25,7 @@ export default function InviteSetupPage() {
     }
     let cancelled = false;
     api
-      .get(`/auth/invite-status?token=${encodeURIComponent(token)}`)
+      .get(`/auth/reset-password-status?token=${encodeURIComponent(token)}`)
       .then((r) => {
         if (cancelled) return;
         if (r.data?.valid) {
@@ -52,12 +52,12 @@ export default function InviteSetupPage() {
     }
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/complete-invite", { token, password, rememberMe });
+      const { data } = await api.post("/auth/reset-password", { token, password, rememberMe });
       establishSession(data);
       navigate("/", { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message || "Could not save password.");
+        setError(err.response?.data?.message || "Could not reset password.");
       } else {
         setError("Something went wrong.");
       }
@@ -69,7 +69,7 @@ export default function InviteSetupPage() {
   if (status === "checking") {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-brand-surface px-4 dark:bg-[#0a0a0a]">
-        <p className="text-sm text-brand-muted dark:text-stone-400">Checking your invite…</p>
+        <p className="text-sm text-brand-muted dark:text-stone-400">Checking your reset link…</p>
       </div>
     );
   }
@@ -78,19 +78,12 @@ export default function InviteSetupPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-brand-surface px-4 dark:bg-[#0a0a0a]">
         <div className="w-full max-w-md rounded-portal border border-black/[0.08] bg-white p-8 shadow-brand-lg dark:border-stone-800 dark:bg-[#141414]">
-          <h1 className="font-serif text-xl font-bold text-brand-black dark:text-white">Invite not valid</h1>
+          <h1 className="font-serif text-xl font-bold text-brand-black dark:text-white">Link not valid</h1>
           <p className="mt-2 text-sm text-brand-muted dark:text-stone-400">
-            This link may have expired or was already used. Ask your administrator for a new invite, or sign in if you
-            already set a password.
+            This reset link may have expired. Request a new one from Forgot password.
           </p>
-          <Link className="btn-primary mt-6 inline-block w-full text-center no-underline" to="/login">
-            Back to sign in
-          </Link>
-          <Link
-            className="mt-4 block text-center text-sm font-semibold text-brand-blue no-underline dark:text-brand-green"
-            to="/forgot-password"
-          >
-            Request a new setup link by email
+          <Link className="btn-primary mt-6 inline-block w-full text-center no-underline" to="/forgot-password">
+            Request again
           </Link>
         </div>
       </div>
@@ -106,10 +99,7 @@ export default function InviteSetupPage() {
         />
         <div className="relative z-[1]">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">AGC University</p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Set your password</h1>
-          <p className="mt-3 max-w-sm text-sm text-white/85">
-            Choose a secure password to finish activating your account.
-          </p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">New password</h1>
         </div>
       </div>
 
@@ -119,15 +109,14 @@ export default function InviteSetupPage() {
             className="agc-form rounded-portal border border-black/[0.08] bg-white p-8 shadow-brand-lg dark:border-stone-800 dark:bg-[#141414]"
             onSubmit={onSubmit}
           >
-            <h2 className="font-serif text-2xl font-bold text-brand-black dark:text-white">Create password</h2>
+            <h2 className="font-serif text-2xl font-bold text-brand-black dark:text-white">Choose a new password</h2>
             {maskedEmail ? (
               <p className="mt-2 text-sm text-brand-muted dark:text-stone-400">
                 Account: <span className="font-semibold text-brand-black dark:text-stone-200">{maskedEmail}</span>
               </p>
             ) : null}
-            <p className="mt-3 text-xs leading-relaxed text-brand-muted dark:text-stone-400">
-              Use at least 10 characters with at least one letter and one number. API:{" "}
-              <code className="font-mono text-[11px]">{apiBaseURL}</code>
+            <p className="mt-3 text-xs text-brand-muted dark:text-stone-400">
+              At least 10 characters with one letter and one number.
             </p>
 
             {error ? (
@@ -165,11 +154,11 @@ export default function InviteSetupPage() {
             </label>
 
             <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? "Saving…" : "Activate account"}
+              {loading ? "Saving…" : "Update password & sign in"}
             </button>
 
             <Link className="mt-4 block text-center text-sm font-semibold text-brand-blue dark:text-brand-green" to="/login">
-              Already have a password? Sign in
+              Back to sign in
             </Link>
           </form>
         </div>

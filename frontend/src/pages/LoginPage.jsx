@@ -1,6 +1,6 @@
 import axios from "axios";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { apiBaseURL } from "../services/api";
 
@@ -13,6 +13,7 @@ export default function LoginPage() {
     email: isDev ? "admin@company.com" : "",
     password: isDev ? "admin123" : "",
   });
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +22,7 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(form.email, form.password);
+      await login(form.email, form.password, rememberMe);
       navigate("/", { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -31,7 +32,7 @@ export default function LoginPage() {
           const code = err.response?.data?.code;
           if (code === "INVITE_PENDING") {
             setError(
-              "This account is waiting for you to set a password. Open the invite link from your email, or ask an administrator to resend it."
+              "This account still needs a password. Check your email for the invite, or use Forgot password below to resend the setup link."
             );
           } else if (code === "INVITE_EXPIRED") {
             setError(
@@ -151,13 +152,31 @@ export default function LoginPage() {
 
             <label className="mb-1.5 block text-sm font-bold text-brand-black dark:text-stone-200">Password</label>
             <input
-              className="mb-6 w-full rounded-portal border border-black/[0.1] bg-white px-3.5 py-3 text-sm text-brand-black outline-none transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/20 dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-brand-green dark:focus:ring-brand-green/25"
+              className="mb-3 w-full rounded-portal border border-black/[0.1] bg-white px-3.5 py-3 text-sm text-brand-black outline-none transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/20 dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-brand-green dark:focus:ring-brand-green/25"
               type="password"
               autoComplete="current-password"
               placeholder="••••••••"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
+
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-brand-black dark:text-stone-200">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 rounded border-stone-400 text-brand-blue focus:ring-brand-blue dark:border-stone-500"
+                />
+                Remember me
+              </label>
+              <Link
+                to="/forgot-password"
+                className="text-sm font-semibold text-brand-blue hover:underline dark:text-brand-green"
+              >
+                Forgot password?
+              </Link>
+            </div>
 
             <button
               type="submit"

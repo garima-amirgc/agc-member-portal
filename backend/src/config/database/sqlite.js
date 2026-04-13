@@ -344,6 +344,16 @@ async function initDb() {
   } catch {
     /* exists */
   }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN password_reset_token_hash TEXT");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN password_reset_expires_at TEXT");
+  } catch {
+    /* exists */
+  }
 
   rawDb.exec(`
     CREATE TABLE IF NOT EXISTS it_tickets (

@@ -235,7 +235,60 @@ async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
 </body>
 </html>`;
 
-  return sendMail({ to, subject, text, html });
+  const out = await sendMail({ to, subject, text, html });
+  if (out.skipped) {
+    console.warn(
+      "[EMAIL] Invite email not sent — configure SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM (and set APP_BASE_URL / FRONTEND_URL to your public site URL for correct links)."
+    );
+  }
+  return out;
+}
+
+/**
+ * Password reset for accounts that already completed invite setup.
+ */
+async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
+  if (!to) return { skipped: true };
+  const mins = validMinutes ?? 60;
+  const subject = "Reset your AGC University password";
+  const text = [
+    `Hello${name ? ` ${name}` : ""},`,
+    "",
+    "We received a request to reset your password. Open the link below to choose a new password:",
+    "",
+    String(resetUrl || "").trim(),
+    "",
+    `This link expires in about ${mins} minutes.`,
+    "",
+    "If you did not request this, you can ignore this email.",
+    "",
+    "AGC University",
+  ].join("\n");
+
+  const link = escapeHtml(String(resetUrl || "").trim());
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="font-family: Segoe UI, Arial, sans-serif; line-height: 1.5; color: #1c1d1f;">
+  <p>Hello${name ? ` ${escapeHtml(name)}` : ""},</p>
+  <p>We received a request to reset your password.</p>
+  <p style="margin: 24px 0;">
+    <a href="${link}" style="display:inline-block;padding:12px 20px;background:#0B3EAF;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Reset password</a>
+  </p>
+  <p style="font-size: 13px; color: #5c5f66;">Or paste this URL into your browser:<br/><span style="word-break: break-all;">${link}</span></p>
+  <p style="font-size: 12px; color: #5c5f66;">This link expires in about ${mins} minutes.</p>
+  <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
+  <p style="font-size: 12px; color: #5c5f66;">AGC University</p>
+</body>
+</html>`;
+
+  const out = await sendMail({ to, subject, text, html });
+  if (out.skipped) {
+    console.warn(
+      "[EMAIL] Password reset email not sent — configure SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM (and APP_BASE_URL / FRONTEND_URL for correct links)."
+    );
+  }
+  return out;
 }
 
 module.exports = {
@@ -245,4 +298,5 @@ module.exports = {
   sendManagerCourseCompletionEmail,
   sendITTicketCreatedEmail,
   sendAccountInviteEmail,
+  sendPasswordResetEmail,
 };

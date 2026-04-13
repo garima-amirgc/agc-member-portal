@@ -170,6 +170,8 @@ async function migrateColumns(client) {
     "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token_hash TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_expires_at TIMESTAMPTZ",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_hash TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ",
   ];
   for (const q of alters) {
     try {

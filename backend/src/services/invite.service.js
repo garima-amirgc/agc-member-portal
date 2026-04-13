@@ -57,7 +57,13 @@ function maskEmail(email) {
 
 function publicAppBaseUrl() {
   const raw = process.env.APP_BASE_URL || process.env.FRONTEND_URL || "http://localhost:5173";
-  return String(raw).trim().replace(/\/+$/, "");
+  const u = String(raw).trim().replace(/\/+$/, "");
+  if ((process.env.NODE_ENV === "production" || process.env.RENDER) && /localhost|127\.0\.0\.1/i.test(u)) {
+    console.warn(
+      "[APP_BASE_URL] Invite and password-reset links point at localhost. Set APP_BASE_URL or FRONTEND_URL to your public React app URL (e.g. https://your-site.onrender.com)."
+    );
+  }
+  return u;
 }
 
 module.exports = {
