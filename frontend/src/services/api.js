@@ -38,6 +38,13 @@ function resolveApiBaseURL() {
 
   if (typeof window !== "undefined") {
     const { hostname, port } = window.location;
+
+    /** Render: static site is often `name-web.onrender.com` and the API is `name.onrender.com`. */
+    const renderSibling = /^(.+)-web\.onrender\.com$/i.exec(hostname);
+    if (renderSibling) {
+      return `https://${renderSibling[1]}.onrender.com`;
+    }
+
     const isLocal =
       hostname === "localhost" ||
       hostname === "127.0.0.1" ||
