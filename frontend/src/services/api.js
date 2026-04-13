@@ -25,7 +25,20 @@ function resolveApiBaseURL() {
   try {
     const fromStorage = typeof localStorage !== "undefined" && localStorage.getItem("AGC_API_URL");
     if (fromStorage && String(fromStorage).trim()) {
-      return String(fromStorage).trim().replace(/\/+$/, "");
+      const u = String(fromStorage).trim().replace(/\/+$/, "");
+      if (typeof window !== "undefined" && /^https?:\/\//i.test(u)) {
+        try {
+          if (new URL(u).origin === window.location.origin) {
+            /* Mis-set to the SPA origin — ignore so Render sibling / env can apply */
+          } else {
+            return u;
+          }
+        } catch {
+          return u;
+        }
+      } else {
+        return u;
+      }
     }
   } catch {
     /* ignore */
@@ -61,6 +74,11 @@ function resolveApiBaseURL() {
   return "/api";
 }
 
+/** Current API base (re-resolve; prefer this over the snapshot `apiBaseURL` for URLs at runtime). */
+export function getApiBaseURL() {
+  return resolveApiBaseURL();
+}
+
 export const apiBaseURL = resolveApiBaseURL();
 
 /**
@@ -70,7 +88,7 @@ export const apiBaseURL = resolveApiBaseURL();
  *   use `/api/tickets/...` so the request hits the Express `/api` mount (or Vite proxy), not `/tickets` on the dev server.
  */
 export function ticketAttachmentsUploadPath() {
-  const b = String(apiBaseURL || "");
+  const b = String(getApiBaseURL() || "");
   if (b === "/api") return "/tickets/attachments/upload";
   return "/api/tickets/attachments/upload";
 }
@@ -81,7 +99,7 @@ export function ticketAttachmentsUploadPath() {
  */
 export function usersResendInvitePath(userId) {
   const id = encodeURIComponent(String(userId));
-  const b = String(apiBaseURL || "");
+  const b = String(getApiBaseURL() || "");
   if (b === "/api") return `/users/${id}/resend-invite`;
   return `/api/users/${id}/resend-invite`;
 }
@@ -95,10 +113,10 @@ export function usersResendInvitePath(userId) {
 export async function postUsersResendInvite(userId) {
   const id = encodeURIComponent(String(userId));
   const path = `/api/users/${id}/resend-invite`;
-  const cfg = { timeout: 15000 };
+  const cfg = { timeout: 90000 };
   if (typeof window !== "undefined") {
     const pageOrigin = window.location.origin;
-    const base = String(apiBaseURL || "");
+    const base = String(getApiBaseURL() || "");
     let crossOriginApi = false;
     if (/^https?:\/\//i.test(base)) {
       try {
@@ -125,7 +143,7 @@ export async function postItTicketAttachment(fd) {
   const cfg = { timeout: 120000 };
   if (typeof window !== "undefined") {
     const pageOrigin = window.location.origin;
-    const base = String(apiBaseURL || "");
+    const base = String(getApiBaseURL() || "");
     let crossOriginApi = false;
     if (/^https?:\/\//i.test(base)) {
       try {
@@ -147,11 +165,13 @@ export async function postItTicketAttachment(fd) {
 }
 
 const api = axios.create({
-  baseURL: apiBaseURL,
-  timeout: 15000,
+  baseURL: "",
+  /** Render free tier cold starts can exceed 15s; admin DELETE etc. need headroom */
+  timeout: 90000,
 });
 
 api.interceptors.request.use((config) => {
+  config.baseURL = resolveApiBaseURL();
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;

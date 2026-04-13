@@ -1,4 +1,4 @@
-import { apiBaseURL } from "../services/api";
+import { getApiBaseURL } from "../services/api";
 
 /**
  * Turn stored `/uploads/...` paths into a browser-loadable URL.
@@ -10,7 +10,7 @@ export function resolvePublicMediaUrl(stored) {
   if (!s) return "";
   if (/^https?:\/\//i.test(s)) return s;
   if (s.startsWith("/")) {
-    const base = String(apiBaseURL || "").replace(/\/+$/, "");
+    const base = String(getApiBaseURL() || "").replace(/\/+$/, "");
     if (base.startsWith("http://") || base.startsWith("https://")) {
       return `${base}${s}`;
     }

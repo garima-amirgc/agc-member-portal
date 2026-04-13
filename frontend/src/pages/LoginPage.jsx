@@ -2,7 +2,7 @@ import axios from "axios";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { apiBaseURL } from "../services/api";
+import { getApiBaseURL } from "../services/api";
 
 const isDev = import.meta.env.DEV;
 
@@ -45,7 +45,7 @@ export default function LoginPage() {
           setError("Invalid email or password.");
         } else if (!err.response) {
           setError(
-            `Cannot reach API at ${apiBaseURL}. Open two terminals: (1) cd backend && npm run dev  (2) cd frontend && npm run dev  Then open the URL Vite prints (e.g. http://localhost:5173). Do not open index.html from the file explorer.`
+            `Cannot reach API at ${getApiBaseURL()}. Open two terminals: (1) cd backend && npm run dev  (2) cd frontend && npm run dev  Then open the URL Vite prints (e.g. http://localhost:5173). Do not open index.html from the file explorer.`
           );
         } else {
           setError(err.response?.data?.message || "Login failed.");
@@ -124,7 +124,7 @@ export default function LoginPage() {
             {isDev ? (
               <p className="mb-6 rounded-portal border border-dashed border-brand-blue/25 bg-brand-surface/80 px-3 py-2 text-xs leading-relaxed text-brand-muted dark:border-white/15 dark:bg-stone-900/80 dark:text-stone-400">
                 <span className="font-semibold text-brand-blue dark:text-brand-green">Dev:</span> API{" "}
-                <code className="font-mono text-[11px] text-slate-700 dark:text-stone-300">{apiBaseURL}</code>
+                <code className="font-mono text-[11px] text-slate-700 dark:text-stone-300">{getApiBaseURL()}</code>
                 {" — "}
                 <code className="font-mono text-[11px]">VITE_API_URL</code> in{" "}
                 <code className="font-mono text-[11px]">frontend/.env</code> if needed.

@@ -5,7 +5,7 @@ import { normalizeFacilityParam } from "../constants/facilities";
 import { PAGE_PADDING, PAGE_SHELL } from "../constants/pageLayout";
 import { useAuth } from "../context/AuthContext";
 import { useResourceProgress } from "../hooks/useResourceProgress";
-import api, { apiBaseURL } from "../services/api";
+import api, { getApiBaseURL } from "../services/api";
 import { CATEGORIES, computeProgress, mergeLmsResourceItems, seedItems } from "../utils/resourcesContent";
 
 /** PDF / images / plain text: load through authenticated API stream (same bucket as videos). */
@@ -192,7 +192,7 @@ export default function ResourceDocumentPage() {
       setViewMode("loading");
       setTextContent(null);
       const token = localStorage.getItem("token");
-      fetch(`${apiBaseURL}/resources/documents/${doc.id}/stream`, {
+      fetch(`${getApiBaseURL()}/resources/documents/${doc.id}/stream`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
         .then((r) => {

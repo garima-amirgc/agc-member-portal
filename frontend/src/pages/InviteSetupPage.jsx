@@ -2,7 +2,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import api, { apiBaseURL } from "../services/api";
+import api, { getApiBaseURL } from "../services/api";
 
 export default function InviteSetupPage() {
   const [searchParams] = useSearchParams();
@@ -127,7 +127,7 @@ export default function InviteSetupPage() {
             ) : null}
             <p className="mt-3 text-xs leading-relaxed text-brand-muted dark:text-stone-400">
               Use at least 10 characters with at least one letter and one number. API:{" "}
-              <code className="font-mono text-[11px]">{apiBaseURL}</code>
+              <code className="font-mono text-[11px]">{getApiBaseURL()}</code>
             </p>
 
             {error ? (

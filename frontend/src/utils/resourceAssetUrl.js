@@ -1,4 +1,4 @@
-import { apiBaseURL } from "../services/api";
+import { getApiBaseURL } from "../services/api";
 
 /** Backend serves `/uploads` as static files; resolve relative paths against the API host (or Vite proxy origin). */
 export function resolveResourceAssetUrl(url) {
@@ -6,7 +6,7 @@ export function resolveResourceAssetUrl(url) {
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return path;
   if (path.startsWith("/")) {
-    const b = String(apiBaseURL || "").trim();
+    const b = String(getApiBaseURL() || "").trim();
     if (/^https?:\/\//i.test(b)) {
       try {
         const u = new URL(b.replace(/\/+$/, ""));
