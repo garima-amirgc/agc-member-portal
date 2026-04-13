@@ -1,0 +1,304 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    font-family: Inter, Roboto, ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    background: linear-gradient(165deg, #f8fafc 0%, #eef2fb 45%, #e8edf7 100%);
+    background-attachment: fixed;
+    color: #0f172a;
+  }
+
+  ::selection {
+    background-color: rgba(11, 62, 175, 0.14);
+    color: #0f172a;
+  }
+
+  .dark body {
+    background: #0a0a0a;
+    color: #f1f5f9;
+  }
+
+  .dark ::selection {
+    background-color: rgba(167, 211, 68, 0.25);
+    color: #f8fafc;
+  }
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Aboreto", ui-serif, Georgia, "Times New Roman", serif;
+}
+
+.app-dashboard h1,
+.app-dashboard h2,
+.app-dashboard h3,
+.app-dashboard h4,
+.app-dashboard h5,
+.app-dashboard h6 {
+  font-family: "Marcellus", ui-serif, Georgia, "Times New Roman", serif;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.dark .app-dashboard h1,
+.dark .app-dashboard h2,
+.dark .app-dashboard h3,
+.dark .app-dashboard h4,
+.dark .app-dashboard h5,
+.dark .app-dashboard h6 {
+  color: #f8fafc;
+}
+
+/* Upcoming promo cards: keep titles white on blue gradient (beats .app-dashboard h3 { color: #000 }). */
+.app-dashboard .upcoming-event-card h3 {
+  color: #ffffff;
+}
+
+@layer components {
+  .card {
+    @apply p-5 transition duration-200;
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(11, 62, 175, 0.06);
+  }
+
+  .dark .card {
+    border-color: rgba(167, 211, 68, 0.18);
+    background-color: #141414;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .card:hover {
+    box-shadow: 0 4px 20px rgba(11, 62, 175, 0.1), 0 2px 8px rgba(15, 23, 42, 0.06);
+    border-color: rgba(11, 62, 175, 0.22);
+  }
+
+  .dark .card:hover {
+    border-color: rgba(167, 211, 68, 0.35);
+  }
+
+  /* Internal card titles — brand accent */
+  .app-dashboard .card > h2:first-child,
+  .app-dashboard .card > h3:first-child {
+    color: #0b3eaf;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 2px solid rgba(167, 211, 68, 0.55);
+  }
+
+  .dark .app-dashboard .card > h2:first-child,
+  .dark .app-dashboard .card > h3:first-child {
+    color: #a7d344;
+    border-bottom-color: rgba(11, 62, 175, 0.5);
+  }
+
+  /* Narrow “Upcoming” rail: smaller title, no heavy underline */
+  .app-dashboard .card.upcoming-rail > h2:first-child,
+  .app-dashboard .card.upcoming-rail > h3:first-child {
+    padding-bottom: 0;
+    margin-bottom: 0.25rem;
+    border-bottom: none;
+  }
+
+  .dark .app-dashboard .card.upcoming-rail > h2:first-child,
+  .dark .app-dashboard .card.upcoming-rail > h3:first-child {
+    border-bottom: none;
+  }
+
+  /* Shared: pill-style corners, compact height */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-bold text-white shadow-none transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+    border-radius: 9999px;
+    min-height: 40px;
+    border: 2px solid #082d82;
+    background-color: #0b3eaf;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: #082d82;
+    border-color: #061f5c;
+  }
+
+  .dark .btn-primary {
+    border-color: #a7d344;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-bold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+    border-radius: 9999px;
+    min-height: 40px;
+    border: 2px solid #000000;
+    background-color: #ffffff;
+    color: #000000;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background-color: #f7f9fe;
+    border-color: #0b3eaf;
+    color: #0b3eaf;
+  }
+
+  .dark .btn-secondary {
+    border-color: #ffffff;
+    background-color: #141414;
+    color: #ffffff;
+  }
+
+  .dark .btn-secondary:hover:not(:disabled) {
+    background-color: #1f1f1f;
+    border-color: #a7d344;
+    color: #a7d344;
+  }
+
+  /* Neutral bordered actions (Edit, Refresh, Back, Reject leave, etc.) */
+  .btn-outline {
+    @apply inline-flex items-center justify-center px-3.5 py-1.5 text-sm font-semibold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+    border-radius: 9999px;
+    min-height: 36px;
+    border: 2px solid rgba(11, 62, 175, 0.28);
+    background-color: #ffffff;
+    color: #000000;
+  }
+
+  .btn-outline:hover:not(:disabled) {
+    border-color: #0b3eaf;
+    background-color: #f7f9fe;
+    color: #0b3eaf;
+  }
+
+  .dark .btn-outline {
+    border-color: rgba(167, 211, 68, 0.4);
+    background-color: #141414;
+    color: #f5f5f5;
+  }
+
+  .dark .btn-outline:hover:not(:disabled) {
+    border-color: #a7d344;
+    background-color: #1a1a1a;
+    color: #a7d344;
+  }
+
+  /* Remove / delete — same shape as btn-outline */
+  .btn-danger {
+    @apply inline-flex items-center justify-center px-3.5 py-1.5 text-sm font-semibold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+    border-radius: 9999px;
+    min-height: 36px;
+    border: 2px solid #e02b20;
+    background-color: #ffffff;
+    color: #c4241a;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background-color: rgba(224, 43, 32, 0.1);
+    border-color: #c4241a;
+    color: #a01d15;
+  }
+
+  .dark .btn-danger {
+    background-color: #141414;
+    color: #fca5a5;
+    border-color: #e02b20;
+  }
+
+  .dark .btn-danger:hover:not(:disabled) {
+    background-color: rgba(224, 43, 32, 0.2);
+  }
+
+  /* Approve / positive action — same geometry as outline row */
+  .btn-success {
+    @apply inline-flex items-center justify-center px-3.5 py-1.5 text-sm font-bold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+    border-radius: 9999px;
+    min-height: 36px;
+    border: 2px solid #15803d;
+    background-color: #16a34a;
+  }
+
+  .btn-success:hover:not(:disabled) {
+    background-color: #15803d;
+    border-color: #166534;
+  }
+
+  .dark .btn-success {
+    border-color: #4ade80;
+  }
+}
+
+@layer utilities {
+  /**
+   * Portal forms: 16px (1rem) for labels, fields, dropdown choices, helper text, and actions.
+   * Overrides Tailwind text-* utilities inside `.agc-form` only.
+   */
+  .agc-form .text-xs,
+  .agc-form .text-sm,
+  .agc-form .text-\[10px\],
+  .agc-form .text-\[11px\],
+  .agc-form .text-lg,
+  .agc-form .text-xl,
+  .agc-form .text-2xl,
+  .agc-form .text-3xl,
+  .agc-form .text-4xl {
+    font-size: 1rem !important;
+  }
+
+  .agc-form h1,
+  .agc-form h2,
+  .agc-form h3,
+  .agc-form h4 {
+    font-size: 1rem !important;
+  }
+
+  .agc-form label,
+  .agc-form input,
+  .agc-form select,
+  .agc-form textarea,
+  .agc-form option,
+  .agc-form p,
+  .agc-form li,
+  .agc-form code {
+    font-size: 1rem !important;
+  }
+
+  .agc-form [type="file"],
+  .agc-form [type="file"]::file-selector-button {
+    font-size: 1rem !important;
+  }
+
+  .agc-form .btn-primary,
+  .agc-form .btn-secondary,
+  .agc-form .btn-outline,
+  .agc-form .btn-danger,
+  .agc-form .btn-success {
+    font-size: 1rem !important;
+  }
+
+  @media (min-width: 640px) {
+    .agc-form .sm\:text-sm,
+    .agc-form .sm\:text-xs,
+    .agc-form .sm\:text-lg,
+    .agc-form .sm\:text-xl {
+      font-size: 1rem !important;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .agc-form .lg\:text-sm,
+    .agc-form .lg\:text-xs,
+    .agc-form .lg\:text-lg,
+    .agc-form .lg\:text-xl,
+    .agc-form .lg\:text-2xl,
+    .agc-form .lg\:text-3xl {
+      font-size: 1rem !important;
+    }
+  }
+}

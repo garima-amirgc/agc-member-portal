@@ -1,0 +1,192 @@
+/**
+ * AGC University — brand palette (always applied):
+ * #0B3EAF blue · #A7D344 green · #E02B20 red · #000000 black · #ffffff white
+ */
+:root {
+  --agc-blue: #0b3eaf;
+  --agc-blue-hover: #082d82;
+  --agc-blue-soft: #e8eef8;
+  --agc-green: #a7d344;
+  --agc-green-hover: #8fb536;
+  --agc-green-soft: rgba(167, 211, 68, 0.18);
+  --agc-red: #e02b20;
+  --agc-red-hover: #c4241a;
+  --agc-black: #000000;
+  --agc-white: #ffffff;
+  --agc-surface: #eef2fb;
+  --agc-surface-2: #f7f9fe;
+}
+
+body {
+  background-color: var(--agc-surface) !important;
+  color: var(--agc-black) !important;
+}
+
+html.dark body {
+  background-color: #0a0a0a !important;
+  color: #f5f5f5 !important;
+}
+
+.agc-app-shell {
+  background-color: var(--agc-surface) !important;
+}
+
+html.dark .agc-app-shell {
+  background-color: #0a0a0a !important;
+}
+
+.agc-app-shell > .agc-main-column {
+  background: linear-gradient(180deg, #fafbfd 0%, #f7f9fc 100%) !important;
+}
+
+html.dark .agc-app-shell > .agc-main-column {
+  background: #0a0a0a !important;
+}
+
+/* Sidebar — #0B3EAF (light & dark) */
+.agc-sidebar-shell {
+  background-color: var(--agc-blue) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 4px 0 28px rgba(11, 62, 175, 0.25) !important;
+}
+
+html.dark .agc-sidebar-shell {
+  background-color: var(--agc-blue) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+}
+
+/* Active row: lime chip on blue sidebar */
+.agc-sidebar-shell .agc-nav-active {
+  background-color: var(--agc-green) !important;
+  color: var(--agc-black) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15) !important;
+}
+
+.agc-sidebar-shell .agc-nav-active svg {
+  color: var(--agc-black) !important;
+}
+
+html.dark .agc-sidebar-shell .agc-nav-active {
+  background-color: var(--agc-green) !important;
+  color: var(--agc-black) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25) !important;
+}
+
+html.dark .agc-sidebar-shell .agc-nav-active svg {
+  color: var(--agc-black) !important;
+}
+
+/**
+ * Sidebar nav scrollbar — light track, blue thumb, end caps + arrow buttons (WebKit/Blink).
+ * Reference: slim pill track (#f0f0f0), thumb #4a76d4, small black triangles.
+ */
+.agc-sidebar-nav-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #4a76d4 #f0f0f0;
+}
+
+.agc-sidebar-nav-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.agc-sidebar-nav-scroll::-webkit-scrollbar-track {
+  margin-block: 2px;
+  background-color: #f0f0f0;
+  border-radius: 9999px;
+}
+
+.agc-sidebar-nav-scroll::-webkit-scrollbar-thumb {
+  background-color: #4a76d4;
+  border-radius: 9999px;
+  border: 2px solid #f0f0f0;
+}
+
+.agc-sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #3d66c0;
+}
+
+.agc-sidebar-nav-scroll::-webkit-scrollbar-button:single-button {
+  display: block;
+  width: 10px;
+  background-color: #f0f0f0;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.agc-sidebar-nav-scroll::-webkit-scrollbar-button:single-button:vertical:decrement {
+  height: 12px;
+  border-radius: 9999px 9999px 0 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath fill='%23000000' d='M4%200L8%205L0%205z'/%3E%3C/svg%3E");
+  background-size: 7px 5px;
+}
+
+.agc-sidebar-nav-scroll::-webkit-scrollbar-button:single-button:vertical:increment {
+  height: 12px;
+  border-radius: 0 0 9999px 9999px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath fill='%23000000' d='M0%200L8%200L4%205z'/%3E%3C/svg%3E");
+  background-size: 7px 5px;
+}
+
+.agc-login-hero {
+  background-color: var(--agc-blue) !important;
+  color: var(--agc-white) !important;
+}
+
+footer.agc-footer-reserved {
+  margin-top: auto;
+  background-color: var(--agc-white) !important;
+}
+
+footer.agc-footer-reserved .agc-footer-reserved-bar {
+  height: 3px;
+  width: 100%;
+  /* Brand red #E02B20 with subtle light/dark variation */
+  background: linear-gradient(90deg, #f04a41 0%, #e02b20 50%, #c4241a 100%);
+}
+
+footer.agc-footer-reserved .agc-footer-reserved-inner {
+  padding-top: 0.625rem;
+  padding-bottom: 0.75rem;
+  text-align: right;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--agc-black) !important;
+}
+
+footer.agc-footer-reserved .agc-footer-brand {
+  color: var(--agc-blue) !important;
+  font-weight: 600;
+}
+
+footer.agc-footer-reserved .agc-footer-dot {
+  color: var(--agc-green) !important;
+  padding: 0 0.15em;
+}
+
+html.dark footer.agc-footer-reserved {
+  background-color: var(--agc-black) !important;
+}
+
+html.dark footer.agc-footer-reserved .agc-footer-reserved-inner {
+  color: var(--agc-white) !important;
+}
+
+html.dark footer.agc-footer-reserved .agc-footer-brand {
+  color: var(--agc-green) !important;
+}
+
+html.dark footer.agc-footer-reserved .agc-footer-dot {
+  color: var(--agc-red) !important;
+}
+
+.agc-page-header-stripe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 1;
+  height: 4px;
+  width: 100%;
+  background: linear-gradient(90deg, #f04a41 0%, #e02b20 50%, #c4241a 100%);
+}
