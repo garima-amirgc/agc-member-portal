@@ -79,13 +79,19 @@ export default function AdminUsersSection({ className = "card" }) {
       const { data } = await api.post("/users", payload);
       setForm(EMPTY_USER);
       if (data?.invite && data?.setup_url) {
-        setInviteBanner({ setup_url: data.setup_url, email_sent: Boolean(data.email_sent) });
+        setInviteBanner({
+          setup_url: data.setup_url,
+          email_sent: Boolean(data.email_sent),
+          email_error: data.email_error || null,
+        });
       }
       await load();
     } catch (err) {
       const st = err.response?.status;
-      const msg = err.response?.data?.message || err.message;
-      window.alert(st ? `Create failed (HTTP ${st}): ${msg}` : msg);
+      const d = err.response?.data;
+      const msg = d?.message || err.message;
+      const detail = d?.detail ? ` ${d.detail}` : "";
+      window.alert(st ? `Create failed (HTTP ${st}): ${msg}${detail}` : `${msg}${detail}`);
     } finally {
       setCreating(false);
     }
@@ -273,9 +279,15 @@ export default function AdminUsersSection({ className = "card" }) {
                 </button>
               </div>
               <p className="mt-2 text-xs opacity-90">
-                {inviteBanner.email_sent
-                  ? "We also emailed this link to the user (if SMTP is configured)."
-                  : "SMTP not configured — share the link manually, or set SMTP_HOST / EMAIL_FROM in the backend .env."}
+                {inviteBanner.email_error ? (
+                  <span className="text-amber-800 dark:text-amber-200">
+                    Email was not sent: {inviteBanner.email_error} — copy the link above or fix SMTP on the API service.
+                  </span>
+                ) : inviteBanner.email_sent ? (
+                  "We emailed this link to the user."
+                ) : (
+                  "SMTP not configured — share the link manually, or set SMTP on the API service (Render → agc-member-portal → Environment)."
+                )}
               </p>
             </div>
           ) : null}

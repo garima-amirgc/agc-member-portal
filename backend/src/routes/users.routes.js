@@ -292,17 +292,26 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
 
     if (useInvite) {
       const setupUrl = `${inviteSvc.publicAppBaseUrl()}/invite?token=${encodeURIComponent(rawInviteToken)}`;
-      const mail = await emailSvc.sendAccountInviteEmail({
-        to: String(email).trim(),
-        name: String(name).trim(),
-        setupUrl,
-        validDays: inviteSvc.INVITE_DAYS,
-      });
+      let emailSent = false;
+      let emailError = null;
+      try {
+        const mail = await emailSvc.sendAccountInviteEmail({
+          to: String(email).trim(),
+          name: String(name).trim(),
+          setupUrl,
+          validDays: inviteSvc.INVITE_DAYS,
+        });
+        emailSent = mail.sent === true;
+      } catch (mailErr) {
+        console.error("[users] invite email failed (user was created):", mailErr);
+        emailError = String(mailErr?.message || mailErr).slice(0, 300);
+      }
       return res.status(201).json({
         id: userId,
         invite: true,
         setup_url: setupUrl,
-        email_sent: mail.sent === true,
+        email_sent: emailSent,
+        email_error: emailError || undefined,
         invite_status: "active",
       });
     }
@@ -314,8 +323,14 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
     if (code === "23505" || /unique|duplicate/i.test(msg)) {
       return res.status(409).json({ message: "A user with this email already exists. Edit that user or use Resend invite." });
     }
+    if (code === "23503" || /foreign key/i.test(msg)) {
+      return res.status(400).json({ message: "Invalid manager or related data. Check manager selection." });
+    }
     console.error("[users] create user:", e);
-    return res.status(400).json({ message: "Could not create user" });
+    return res.status(400).json({
+      message: "Could not create user",
+      detail: msg ? msg.slice(0, 400) : undefined,
+    });
   }
 });
 
