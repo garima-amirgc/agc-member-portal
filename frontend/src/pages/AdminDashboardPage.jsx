@@ -397,7 +397,10 @@ export default function AdminDashboardPage() {
                       className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-brand-blue-soft file:px-2 file:py-1 file:text-xs file:font-semibold dark:file:bg-white/10"
                     />
                     <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      mp4, webm, mov, mkv. Large uploads are allowed several minutes to finish.
+                      mp4, webm, mov, mkv. Large uploads are allowed several minutes to finish. If you save without a file,
+                      open the course in <strong className="font-semibold">Uploaded videos</strong> and choose a file under{" "}
+                      <strong className="font-semibold">Add another lesson (video)</strong> — that uploads to Spaces and
+                      creates the lesson.
                     </p>
                   </div>
                   <button type="submit" className="btn-primary w-full" disabled={creatingCourse}>
@@ -544,7 +547,8 @@ export default function AdminDashboardPage() {
                           </ul>
                         ) : (
                           <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                            No lessons yet — upload a video below.
+                            No lessons yet — choose a video file under <strong className="font-semibold">Add another lesson (video)</strong>{" "}
+                            below (saving metadata alone does not upload a file).
                           </p>
                         )}
                         {Array.isArray(c.lessons) &&
@@ -570,7 +574,7 @@ export default function AdminDashboardPage() {
                             type="file"
                             accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mp4,.webm,.mov,.mkv"
                             className="mt-1 text-xs"
-                            disabled={courseEdit?.id === c.id || uploadingCourseId === c.id}
+                            disabled={uploadingCourseId === c.id}
                             onChange={(e) => {
                               const f = e.target.files?.[0];
                               if (f) onVideoUpload(c.id, f, e.target);
