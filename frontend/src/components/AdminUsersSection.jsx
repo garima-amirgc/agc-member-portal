@@ -230,8 +230,12 @@ export default function AdminUsersSection({ className = "card" }) {
       await load();
     } catch (err) {
       const st = err.response?.status;
-      const msg = err.response?.data?.message || err.message;
-      window.alert(st ? `Delete failed (HTTP ${st}): ${msg}` : msg);
+      const data = err.response?.data;
+      const msg = data?.message || err.message;
+      const pg = [data?.detail, data?.constraint].filter(Boolean).join(" — ");
+      window.alert(
+        st ? `Delete failed (HTTP ${st}): ${msg}${pg ? `\n\n${pg}` : ""}` : `${msg}${pg ? `\n\n${pg}` : ""}`
+      );
     } finally {
       setDeletingId(null);
     }

@@ -55,15 +55,52 @@ function maskEmail(email) {
   return `${show}@${domain}`;
 }
 
+/**
+ * On Render, the API service URL is often `https://name.onrender.com` and the static SPA is
+ * `https://name-web.onrender.com`. When APP_BASE_URL is unset, derive the SPA URL from
+ * `RENDER_EXTERNAL_URL` (set automatically on Render).
+ */
+function inferFrontendUrlFromRenderApi() {
+  const external = process.env.RENDER_EXTERNAL_URL && String(process.env.RENDER_EXTERNAL_URL).trim();
+  if (!external) return null;
+  try {
+    const u = new URL(external);
+    if (!/\.onrender\.com$/i.test(u.hostname)) return null;
+    const host = u.hostname;
+    if (/-web\.onrender\.com$/i.test(host)) {
+      return `${u.protocol}//${host}`.replace(/\/+$/, "");
+    }
+    const base = host.replace(/\.onrender\.com$/i, "");
+    if (!base || base.toLowerCase().endsWith("-web")) return null;
+    return `${u.protocol}//${base}-web.onrender.com`.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
 function publicAppBaseUrl() {
-  const raw = process.env.APP_BASE_URL || process.env.FRONTEND_URL || "http://localhost:5173";
-  const u = String(raw).trim().replace(/\/+$/, "");
-  if ((process.env.NODE_ENV === "production" || process.env.RENDER) && /localhost|127\.0\.0\.1/i.test(u)) {
+  const explicit = (process.env.APP_BASE_URL || process.env.FRONTEND_URL || "").trim().replace(/\/+$/, "");
+  if (explicit) {
+    if ((process.env.NODE_ENV === "production" || process.env.RENDER) && /localhost|127\.0\.0\.1/i.test(explicit)) {
+      console.warn(
+        "[APP_BASE_URL] Invite and password-reset links point at localhost. Set APP_BASE_URL or FRONTEND_URL to your public React app URL (e.g. https://your-site.onrender.com)."
+      );
+    }
+    return explicit;
+  }
+
+  const inferred = inferFrontendUrlFromRenderApi();
+  if (inferred) {
+    return inferred;
+  }
+
+  const fallback = "http://localhost:5173";
+  if (process.env.NODE_ENV === "production" || process.env.RENDER) {
     console.warn(
-      "[APP_BASE_URL] Invite and password-reset links point at localhost. Set APP_BASE_URL or FRONTEND_URL to your public React app URL (e.g. https://your-site.onrender.com)."
+      "[APP_BASE_URL] Invite and password-reset links default to localhost. Set APP_BASE_URL or FRONTEND_URL to your static site URL, or rely on RENDER_EXTERNAL_URL (API) so we can infer *-web.onrender.com."
     );
   }
-  return u;
+  return fallback;
 }
 
 module.exports = {

@@ -1,6 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
-const { db, isPostgres } = require("../config/db");
+const { db, isPostgres, getPool } = require("../config/db");
 const { BUSINESS_UNITS, ROLES } = require("../config/constants");
 const { authRequired, allowRoles } = require("../middleware/auth");
 const { syncUserAssignmentsForFacilities } = require("../services/assignmentSync.service");
@@ -477,21 +477,91 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
   return res.json({ message: "User updated", user: { ...updated, departments: departmentsOut } });
 });
 
+/**
+ * Remove a user and dependent rows. Uses explicit deletes + updates so it still works if an older
+ * DB was created without ON DELETE CASCADE on every child FK (common cause of persistent 23503).
+ */
+async function deleteAdminUserCascade(userId, actingAdminId) {
+  if (isPostgres) {
+    const pool = getPool();
+    if (!pool) throw new Error("PostgreSQL pool unavailable");
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const uid = Number(userId);
+      const aid = Number(actingAdminId);
+      await client.query(
+        `DELETE FROM lesson_completions WHERE assignment_id IN (SELECT id FROM assignments WHERE user_id = $1)`,
+        [uid]
+      );
+      await client.query(`DELETE FROM assignments WHERE user_id = $1`, [uid]);
+      await client.query(`DELETE FROM manager_notifications WHERE manager_id = $1 OR employee_id = $1`, [uid]);
+      await client.query(`DELETE FROM leave_requests WHERE employee_id = $1 OR manager_id = $1`, [uid]);
+      await client.query(`DELETE FROM resource_progress WHERE user_id = $1`, [uid]);
+      await client.query(`DELETE FROM user_facilities WHERE user_id = $1`, [uid]);
+      await client.query(`DELETE FROM user_departments WHERE user_id = $1`, [uid]);
+      await client.query(`UPDATE it_tickets SET assignee_id = NULL WHERE assignee_id = $1`, [uid]);
+      await client.query(`DELETE FROM it_tickets WHERE user_id = $1`, [uid]);
+      await client.query(`UPDATE users SET manager_id = NULL WHERE manager_id = $1`, [uid]);
+      await client.query(`UPDATE courses SET created_by = $1 WHERE created_by = $2`, [aid, uid]);
+      await client.query(`UPDATE resource_documents SET created_by = NULL WHERE created_by = $1`, [uid]);
+      await client.query(`DELETE FROM users WHERE id = $1`, [uid]);
+      await client.query("COMMIT");
+    } catch (e) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rb) {
+        console.error("[users] delete ROLLBACK failed:", rb);
+      }
+      throw e;
+    } finally {
+      client.release();
+    }
+    return;
+  }
+
+  await db
+    .prepare(
+      `DELETE FROM lesson_completions WHERE assignment_id IN (SELECT id FROM assignments WHERE user_id = ?)`
+    )
+    .run(userId);
+  await db.prepare(`DELETE FROM assignments WHERE user_id = ?`).run(userId);
+  await db.prepare(`DELETE FROM manager_notifications WHERE manager_id = ? OR employee_id = ?`).run(userId, userId);
+  await db.prepare(`DELETE FROM leave_requests WHERE employee_id = ? OR manager_id = ?`).run(userId, userId);
+  await db.prepare(`DELETE FROM resource_progress WHERE user_id = ?`).run(userId);
+  await db.prepare(`DELETE FROM user_facilities WHERE user_id = ?`).run(userId);
+  await db.prepare(`DELETE FROM user_departments WHERE user_id = ?`).run(userId);
+  await db.prepare("UPDATE it_tickets SET assignee_id = NULL WHERE assignee_id = ?").run(userId);
+  await db.prepare(`DELETE FROM it_tickets WHERE user_id = ?`).run(userId);
+  await db.prepare("UPDATE users SET manager_id = NULL WHERE manager_id = ?").run(userId);
+  await db
+    .prepare("UPDATE courses SET created_by = ? WHERE created_by = ?")
+    .run(actingAdminId, userId);
+  await db.prepare("UPDATE resource_documents SET created_by = NULL WHERE created_by = ?").run(userId);
+  await db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+}
+
 router.delete("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
   const userId = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(userId) || userId < 1) {
     return res.status(400).json({ message: "Invalid user id" });
   }
+  if (userId === req.user.id) {
+    return res.status(400).json({ message: "You cannot delete your own account." });
+  }
   try {
-    await db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+    await deleteAdminUserCascade(userId, req.user.id);
     return res.json({ message: "User deleted" });
   } catch (e) {
     const msg = String(e?.message || "");
     const code = e?.code;
+    console.error("[users] DELETE /:id", code, e?.detail || msg, e?.table, e?.constraint);
     if (code === "23503" || /foreign key|violates foreign key/i.test(msg)) {
       return res.status(409).json({
         message:
           "Cannot delete this user while other records still reference them (e.g. courses they created, or tickets). Remove or reassign those first.",
+        detail: e?.detail || undefined,
+        constraint: e?.constraint || undefined,
       });
     }
     console.error("[users] delete:", e);
