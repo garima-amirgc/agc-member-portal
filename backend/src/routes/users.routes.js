@@ -309,6 +309,12 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
 
     return res.status(201).json({ id: userId, invite: false, invite_status: "none" });
   } catch (e) {
+    const msg = String(e?.message || "");
+    const code = e?.code;
+    if (code === "23505" || /unique|duplicate/i.test(msg)) {
+      return res.status(409).json({ message: "A user with this email already exists. Edit that user or use Resend invite." });
+    }
+    console.error("[users] create user:", e);
     return res.status(400).json({ message: "Could not create user" });
   }
 });
