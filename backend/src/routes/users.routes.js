@@ -478,8 +478,25 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
 });
 
 router.delete("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
-  await db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
-  return res.json({ message: "User deleted" });
+  const userId = Number.parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(userId) || userId < 1) {
+    return res.status(400).json({ message: "Invalid user id" });
+  }
+  try {
+    await db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+    return res.json({ message: "User deleted" });
+  } catch (e) {
+    const msg = String(e?.message || "");
+    const code = e?.code;
+    if (code === "23503" || /foreign key|violates foreign key/i.test(msg)) {
+      return res.status(409).json({
+        message:
+          "Cannot delete this user while other records still reference them (e.g. courses they created, or tickets). Remove or reassign those first.",
+      });
+    }
+    console.error("[users] delete:", e);
+    return res.status(500).json({ message: "Could not delete user" });
+  }
 });
 
 module.exports = router;

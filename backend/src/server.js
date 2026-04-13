@@ -5,7 +5,15 @@ const cors = require("cors");
 const { ROLES } = require("./config/constants");
 
 const app = express();
-app.use(cors());
+/** Static site (e.g. *-web.onrender.com) and API on another host — allow browser + Authorization preflight */
+app.use(
+  cors({
+    origin: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    maxAge: 86400,
+  })
+);
 app.use(express.json());
 
 const backendRootDir = path.join(__dirname, "..");

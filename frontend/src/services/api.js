@@ -74,9 +74,19 @@ function resolveApiBaseURL() {
   return "/api";
 }
 
+/** HTTPS page must not call http:// API (mixed content — browser blocks). */
+function ensureHttpsIfPageSecure(url) {
+  const u = String(url || "").trim();
+  if (typeof window === "undefined" || window.location.protocol !== "https:") return u;
+  if (u.startsWith("http://") && /\.onrender\.com/i.test(u)) {
+    return `https://${u.slice("http://".length)}`;
+  }
+  return u;
+}
+
 /** Current API base (re-resolve; prefer this over the snapshot `apiBaseURL` for URLs at runtime). */
 export function getApiBaseURL() {
-  return resolveApiBaseURL();
+  return ensureHttpsIfPageSecure(resolveApiBaseURL());
 }
 
 export const apiBaseURL = resolveApiBaseURL();
@@ -171,7 +181,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  config.baseURL = resolveApiBaseURL();
+  config.baseURL = ensureHttpsIfPageSecure(resolveApiBaseURL());
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
