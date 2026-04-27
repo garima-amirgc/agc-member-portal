@@ -25,7 +25,7 @@ async function main() {
     const { sendMail } = email;
     await sendMail({
       to,
-      subject: "AGC University — SMTP test",
+      subject: "Member Portal — SMTP test",
       text: "If you received this message, SMTP is configured correctly.",
       html: "<p>If you received this message, <strong>SMTP is configured correctly</strong>.</p>",
     });

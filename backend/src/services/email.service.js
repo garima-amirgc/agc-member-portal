@@ -1,5 +1,8 @@
 const nodemailer = require("nodemailer");
 
+/** Display name in email subjects, footers, and plain-text signatures. */
+const APP_MAIL_BRAND = "Member Portal";
+
 function isEmailConfigured() {
   return !!(
     process.env.SMTP_HOST &&
@@ -84,7 +87,7 @@ async function sendManagerCourseCompletionEmail({
     "",
     `Time: ${new Date().toISOString()}`,
     "",
-    "This message was sent by AGC University.",
+    `This message was sent by ${APP_MAIL_BRAND}.`,
   ].join("\n");
 
   const html = `
@@ -98,7 +101,7 @@ async function sendManagerCourseCompletionEmail({
   </p>
   <p style="font-size: 12px; color: #6a6f73;">${escapeHtml(new Date().toLocaleString())}</p>
   <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
-  <p style="font-size: 12px; color: #6a6f73;">AGC University — automated notification</p>
+  <p style="font-size: 12px; color: #6a6f73;">${APP_MAIL_BRAND} — automated notification</p>
 </body>
 </html>`;
 
@@ -170,7 +173,7 @@ async function sendITTicketCreatedEmail({
     ...attLines,
     `Submitted: ${new Date().toISOString()}`,
     "",
-    "AGC University — IT ticketing",
+    `${APP_MAIL_BRAND} — IT ticketing`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -191,7 +194,7 @@ async function sendITTicketCreatedEmail({
   ${attHtml}
   <p style="font-size: 12px; color: #5c5f66;">${escapeHtml(new Date().toLocaleString())}</p>
   <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
-  <p style="font-size: 12px; color: #5c5f66;">AGC University — automated IT notification</p>
+  <p style="font-size: 12px; color: #5c5f66;">${APP_MAIL_BRAND} — automated IT notification</p>
 </body>
 </html>`;
 
@@ -203,7 +206,7 @@ async function sendITTicketCreatedEmail({
  */
 async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
   if (!to) return { skipped: true };
-  const subject = "Set up your AGC University account";
+  const subject = `Set up your ${APP_MAIL_BRAND} account`;
   const text = [
     `Hello${name ? ` ${name}` : ""},`,
     "",
@@ -215,7 +218,7 @@ async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
     "",
     "If you did not expect this message, you can ignore it.",
     "",
-    "AGC University",
+    APP_MAIL_BRAND,
   ].join("\n");
 
   const link = escapeHtml(String(setupUrl || "").trim());
@@ -231,7 +234,7 @@ async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
   <p style="font-size: 13px; color: #5c5f66;">Or paste this URL into your browser:<br/><span style="word-break: break-all;">${link}</span></p>
   <p style="font-size: 12px; color: #5c5f66;">This link expires in about ${validDays ?? 7} days.</p>
   <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
-  <p style="font-size: 12px; color: #5c5f66;">AGC University</p>
+  <p style="font-size: 12px; color: #5c5f66;">${APP_MAIL_BRAND}</p>
 </body>
 </html>`;
 
@@ -250,7 +253,7 @@ async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
 async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
   if (!to) return { skipped: true };
   const mins = validMinutes ?? 60;
-  const subject = "Reset your AGC University password";
+  const subject = `Reset your ${APP_MAIL_BRAND} password`;
   const text = [
     `Hello${name ? ` ${name}` : ""},`,
     "",
@@ -262,7 +265,7 @@ async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
     "",
     "If you did not request this, you can ignore this email.",
     "",
-    "AGC University",
+    APP_MAIL_BRAND,
   ].join("\n");
 
   const link = escapeHtml(String(resetUrl || "").trim());
@@ -278,7 +281,7 @@ async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
   <p style="font-size: 13px; color: #5c5f66;">Or paste this URL into your browser:<br/><span style="word-break: break-all;">${link}</span></p>
   <p style="font-size: 12px; color: #5c5f66;">This link expires in about ${mins} minutes.</p>
   <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
-  <p style="font-size: 12px; color: #5c5f66;">AGC University</p>
+  <p style="font-size: 12px; color: #5c5f66;">${APP_MAIL_BRAND}</p>
 </body>
 </html>`;
 

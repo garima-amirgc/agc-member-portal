@@ -368,7 +368,7 @@ export default function AdminUsersSection({ className = "card" }) {
             </div>
 
             <div className="rounded border p-3 dark:border-slate-700">
-              <div className="mb-2 text-sm font-medium">Facilities</div>
+              <div className="mb-2 text-sm font-medium">Sites</div>
               <div className="flex flex-wrap gap-3">
                 {FACILITIES.map((f) => {
                   const checked = (form.business_units || []).includes(f);
@@ -612,7 +612,7 @@ export default function AdminUsersSection({ className = "card" }) {
               </div>
 
               <div className="rounded border p-3 dark:border-slate-700">
-                <div className="mb-2 text-sm font-medium">Facilities</div>
+                <div className="mb-2 text-sm font-medium">Sites</div>
                 <div className="flex flex-wrap gap-3">
                   {FACILITIES.map((f) => {
                     const checked = (editing.facilities || []).includes(f);

@@ -53,7 +53,8 @@ function rewriteSqliteToPostgres(sql) {
 function insertHasNoSerialId(sqlTrimmed) {
   return (
     /^\s*insert\s+into\s+user_facilities\b/i.test(sqlTrimmed) ||
-    /^\s*insert\s+into\s+user_departments\b/i.test(sqlTrimmed)
+    /^\s*insert\s+into\s+user_departments\b/i.test(sqlTrimmed) ||
+    /^\s*insert\s+into\s+report_access_users\b/i.test(sqlTrimmed)
   );
 }
 

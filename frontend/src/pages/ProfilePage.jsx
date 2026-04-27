@@ -7,13 +7,14 @@ import ManagerEmployeeManagement from "../components/ManagerEmployeeManagement";
 import ReportingHierarchyTree from "../components/ReportingHierarchyTree";
 import { useAuth } from "../context/AuthContext";
 import { formatDepartments } from "../utils/userDepts";
+import { friendlyErrorMessage } from "../services/friendlyError";
 
 export default function ProfilePage() {
   const { user, refreshMe } = useAuth();
 
   const [me, setMe] = useState(null);
   const [assignments, setAssignments] = useState([]);
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", birth_month: "", birth_day: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -30,8 +31,10 @@ export default function ProfilePage() {
         name: meRes.data?.name ?? "",
         email: meRes.data?.email ?? "",
         password: "",
+        birth_month: meRes.data?.birth_month != null ? String(meRes.data.birth_month) : "",
+        birth_day: meRes.data?.birth_day != null ? String(meRes.data.birth_day) : "",
       });
-    })().catch((e) => setError(e?.message || "Failed to load profile"));
+    })().catch((e) => setError(friendlyErrorMessage(e, "Failed to load profile")));
   }, [user]);
 
   const overallProgress = useMemo(() => {
@@ -43,6 +46,15 @@ export default function ProfilePage() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.name || !form.email) return;
+    const birthMonthRaw = String(form.birth_month ?? "").trim();
+    const birthDayRaw = String(form.birth_day ?? "").trim();
+    const includeDob = birthMonthRaw !== "" && birthDayRaw !== "";
+    const birth_month = includeDob ? Number(birthMonthRaw) : undefined;
+    const birth_day = includeDob ? Number(birthDayRaw) : undefined;
+    if (includeDob && (!Number.isFinite(birth_month) || !Number.isFinite(birth_day))) {
+      setError("Invalid date of birth. Please select a month and day.");
+      return;
+    }
 
     setSaving(true);
     setError("");
@@ -52,6 +64,7 @@ export default function ProfilePage() {
       await api.put("/users/me", {
         name: form.name,
         email: form.email,
+        ...(includeDob ? { birth_month, birth_day } : {}),
         ...(form.password ? { password: form.password } : {}),
       });
 
@@ -64,7 +77,7 @@ export default function ProfilePage() {
       setSuccess("Profile updated");
       setForm((f) => ({ ...f, password: "" }));
     } catch (e2) {
-      setError(e2?.response?.data?.message || e2?.message || "Failed to update profile");
+      setError(friendlyErrorMessage(e2, "Failed to update profile"));
     } finally {
       setSaving(false);
     }
@@ -84,7 +97,7 @@ export default function ProfilePage() {
       setSuccess("Profile image updated");
       setAvatarFile(null);
     } catch (e2) {
-      setError(e2?.response?.data?.message || e2?.message || "Failed to upload image");
+      setError(friendlyErrorMessage(e2, "Failed to upload image"));
     } finally {
       setAvatarUploading(false);
     }
@@ -185,6 +198,50 @@ export default function ProfilePage() {
             <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
               New password: at least 10 characters, with at least one letter and one number.
             </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">Date of birth (optional)</label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select
+                className="w-full rounded border p-2 dark:bg-slate-700"
+                value={form.birth_month}
+                onChange={(e) => setForm({ ...form, birth_month: e.target.value })}
+              >
+                <option value="">Month</option>
+                {[
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December",
+                ].map((m, idx) => (
+                  <option key={m} value={String(idx + 1)}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="w-full rounded border p-2 dark:bg-slate-700"
+                value={form.birth_day}
+                onChange={(e) => setForm({ ...form, birth_day: e.target.value })}
+              >
+                <option value="">Day</option>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={String(d)}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">We only store month and day (not the year).</p>
           </div>
 
           <button type="submit" className="btn-primary" disabled={saving}>

@@ -38,11 +38,8 @@ export default function FacilitiesPage() {
     <main className={PAGE_SHELL}>
       <section>
         <h1 className="mb-3 text-2xl font-bold text-[#000000] dark:text-white">Facilities</h1>
-        <p className="text-sm text-[#0B3EAF] dark:text-[#A7D344]">Courses are assigned based on your facilities.</p>
-        <p className="mt-2 max-w-3xl text-xs text-[#000000]/75 dark:text-white/70">
-          Each tile counts <strong className="font-semibold">assigned</strong> trainings only, grouped by the{" "}
-          <strong className="font-semibold">course facility</strong> (AGC, AQM, SCF, ASP). Creating a course in Learning
-          admin does not change these numbers until you assign that course to someone; unassigned courses stay admin-only.
+        <p className="text-sm text-[#0B3EAF] dark:text-[#A7D344]">
+          Training assignments and progress by facility.
         </p>
       </section>
 

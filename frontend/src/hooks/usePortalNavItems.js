@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   IconBuilding,
   IconCalendar,
+  IconChart,
   IconCog,
   IconHome,
   IconTeam,
@@ -25,7 +26,6 @@ export function usePortalNavItems(role) {
         end: true,
         icon: IconHome,
         label: "Home",
-        desc: "Quick links & overview",
       });
     } else {
       main.push({
@@ -33,7 +33,6 @@ export function usePortalNavItems(role) {
         end: true,
         icon: IconHome,
         label: "Home",
-        desc: "Dashboard",
       });
     }
 
@@ -42,7 +41,6 @@ export function usePortalNavItems(role) {
         to: "/manager",
         icon: IconTeam,
         label: "Manager hub",
-        desc: "Team, leave & calendar",
       });
     }
 
@@ -50,20 +48,28 @@ export function usePortalNavItems(role) {
       {
         to: "/facilities",
         icon: IconBuilding,
-        label: "Facilities",
-        desc: "Facility pages & courses",
+        label: "AGC University",
+      },
+      {
+        to: "/reports",
+        icon: IconChart,
+        label: "Reports",
+        desc: "Power BI dashboards",
+      },
+      {
+        to: "/employee-engagement-calendar",
+        icon: IconCalendar,
+        label: "Engagement calendar",
       },
       {
         to: "/it-tickets",
         icon: IconTicket,
         label: "IT Ticket",
-        desc: "Report IT issues",
       },
       {
         to: "/profile",
         icon: IconUser,
         label: "Profile",
-        desc: "Account & leave requests",
       },
     );
 
@@ -74,24 +80,36 @@ export function usePortalNavItems(role) {
           to: "/upcoming",
           icon: IconCalendar,
           label: "Upcoming events",
-          desc: "Facility calendars",
         },
         {
           to: "/users",
           icon: IconUsers,
           label: "Users",
-          desc: "Roles & access",
         },
         {
           to: "/admin",
           icon: IconCog,
           label: "Learning admin",
-          desc: "Videos, documents & assignments",
+          end: true,
+        },
+        {
+          to: "/admin/reports",
+          icon: IconChart,
+          label: "Manage reports",
+          desc: "Add Power BI embeds",
+          end: true,
+        },
+        {
+          to: "/admin/system",
+          icon: IconCog,
+          label: "System status",
+          desc: "Health & metrics",
+          end: true,
         },
       );
     }
 
-    const homeTo = isAdmin ? "/upcoming" : "/";
+    const homeTo = "/";
 
     return { mainItems: main, adminItems: admin, homeTo };
   }, [role]);

@@ -1,5 +1,5 @@
 /**
- * AGC University — brand palette (always applied):
+ * Member Portal — brand palette (always applied):
  * #0B3EAF blue · #A7D344 green · #E02B20 red · #000000 black · #ffffff white
  */
 :root {
@@ -135,7 +135,8 @@ html.dark .agc-sidebar-shell .agc-nav-active svg {
 
 footer.agc-footer-reserved {
   margin-top: auto;
-  background-color: var(--agc-white) !important;
+  /* Transparent so the birds don't sit on a white/gray block. */
+  background-color: transparent !important;
 }
 
 footer.agc-footer-reserved .agc-footer-reserved-bar {
@@ -165,7 +166,7 @@ footer.agc-footer-reserved .agc-footer-dot {
 }
 
 html.dark footer.agc-footer-reserved {
-  background-color: var(--agc-black) !important;
+  background-color: transparent !important;
 }
 
 html.dark footer.agc-footer-reserved .agc-footer-reserved-inner {

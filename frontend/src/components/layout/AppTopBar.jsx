@@ -22,6 +22,7 @@ function greetingForHour(h) {
 
 function TopBarNavLink({ item, onNavigate }) {
   const Icon = item.icon;
+  const sub = item.desc?.trim();
   return (
     <NavLink
       to={item.to}
@@ -42,9 +43,9 @@ function TopBarNavLink({ item, onNavigate }) {
       />
       <span className="min-w-0">
         <span className="block font-semibold leading-tight">{item.label}</span>
-        <span className="mt-0.5 block text-xs text-[#5c5f66] dark:text-white/70">
-          {item.desc}
-        </span>
+        {sub ? (
+          <span className="mt-0.5 block text-xs text-[#5c5f66] dark:text-white/70">{sub}</span>
+        ) : null}
       </span>
     </NavLink>
   );
@@ -84,12 +85,7 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
       className={`sticky top-0 z-30 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white/95 py-3.5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-[#0f0f0f]/95 ${PAGE_GUTTER_X}`}
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-          AGC University
-        </p>
-        <p className="mt-0.5 truncate text-lg font-bold leading-tight text-slate-900 sm:text-xl dark:text-white">
-          {greeting}
-        </p>
+        <p className="truncate text-lg font-bold leading-tight text-slate-900 sm:text-xl dark:text-white">{greeting}</p>
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
@@ -170,10 +166,7 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
                   setOpen(false);
                 }}
               >
-                <span className="font-semibold">Theme</span>
-                <span className="mt-0.5 block text-xs text-[#0B3EAF] dark:text-[#A7D344]">
-                  {darkMode ? "Dark" : "Light"} — tap to switch
-                </span>
+                <span className="font-semibold">Theme: {darkMode ? "Dark" : "Light"}</span>
               </button>
               <div className="mx-2 border-t border-[#0B3EAF]/10 dark:border-white/10" />
               <button

@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
   manager_id INTEGER REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   profile_image_url TEXT,
-  department TEXT
+  department TEXT,
+  birth_month INTEGER,
+  birth_day INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS user_facilities (
@@ -109,6 +111,34 @@ CREATE TABLE IF NOT EXISTS facility_upcoming (
   business_units TEXT
 );
 
+CREATE TABLE IF NOT EXISTS birthday_list (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  company_name TEXT NOT NULL,
+  department TEXT NOT NULL,
+  dob TEXT NOT NULL, -- YYYY-MM-DD
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS embedded_reports (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  business_units TEXT NOT NULL,
+  embed_src TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS report_access_users (
+  report_id INTEGER NOT NULL REFERENCES embedded_reports(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(report_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS it_tickets (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -163,6 +193,7 @@ async function migrateColumns(client) {
     "ALTER TABLE facility_upcoming ADD COLUMN IF NOT EXISTS show_from_at TEXT",
     "ALTER TABLE facility_upcoming ADD COLUMN IF NOT EXISTS event_at TEXT",
     "ALTER TABLE facility_upcoming ADD COLUMN IF NOT EXISTS business_units TEXT",
+    "ALTER TABLE birthday_list ADD COLUMN IF NOT EXISTS company_name TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT",
     "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS assignee_id INTEGER REFERENCES users(id)",
     "ALTER TABLE courses ADD COLUMN IF NOT EXISTS resource_category TEXT",
@@ -172,6 +203,9 @@ async function migrateColumns(client) {
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_expires_at TIMESTAMPTZ",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_hash TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_month INTEGER",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_day INTEGER",
+    "CREATE TABLE IF NOT EXISTS report_access_users (report_id INTEGER NOT NULL REFERENCES embedded_reports(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, UNIQUE(report_id, user_id))",
   ];
   for (const q of alters) {
     try {
@@ -187,6 +221,16 @@ async function migrateColumns(client) {
     `);
   } catch (e) {
     console.warn("[pg migrate] it_tickets closed_at backfill:", e.message);
+  }
+
+  try {
+    await client.query(`
+      UPDATE birthday_list
+      SET company_name = 'AGC University'
+      WHERE company_name IS NULL OR TRIM(company_name) = ''
+    `);
+  } catch (e) {
+    console.warn("[pg migrate] birthday_list company_name backfill:", e.message);
   }
 }
 

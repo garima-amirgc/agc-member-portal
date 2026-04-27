@@ -60,6 +60,18 @@ export function IconCog({ className = "h-5 w-5" }) {
   );
 }
 
+export function IconChart({ className = "h-5 w-5" }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 19V5m0 14h16M8 16v-5m4 5V8m4 8v-3"
+      />
+    </svg>
+  );
+}
+
 export function IconTeam({ className = "h-5 w-5" }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>

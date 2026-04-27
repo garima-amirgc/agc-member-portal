@@ -1,15 +1,12 @@
 import { NavLink } from "react-router-dom";
 import { useMemo, useState } from "react";
+import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../../constants/branding";
 import { useAuth } from "../../context/AuthContext";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
-import {
-  IconChevron,
-  IconHelp,
-  IconSearch,
-  IconSparkle,
-} from "./SidebarIcons";
+import { IconChevron, IconHelp, IconSearch } from "./SidebarIcons";
 
 function NavItem({ to, end, icon: Icon, label, desc }) {
+  const sub = desc?.trim();
   return (
     <NavLink
       to={to}
@@ -39,14 +36,16 @@ function NavItem({ to, end, icon: Icon, label, desc }) {
           />
           <div className="min-w-0">
             <div className="text-sm font-semibold leading-tight">{label}</div>
-            <div
-              className={[
-                "mt-0.5 text-xs leading-snug",
-                isActive ? "text-black/70 dark:text-black/70" : "text-white/75 dark:text-white/75",
-              ].join(" ")}
-            >
-              {desc}
-            </div>
+            {sub ? (
+              <div
+                className={[
+                  "mt-0.5 text-xs leading-snug",
+                  isActive ? "text-black/70 dark:text-black/70" : "text-white/75 dark:text-white/75",
+                ].join(" ")}
+              >
+                {sub}
+              </div>
+            ) : null}
           </div>
         </>
       )}
@@ -78,12 +77,14 @@ function NavSection({ title, defaultOpen, children }) {
 
 export default function AppSidebar() {
   const { user } = useAuth();
-  const { mainItems, adminItems, homeTo } = usePortalNavItems(user?.role);
+  const { mainItems, adminItems } = usePortalNavItems(user?.role);
   const [query, setQuery] = useState("");
 
   const q = query.trim().toLowerCase();
   const match = (item) =>
-    !q || item.label.toLowerCase().includes(q) || item.desc.toLowerCase().includes(q);
+    !q ||
+    item.label.toLowerCase().includes(q) ||
+    (item.desc && String(item.desc).toLowerCase().includes(q));
 
   const filteredMain = mainItems.filter(match);
   const filteredAdmin = adminItems.filter(match);
@@ -95,18 +96,15 @@ export default function AppSidebar() {
     <aside className="agc-sidebar-shell z-20 hidden w-[288px] shrink-0 flex-col border-r border-black/10 lg:sticky lg:top-0 lg:flex lg:h-dvh">
       <div className="border-b border-black/10 px-4 py-5 dark:border-white/15">
         <NavLink
-          to={homeTo}
+          to="/"
           className="flex flex-col items-center gap-2.5 text-center text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B3EAF] rounded-portal"
         >
           <img
-            src="/agc-group-logo.png"
-            alt="AGC GROUP"
-            className="h-[4.5rem] w-auto max-w-[200px] object-contain object-center"
+            src={AMIR_GROUP_LOGO_SRC}
+            alt="AMIR Group of Companies"
+            className="h-auto w-[190px] max-w-full object-contain object-center drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]"
           />
-          <div>
-            <div className="text-lg font-bold leading-tight tracking-tight text-white">AGC University</div>
-            <div className="mt-1 text-xs font-medium leading-snug text-white/75">Learning &amp; compliance</div>
-          </div>
+          <div className="text-lg font-bold leading-tight tracking-tight text-white">{APP_DISPLAY_NAME}</div>
         </NavLink>
 
         <label className="relative mt-4 block">
@@ -150,14 +148,6 @@ export default function AppSidebar() {
           <IconHelp className="h-5 w-5 text-white" />
           Help
         </NavLink>
-        <a
-          href="#"
-          className="mt-0.5 flex items-center gap-3 rounded-portal px-3 py-2 text-sm font-medium text-white hover:bg-black/10 dark:hover:bg-white/10"
-          onClick={(e) => e.preventDefault()}
-        >
-          <IconSparkle className="h-5 w-5 text-[#E02B20]" />
-          What&apos;s new
-        </a>
       </div>
     </aside>
   );

@@ -2,8 +2,8 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import AppSidebar from "./AppSidebar";
 import AppTopBar from "./AppTopBar";
+import BottomBirdBand from "./BottomBirdBand";
 import Footer from "./Footer";
-import PageBirdAccent from "./PageBirdAccent";
 
 export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
   const { user } = useAuth();
@@ -14,11 +14,11 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
       <AppSidebar />
       <div className="agc-main-column relative flex min-w-0 flex-1 flex-col">
         <AppTopBar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <div className="min-h-0 min-w-0 flex-1">
+        <div className="min-h-0 min-w-0 flex-1 pb-6">
           <Outlet />
         </div>
+        <BottomBirdBand />
         <Footer />
-        <PageBirdAccent />
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { leaveJson, managerInboxWithTeamJson } from "../services/leaveClient";
 import { useAuth } from "../context/AuthContext";
 import ManagerLeaveCalendar from "../components/ManagerLeaveCalendar";
 import ManagerTeamGraph from "../components/ManagerTeamGraph";
+import { friendlyErrorMessage } from "../services/friendlyError";
 
 const leaveStatusClass = {
   pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
@@ -31,7 +32,7 @@ export default function ManagerDashboardPage() {
       const res = await api.get("/notifications/me");
       setNotifications(res.data);
     } catch (e) {
-      setError(e?.response?.data?.message || e?.message || "Failed to load notifications");
+      setError(friendlyErrorMessage(e, "Failed to load notifications"));
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ export default function ManagerDashboardPage() {
       await api.post(`/notifications/${id}/dismiss`);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch (e) {
-      setError(e?.response?.data?.message || e?.message || "Failed to dismiss");
+      setError(friendlyErrorMessage(e, "Failed to dismiss"));
     }
   };
 
@@ -81,17 +82,14 @@ export default function ManagerDashboardPage() {
       });
       await loadManagerSection();
     } catch (e) {
-      setLeaveError(e?.message || "Could not update request");
+      setLeaveError(friendlyErrorMessage(e, "Could not update request"));
     }
   };
 
   return (
     <main className={PAGE_SHELL}>
       <section>
-        <h1 className="mb-1 text-2xl font-bold">Manager Dashboard</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Team graph, leave calendar, requests, and course completion alerts.
-        </p>
+        <h1 className="mb-1 text-2xl font-bold">Manager dashboard</h1>
       </section>
 
       {teamLoading && <div className="card p-4 text-sm text-slate-500">Loading team…</div>}
@@ -100,10 +98,7 @@ export default function ManagerDashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <section className="card">
-          <h2 className="mb-1 text-lg font-semibold">Leave requests</h2>
-          <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
-            Submitted by people who have you set as their manager in Admin.
-          </p>
+          <h2 className="mb-3 text-lg font-semibold">Leave requests</h2>
           {leaveLoading && <div className="text-sm text-slate-500">Loading leave requests…</div>}
           {leaveError && <div className="rounded bg-rose-100 p-2 text-sm text-rose-700">{leaveError}</div>}
           {!leaveLoading && !leaveError && leaveInbox.length === 0 && (

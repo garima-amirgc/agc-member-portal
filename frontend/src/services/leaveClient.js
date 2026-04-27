@@ -147,7 +147,7 @@ function normalizeManagerInboxResponse(data) {
 }
 
 const STALE_API_TEAM_MSG =
-  "The API on port 5000 is still returning the old manager inbox (plain list only), so direct reports cannot load. Fix: (1) Close every backend terminal. (2) Task Manager → end any node.exe. (3) In PowerShell: cd to the AGC University\\backend folder that contains this project’s package.json, run npm run dev. (4) If you set localStorage AGC_API_URL, remove it or point it at this machine. Opening /auth/manager-leave-inbox in the browser always shows Unauthorized without a login token — that is normal.";
+  "The API on port 5000 is still returning the old manager inbox (plain list only), so direct reports cannot load. Fix: (1) Close every backend terminal. (2) Task Manager → end any node.exe. (3) In PowerShell: cd to this repo’s `backend` folder that contains this project’s package.json, run npm run dev. (4) If you set localStorage AGC_API_URL, remove it or point it at this machine. Opening /auth/manager-leave-inbox in the browser always shows Unauthorized without a login token — that is normal.";
 
 async function teamFallback(inboxArr) {
   const tryAxiosTeam = async () => {

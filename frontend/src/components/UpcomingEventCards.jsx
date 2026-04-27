@@ -25,7 +25,13 @@ function getVisibleFromIso(ev) {
  * @param {boolean} showFacility - when true, show AGC/AQM/… badge (e.g. merged home feed).
  * @param {boolean} compact - sidebars: smaller type; order is image (if any) → title → date → detail.
  */
-export default function UpcomingEventCards({ items, loading, showFacility = false, compact = false }) {
+export default function UpcomingEventCards({
+  items,
+  loading,
+  showFacility = false,
+  compact = false,
+  onItemClick,
+}) {
   if (loading) {
     return (
       <p className={compact ? "text-[11px] text-slate-500 dark:text-slate-400" : "text-sm text-slate-500 dark:text-slate-400"}>
@@ -87,10 +93,23 @@ export default function UpcomingEventCards({ items, loading, showFacility = fals
           </p>
         ) : null;
 
+        const clickable = typeof onItemClick === "function";
         return (
           <article
             key={ev.id}
-            className={`upcoming-event-card flex flex-col overflow-hidden rounded-xl border border-white/15 bg-gradient-to-br from-[#1558d6] via-[#0C3EB0] to-[#06245c] shadow-md ring-1 ring-white/10 ${compact ? "" : "rounded-2xl shadow-lg"}`}
+            className={`upcoming-event-card flex flex-col overflow-hidden rounded-xl border border-white/15 bg-gradient-to-br from-[#1558d6] via-[#0C3EB0] to-[#06245c] shadow-md ring-1 ring-white/10 ${compact ? "" : "rounded-2xl shadow-lg"} ${
+              clickable ? "cursor-pointer transition hover:brightness-[1.03] focus:outline-none focus:ring-2 focus:ring-white/40" : ""
+            }`}
+            role={clickable ? "button" : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            onClick={clickable ? () => onItemClick(ev) : undefined}
+            onKeyDown={
+              clickable
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") onItemClick(ev);
+                  }
+                : undefined
+            }
           >
             {hasImage ? (
               <div

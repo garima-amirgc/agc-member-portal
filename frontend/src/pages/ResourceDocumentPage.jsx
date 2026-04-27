@@ -245,7 +245,7 @@ export default function ResourceDocumentPage() {
       loadError === "forbidden"
         ? "You don’t have access to this document’s facility."
         : loadError === "notfound"
-          ? "Document not found. It may have been deleted, or the link may be wrong — open it from Facilities → Resources → Documents for the correct facility and category."
+          ? "Document not found. It may have been deleted, or the link may be wrong — open it from Member Portal → Resources → Documents for the correct facility and category."
           : "Could not load this document. Check that the backend is running and you are signed in.";
     return <div className={PAGE_PADDING}>{msg}</div>;
   }

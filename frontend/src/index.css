@@ -116,6 +116,19 @@ h6 {
     border-bottom: none;
   }
 
+  /* Opt-out: remove title underline on selected cards */
+  .app-dashboard .card.no-title-underline > h2:first-child,
+  .app-dashboard .card.no-title-underline > h3:first-child {
+    padding-bottom: 0;
+    margin-bottom: 0.5rem;
+    border-bottom: none;
+  }
+
+  .dark .app-dashboard .card.no-title-underline > h2:first-child,
+  .dark .app-dashboard .card.no-title-underline > h3:first-child {
+    border-bottom: none;
+  }
+
   /* Shared: pill-style corners, compact height */
   .btn-primary {
     @apply inline-flex items-center justify-center px-4 py-2 text-sm font-bold text-white shadow-none transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;

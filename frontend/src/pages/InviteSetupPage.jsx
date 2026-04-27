@@ -1,8 +1,10 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { APP_DISPLAY_NAME } from "../constants/branding";
 import { useAuth } from "../context/AuthContext";
 import api, { getApiBaseURL } from "../services/api";
+import { friendlyErrorMessage } from "../services/friendlyError";
 
 export default function InviteSetupPage() {
   const [searchParams] = useSearchParams();
@@ -56,11 +58,7 @@ export default function InviteSetupPage() {
       establishSession(data);
       navigate("/", { replace: true });
     } catch (err) {
-      if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message || "Could not save password.");
-      } else {
-        setError("Something went wrong.");
-      }
+      setError(friendlyErrorMessage(err, "Could not save password."));
     } finally {
       setLoading(false);
     }
@@ -105,7 +103,7 @@ export default function InviteSetupPage() {
           aria-hidden
         />
         <div className="relative z-[1]">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">AGC University</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">{APP_DISPLAY_NAME}</p>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Set your password</h1>
           <p className="mt-3 max-w-sm text-sm text-white/85">
             Choose a secure password to finish activating your account.

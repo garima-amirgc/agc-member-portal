@@ -3,6 +3,7 @@ import api, { postItTicketAttachment } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import { formatDepartments, userHasDepartment } from "../utils/userDepts";
+import { friendlyErrorMessage } from "../services/friendlyError";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -144,7 +145,7 @@ export default function ItTicketsPage() {
       await load();
       window.dispatchEvent(new Event("agc-it-tickets-changed"));
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Could not submit ticket.");
+      setError(friendlyErrorMessage(err, "Could not submit ticket."));
     } finally {
       setSubmitting(false);
     }
@@ -174,7 +175,7 @@ export default function ItTicketsPage() {
       }
       setAttachments(next);
     } catch (err) {
-      setUploadError(err.response?.data?.message || err.message || "Upload failed.");
+      setUploadError(friendlyErrorMessage(err, "Upload failed."));
     } finally {
       setUploadBusy(false);
     }

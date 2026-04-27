@@ -454,7 +454,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
   return (
     <section className={className}>
       <h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100 max-xl:text-base">
-        Upcoming events (facilities)
+        Upcoming events
       </h2>
       <form
         ref={addFormRef}
@@ -464,7 +464,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
         <div className={formPanelClass}>
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <span className="text-xs font-medium text-slate-600 dark:text-slate-400 max-xl:text-[0.7rem]">
-              Facilities
+              Sites
             </span>
             <button
               type="button"
@@ -775,7 +775,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
               <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5 dark:border-slate-600 dark:bg-slate-800/40">
                 <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
-                    Facilities (select one or more)
+                    Sites (select one or more)
                   </div>
                   <button
                     type="button"

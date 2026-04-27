@@ -16,6 +16,20 @@ const { issueInviteAndEmail } = require("../services/inviteResend.service");
 const router = express.Router();
 router.use(authRequired);
 
+function normalizeBirthMonthDay(month, day) {
+  const m = Number(month);
+  const d = Number(day);
+  if (!Number.isFinite(m) || !Number.isFinite(d)) return null;
+  const mo = Math.floor(m);
+  const da = Math.floor(d);
+  if (mo < 1 || mo > 12) return null;
+  if (da < 1 || da > 31) return null;
+  // Validate using a leap year so Feb 29 is allowed.
+  const dt = new Date(Date.UTC(2024, mo - 1, da));
+  if (dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== da) return null;
+  return { birth_month: mo, birth_day: da };
+}
+
 function adminUsersListSql() {
   const facAgg = isPostgres
     ? `COALESCE((SELECT string_agg(uf.business_unit, ',' ORDER BY uf.business_unit) FROM user_facilities uf WHERE uf.user_id = u.id), '') AS facilities_csv`
@@ -42,7 +56,7 @@ function adminUsersListSql() {
 router.get("/me", async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, created_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, birth_month, birth_day, created_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
     )
     .get(req.user.id);
 
@@ -71,6 +85,15 @@ router.put("/me", async (req, res) => {
 
   if (!nextName || !nextEmail) return res.status(400).json({ message: "Missing name/email" });
 
+  // DOB (month/day only) is optional. If one is provided, both must be valid.
+  const providedMonth = req.body?.birth_month;
+  const providedDay = req.body?.birth_day;
+  const wantsUpdateDob = providedMonth !== undefined || providedDay !== undefined;
+  const normalizedDob = wantsUpdateDob ? normalizeBirthMonthDay(providedMonth, providedDay) : null;
+  if (wantsUpdateDob && !normalizedDob) {
+    return res.status(400).json({ message: "Invalid date of birth (month and day only)." });
+  }
+
   if (nextEmail !== existing.email) {
     const emailExists = await db
       .prepare("SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1")
@@ -91,18 +114,39 @@ router.put("/me", async (req, res) => {
   }
 
   if (clearInvite) {
-    await db
-      .prepare(
-        "UPDATE users SET name = ?, email = ?, password = ?, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
-      )
-      .run(nextName, nextEmail, nextPassword, req.user.id);
+    if (normalizedDob) {
+      await db
+        .prepare(
+          "UPDATE users SET name = ?, email = ?, password = ?, birth_month = ?, birth_day = ?, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
+        )
+        .run(nextName, nextEmail, nextPassword, normalizedDob.birth_month, normalizedDob.birth_day, req.user.id);
+    } else {
+      await db
+        .prepare(
+          "UPDATE users SET name = ?, email = ?, password = ?, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
+        )
+        .run(nextName, nextEmail, nextPassword, req.user.id);
+    }
   } else {
-    await db.prepare("UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?").run(
-      nextName,
-      nextEmail,
-      nextPassword,
-      req.user.id
-    );
+    if (normalizedDob) {
+      await db
+        .prepare("UPDATE users SET name = ?, email = ?, password = ?, birth_month = ?, birth_day = ? WHERE id = ?")
+        .run(
+          nextName,
+          nextEmail,
+          nextPassword,
+          normalizedDob.birth_month,
+          normalizedDob.birth_day,
+          req.user.id
+        );
+    } else {
+      await db.prepare("UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?").run(
+        nextName,
+        nextEmail,
+        nextPassword,
+        req.user.id
+      );
+    }
   }
 
   return res.json({ message: "Profile updated" });

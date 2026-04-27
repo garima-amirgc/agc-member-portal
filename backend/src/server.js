@@ -55,10 +55,13 @@ async function start() {
   const uploadRoutes = require("./routes/upload.routes");
   const notificationsRoutes = require("./routes/notifications.routes");
   const upcomingRoutes = require("./routes/upcoming.routes");
+  const birthdaysRoutes = require("./routes/birthdays.routes");
   const ticketsRoutes = require("./routes/tickets.routes");
   const avatarRoutes = require("./routes/avatar.routes");
   const leaveRequestsRoutes = require("./routes/leave-requests.routes");
   const resourcesRoutes = require("./routes/resources.routes");
+  const reportsRoutes = require("./routes/reports.routes");
+  const adminRoutes = require("./routes/admin.routes");
   const { authRequired } = require("./middleware/auth");
   const leaveSvc = require("./services/leaveRequests.service");
   const managerTeamSvc = require("./services/managerTeam.service");
@@ -130,11 +133,14 @@ async function start() {
   api.use("/assignments", assignmentRoutes);
   api.use("/notifications", notificationsRoutes);
   api.use("/upcoming", upcomingRoutes);
+  api.use("/birthdays", birthdaysRoutes);
   api.use("/tickets", ticketsRoutes);
   api.use("/upload", uploadRoutes);
   api.use("/avatar", avatarRoutes);
   api.use("/leave-requests", leaveRequestsRoutes);
   api.use("/resources", resourcesRoutes);
+  api.use("/reports", reportsRoutes);
+  api.use("/admin", adminRoutes);
   app.use("/api", api);
 
   app.use("/auth", authRoutes);
@@ -144,11 +150,14 @@ async function start() {
   app.use("/assignments", assignmentRoutes);
   app.use("/notifications", notificationsRoutes);
   app.use("/upcoming", upcomingRoutes);
+  app.use("/birthdays", birthdaysRoutes);
   app.use("/tickets", ticketsRoutes);
   app.use("/upload", uploadRoutes);
   app.use("/avatar", avatarRoutes);
   app.use("/leave-requests", leaveRequestsRoutes);
   app.use("/resources", resourcesRoutes);
+  app.use("/reports", reportsRoutes);
+  app.use("/admin", adminRoutes);
 
   const seedAdminFlag = String(process.env.SEED_DEFAULT_ADMIN ?? "1").toLowerCase();
   const allowDefaultAdmin =

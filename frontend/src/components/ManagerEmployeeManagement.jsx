@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { leaveJson, managerInboxWithTeamJson } from "../services/leaveClient";
 import ProgressBar from "./ProgressBar";
+import { friendlyErrorMessage } from "../services/friendlyError";
 
 const leaveStatusClass = {
   pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
@@ -23,7 +24,7 @@ export default function ManagerEmployeeManagement() {
       setTeam(team);
       setError(teamError || "");
     } catch (e) {
-      setError(e?.message || e?.response?.data?.message || e?.data?.message || "Failed to load team");
+      setError(friendlyErrorMessage(e, "Failed to load team"));
       setTeam([]);
     } finally {
       setLoading(false);
@@ -43,7 +44,7 @@ export default function ManagerEmployeeManagement() {
       });
       await load();
     } catch (e) {
-      setLeaveActionErr(e?.message || "Could not update leave request");
+      setLeaveActionErr(friendlyErrorMessage(e, "Could not update leave request"));
     }
   };
 

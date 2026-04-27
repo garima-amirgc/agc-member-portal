@@ -214,6 +214,42 @@ const SCHEMA = `
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- Admin-managed birthday directory (shown in the below-nav strip for all users).
+  CREATE TABLE IF NOT EXISTS birthday_list (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    company_name TEXT NOT NULL,
+    department TEXT NOT NULL,
+    dob TEXT NOT NULL, -- YYYY-MM-DD
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Admin-managed embedded reports (e.g. Power BI) shown under /reports in the portal.
+  -- business_units is JSON (e.g. ["AGC","AQM"]) to control visibility by facility.
+  CREATE TABLE IF NOT EXISTS embedded_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    business_units TEXT NOT NULL, -- JSON array string
+    embed_src TEXT NOT NULL, -- iframe src URL only (safer than storing raw HTML)
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  -- Optional per-report access allowlist. If a report has any rows here,
+  -- only the listed users can see it (in addition to facility filtering).
+  CREATE TABLE IF NOT EXISTS report_access_users (
+    report_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(report_id) REFERENCES embedded_reports(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(report_id, user_id)
+  );
 `;
 
 async function initDb() {
@@ -235,6 +271,16 @@ async function initDb() {
     rawDb.exec("ALTER TABLE users ADD COLUMN profile_image_url TEXT");
   } catch {
     // column already exists
+  }
+  try {
+    rawDb.exec("ALTER TABLE birthday_list ADD COLUMN company_name TEXT");
+  } catch {
+    /* column already exists */
+  }
+  try {
+    rawDb.exec("UPDATE birthday_list SET company_name = 'AGC University' WHERE company_name IS NULL OR TRIM(company_name) = ''");
+  } catch {
+    /* ignore */
   }
   try {
     rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN start_at TEXT");
@@ -351,6 +397,16 @@ async function initDb() {
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN password_reset_expires_at TEXT");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN birth_month INTEGER");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN birth_day INTEGER");
   } catch {
     /* exists */
   }

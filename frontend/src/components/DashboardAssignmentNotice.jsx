@@ -85,29 +85,27 @@ export default function DashboardAssignmentNotice({ user }) {
         {assignedToMeCount > 0 ? (
           <li>
             {assignedToMeCount === 1
-              ? "1 IT ticket is assigned to you."
-              : `${assignedToMeCount} IT tickets are assigned to you.`}{" "}
+              ? "1 IT ticket assigned to you."
+              : `${assignedToMeCount} IT tickets assigned to you.`}{" "}
             <Link
               to="/it-tickets"
               className="font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 dark:text-[#A7D344]"
             >
-              Open IT Ticket
-            </Link>{" "}
-            to resolve or update them. This notice goes away when all assigned tickets are completed.
+              View tickets
+            </Link>
           </li>
         ) : null}
         {myOpenCount > 0 ? (
           <li>
             {myOpenCount === 1
-              ? "You have 1 ticket you submitted that is still open or in progress."
-              : `You have ${myOpenCount} tickets you submitted that are still open or in progress.`}{" "}
+              ? "1 open ticket you submitted."
+              : `${myOpenCount} open tickets you submitted.`}{" "}
             <Link
               to="/it-tickets"
               className="font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 dark:text-[#A7D344]"
             >
-              View IT Ticket
-            </Link>{" "}
-            for status. This notice goes away when IT marks them completed.
+              View tickets
+            </Link>
           </li>
         ) : null}
       </ul>

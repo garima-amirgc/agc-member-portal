@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { leaveJson } from "../services/leaveClient";
+import { friendlyErrorMessage } from "../services/friendlyError";
 
 const statusClass = {
   pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
@@ -24,7 +25,7 @@ export default function LeaveRequestPanel({ className = "", embedded = false }) 
       const data = await leaveJson("/auth/my-leave-requests", { method: "GET" });
       setList(Array.isArray(data) ? data : []);
     } catch (e) {
-      setErr(e?.message || "Failed to load requests");
+      setErr(friendlyErrorMessage(e, "Failed to load requests"));
     } finally {
       setLoading(false);
     }
@@ -50,7 +51,7 @@ export default function LeaveRequestPanel({ className = "", embedded = false }) 
       await refreshMe();
       load();
     } catch (e) {
-      setErr(e?.message || "Could not submit");
+      setErr(friendlyErrorMessage(e, "Could not submit"));
     }
   };
 

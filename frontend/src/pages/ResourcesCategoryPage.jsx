@@ -162,7 +162,7 @@ export default function ResourcesCategoryPage() {
                 <strong className="font-semibold text-slate-700 dark:text-slate-200">{facilityNorm}</strong> yet. In Learning admin, the course facility and{" "}
                 <strong className="font-semibold">Also list under Resources</strong> must match this page (e.g. Sales
                 uploads only appear under the <strong className="font-semibold">Sales</strong> tile). Open{" "}
-                <strong className="font-semibold">Facilities → {facilityNorm} → Resources → {current.label}</strong> after
+                <strong className="font-semibold">Member Portal → {facilityNorm} → Resources → {current.label}</strong> after
                 saving the course.
               </p>
             )}

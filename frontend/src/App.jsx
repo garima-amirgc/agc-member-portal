@@ -23,6 +23,10 @@ import ResourcesCategoryPage from "./pages/ResourcesCategoryPage";
 import ResourceVideoPage from "./pages/ResourceVideoPage";
 import ResourceDocumentPage from "./pages/ResourceDocumentPage";
 import ItTicketsPage from "./pages/ItTicketsPage";
+import EmployeeEngagementCalendarPage from "./pages/EmployeeEngagementCalendarPage";
+import ReportsPage from "./pages/ReportsPage";
+import AdminReportsPage from "./pages/AdminReportsPage";
+import AdminSystemStatusPage from "./pages/AdminSystemStatusPage";
 
 function pickFacilityForLegacyResources(me) {
   try {
@@ -104,6 +108,8 @@ export default function App() {
           }
         />
         <Route path="it-tickets" element={<ItTicketsPage />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="employee-engagement-calendar" element={<EmployeeEngagementCalendarPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="facilities" element={<FacilitiesPage />} />
         <Route
@@ -122,6 +128,22 @@ export default function App() {
           element={
             <ProtectedRoute roles={["Admin"]}>
               <AdminDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/reports"
+          element={
+            <ProtectedRoute roles={["Admin"]}>
+              <AdminReportsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/system"
+          element={
+            <ProtectedRoute roles={["Admin"]}>
+              <AdminSystemStatusPage />
             </ProtectedRoute>
           }
         />

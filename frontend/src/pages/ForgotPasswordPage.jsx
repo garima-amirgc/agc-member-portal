@@ -1,7 +1,9 @@
 import axios from "axios";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { APP_DISPLAY_NAME } from "../constants/branding";
 import api from "../services/api";
+import { friendlyErrorMessage } from "../services/friendlyError";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -18,11 +20,7 @@ export default function ForgotPasswordPage() {
       const { data } = await api.post("/auth/recover-access", { email: email.trim() });
       setMessage(data?.message || "If this address is registered, check your email.");
     } catch (err) {
-      if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message || "Something went wrong.");
-      } else {
-        setError("Something went wrong.");
-      }
+      setError(friendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -36,7 +34,7 @@ export default function ForgotPasswordPage() {
           aria-hidden
         />
         <div className="relative z-[1]">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">AGC University</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">{APP_DISPLAY_NAME}</p>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Account help</h1>
           <p className="mt-3 max-w-sm text-sm text-white/85">
             Resend your setup link or reset your password. We’ll email you if we find your account.

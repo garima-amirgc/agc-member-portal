@@ -259,9 +259,9 @@ export default function AdminDashboardPage() {
   };
 
   const nav = [
-    { id: "videos", label: "Videos", desc: "Upload training videos (Resources → Videos)" },
-    { id: "documents", label: "Documents", desc: "Upload PDFs & files (Resources → Documents)" },
-    { id: "assignments", label: "Assignments", desc: "Assign video trainings to users" },
+    { id: "videos", label: "Videos" },
+    { id: "documents", label: "Documents" },
+    { id: "assignments", label: "Assignments" },
   ];
 
   return (
@@ -269,11 +269,6 @@ export default function AdminDashboardPage() {
       <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#000000] dark:text-white">Learning admin</h1>
-          <p className="mt-1 text-sm text-brand-muted dark:text-stone-400">
-            Videos and documents for Resources pages; assignments for mandatory training. Manage people under{" "}
-            <strong className="font-semibold text-brand-blue dark:text-brand-green">Users</strong>; facility events under{" "}
-            <strong className="font-semibold text-brand-blue dark:text-brand-green">Upcoming events</strong>.
-          </p>
         </div>
         <Link
           className="text-sm font-bold text-brand-blue underline underline-offset-2 hover:text-brand-blue-hover dark:text-brand-green"
@@ -304,15 +299,6 @@ export default function AdminDashboardPage() {
                   ].join(" ")}
                 >
                   <div className="text-sm font-semibold">{item.label}</div>
-                  <div
-                    className={
-                      selected
-                        ? "text-xs font-medium text-brand-muted dark:text-white/75"
-                        : "text-xs text-brand-muted dark:text-stone-400"
-                    }
-                  >
-                    {item.desc}
-                  </div>
                   {selected ? null : (
                     <div className="mt-2 h-1 w-8 rounded-full bg-brand-blue/0 transition-all group-hover:w-12 group-hover:bg-brand-blue/50" />
                   )}
@@ -329,7 +315,7 @@ export default function AdminDashboardPage() {
                 <h2 className="mb-3 text-lg font-semibold">Add video</h2>
                 <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
                   Videos are stored on DigitalOcean and listed under{" "}
-                  <strong className="font-semibold">Facilities → (facility) → Resources → (category) → Videos</strong> when
+                  <strong className="font-semibold">Member Portal → (facility) → Resources → (category) → Videos</strong> when
                   you set “List under Resources” below. Assignments still use the same entry in the Assignments tab.
                 </p>
                 <form className="agc-form space-y-2" onSubmit={createCourse}>
@@ -382,7 +368,7 @@ export default function AdminDashboardPage() {
                       ))}
                     </select>
                     <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      Example: Facilities → {courseForm.business_unit} → Resources → Finance → <strong>Videos</strong>.
+                      Example: Member Portal → {courseForm.business_unit} → Resources → Finance → <strong>Videos</strong>.
                     </p>
                   </div>
                   <div>
@@ -598,7 +584,7 @@ export default function AdminDashboardPage() {
                   Files are uploaded to the <strong className="font-semibold">same DigitalOcean Space</strong> as training
                   videos (under <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">docs/</code> keys), then
                   listed under{" "}
-                  <strong className="font-semibold">Facilities → (facility) → Resources → (category) → Documents</strong>
+                  <strong className="font-semibold">Member Portal → (facility) → Resources → (category) → Documents</strong>
                   . Use the <strong className="font-semibold">Videos</strong> tab for video files only.
                 </p>
                 <form className="agc-form space-y-3" onSubmit={uploadResourceDocument}>

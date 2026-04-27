@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
+import { friendlyErrorMessage } from "../services/friendlyError";
 
 function formatAt(iso) {
   if (!iso) return "—";
@@ -42,7 +43,7 @@ export default function ItTicketsAssigneeWidget() {
       await load();
       window.dispatchEvent(new Event("agc-it-tickets-changed"));
     } catch (e) {
-      window.alert(e.response?.data?.message || e.message || "Could not update ticket.");
+      window.alert(friendlyErrorMessage(e, "Could not update ticket."));
     } finally {
       setCompletingId(null);
     }

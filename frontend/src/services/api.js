@@ -22,6 +22,12 @@ const DEV_LIKE_PORTS = new Set([
  * - Otherwise same-origin `/api` (reverse proxy).
  */
 function resolveApiBaseURL() {
+  // In local dev, always prefer the local backend.
+  // This avoids surprises from stale `localStorage.AG C_API_URL` pointing at Render.
+  if (import.meta.env.DEV) {
+    return LOOPBACK_API;
+  }
+
   try {
     const fromStorage = typeof localStorage !== "undefined" && localStorage.getItem("AGC_API_URL");
     if (fromStorage && String(fromStorage).trim()) {
@@ -65,10 +71,6 @@ function resolveApiBaseURL() {
     if (isLocal && DEV_LIKE_PORTS.has(port)) {
       return LOOPBACK_API;
     }
-  }
-
-  if (import.meta.env.DEV) {
-    return LOOPBACK_API;
   }
 
   return "/api";

@@ -1,8 +1,10 @@
 import axios from "axios";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../constants/branding";
 import { useAuth } from "../context/AuthContext";
 import { getApiBaseURL } from "../services/api";
+import { friendlyErrorMessage } from "../services/friendlyError";
 
 const isDev = import.meta.env.DEV;
 
@@ -42,16 +44,18 @@ export default function LoginPage() {
             setError(err.response?.data?.message || "Access denied.");
           }
         } else if (err.response?.status === 401) {
-          setError("Invalid email or password.");
+          setError(
+            "No account found for that email, or the password is incorrect. If you don’t have an account yet, ask an administrator to add you to the Member Portal."
+          );
         } else if (!err.response) {
           setError(
             `Cannot reach API at ${getApiBaseURL()}. Open two terminals: (1) cd backend && npm run dev  (2) cd frontend && npm run dev  Then open the URL Vite prints (e.g. http://localhost:5173). Do not open index.html from the file explorer.`
           );
         } else {
-          setError(err.response?.data?.message || "Login failed.");
+          setError(friendlyErrorMessage(err, "Login failed."));
         }
       } else {
-        setError("Something went wrong.");
+        setError(friendlyErrorMessage(err));
       }
     } finally {
       setLoading(false);
@@ -79,14 +83,15 @@ export default function LoginPage() {
           aria-hidden
         />
         <div className="relative z-[1] flex flex-col gap-5">
-          <img
-            src="/agc-group-logo.png"
-            alt="AGC GROUP"
-            className="h-[4.5rem] w-auto max-w-[220px] object-contain object-left"
-          />
+          <Link to="/" aria-label="Home" className="inline-flex">
+            <img
+              src={AMIR_GROUP_LOGO_SRC}
+              alt="AMIR Group of Companies"
+              className="h-auto w-[190px] max-w-full object-contain object-left drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]"
+            />
+          </Link>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">AGC University</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-white lg:text-3xl">Member Portal</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white lg:text-3xl">{APP_DISPLAY_NAME}</h1>
             <p className="mt-3 font-serif text-xl font-semibold leading-snug text-white/95 lg:text-2xl">
               Learn. Comply. Grow.
             </p>
@@ -107,7 +112,7 @@ export default function LoginPage() {
           <div className="mb-8 lg:hidden">
             <div className="mb-3 h-1 w-14 rounded-full bg-gradient-to-r from-[#f04a41] via-[#E02B20] to-[#c4241a]" />
             <h2 className="font-serif text-2xl font-bold text-brand-black dark:text-white">Sign in</h2>
-            <p className="mt-1 text-sm text-brand-muted dark:text-stone-400">AGC University</p>
+            <p className="mt-1 text-sm text-brand-muted dark:text-stone-400">{APP_DISPLAY_NAME}</p>
           </div>
 
           <form
