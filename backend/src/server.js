@@ -3,6 +3,7 @@ require("dotenv").config({ path: path.join(__dirname, "..", ".env"), override: t
 const express = require("express");
 const cors = require("cors");
 const { ROLES } = require("./config/constants");
+const { EMAIL_TEMPLATE_VERSION } = require("./services/email.service");
 
 const app = express();
 /** Static site (e.g. *-web.onrender.com) and API on another host — allow browser + Authorization preflight */
@@ -31,7 +32,13 @@ app.get("/", (_, res) =>
     docs: "See README.md in the project root for routes.",
   })
 );
-app.get("/health", (_, res) => res.json({ ok: true }));
+app.get("/health", (_, res) =>
+  res.json({
+    ok: true,
+    git_commit: process.env.RENDER_GIT_COMMIT || null,
+    email_template_version: EMAIL_TEMPLATE_VERSION,
+  })
+);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

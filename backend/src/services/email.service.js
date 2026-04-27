@@ -3,6 +3,9 @@ const nodemailer = require("nodemailer");
 /** Display name in email subjects, footers, and plain-text signatures. */
 const APP_MAIL_BRAND = "Member Portal";
 
+/** Bump when invite/reset HTML changes (helps verify production deploy). */
+const EMAIL_TEMPLATE_VERSION = "20260427-email-v2";
+
 function escapeHtml(s) {
   if (s == null) return "";
   return String(s)
@@ -62,7 +65,7 @@ function emailShell({ title, preheader, bodyHtml }) {
           </tr>
         </table>
         <p style="font-family:Segoe UI, Arial, sans-serif;font-size:11px;color:#8a8f96;margin:16px 8px 0 8px;max-width:600px;">
-          Amir Group — internal member portal
+          Amir Group — internal member portal · ${escapeHtml(EMAIL_TEMPLATE_VERSION)}
         </p>
       </td>
     </tr>
@@ -367,6 +370,7 @@ async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
 }
 
 module.exports = {
+  EMAIL_TEMPLATE_VERSION,
   isEmailConfigured,
   sendMail,
   resetTransporter,
