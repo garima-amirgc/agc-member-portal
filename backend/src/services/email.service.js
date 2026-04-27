@@ -3,6 +3,74 @@ const nodemailer = require("nodemailer");
 /** Display name in email subjects, footers, and plain-text signatures. */
 const APP_MAIL_BRAND = "Member Portal";
 
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Public URL to a logo image (https). Prefer EMAIL_LOGO_URL; otherwise derived from APP_BASE_URL/FRONTEND_URL. */
+function getEmailLogoUrl() {
+  const explicit = String(process.env.EMAIL_LOGO_URL || "").trim();
+  if (explicit) return explicit;
+  const base = String(process.env.APP_BASE_URL || process.env.FRONTEND_URL || "").trim().replace(/\/+$/, "");
+  if (!base) return "";
+  return `${base}/amir-group-logo.png?v=6`;
+}
+
+function emailShell({ title, preheader, bodyHtml }) {
+  const logo = getEmailLogoUrl();
+  const logoBlock = logo
+    ? `<img src="${escapeHtml(logo)}" width="180" height="auto" alt="Amir Group" style="display:block;border:0;outline:none;text-decoration:none;max-width:180px;height:auto;" />`
+    : `<div style="font-size:20px;font-weight:700;letter-spacing:0.02em;color:#0B3EAF;">${escapeHtml(APP_MAIL_BRAND)}</div>`;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f8;">
+  <span style="display:none !important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;">${escapeHtml(
+    preheader || ""
+  )}</span>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f4f6f8;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6eaef;">
+          <tr>
+            <td style="padding:24px 28px 8px 28px;border-bottom:1px solid #eef2f6;">
+              ${logoBlock}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 28px 8px 28px;font-family:Segoe UI, Arial, sans-serif;color:#1c1d1f;line-height:1.55;">
+              ${bodyHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 28px 28px 28px;font-family:Segoe UI, Arial, sans-serif;color:#5c5f66;font-size:12px;line-height:1.5;">
+              <hr style="border:none;border-top:1px solid #e6eaef;margin:20px 0 16px 0;" />
+              <p style="margin:0;">This message was sent by <strong>${escapeHtml(APP_MAIL_BRAND)}</strong>.</p>
+              <p style="margin:8px 0 0 0;">If you did not expect this email, you can ignore it or contact your administrator.</p>
+            </td>
+          </tr>
+        </table>
+        <p style="font-family:Segoe UI, Arial, sans-serif;font-size:11px;color:#8a8f96;margin:16px 8px 0 8px;max-width:600px;">
+          Amir Group — internal member portal
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 function isEmailConfigured() {
   return !!(
     process.env.SMTP_HOST &&
@@ -108,15 +176,6 @@ async function sendManagerCourseCompletionEmail({
   return sendMail({ to: managerEmail, subject, text, html });
 }
 
-function escapeHtml(s) {
-  if (s == null) return "";
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 async function sendITTicketCreatedEmail({
   to,
   itName,
@@ -207,12 +266,14 @@ async function sendITTicketCreatedEmail({
 async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
   if (!to) return { skipped: true };
   const subject = `Set up your ${APP_MAIL_BRAND} account`;
+  const rawUrl = String(setupUrl || "").trim();
   const text = [
     `Hello${name ? ` ${name}` : ""},`,
     "",
-    "An administrator created an account for you. Open the link below to choose your password and sign in:",
+    "Your administrator has created a Member Portal account for you.",
+    "Use the link below to choose a password and activate your access:",
     "",
-    String(setupUrl || "").trim(),
+    rawUrl,
     "",
     `This link expires in about ${validDays ?? 7} days.`,
     "",
@@ -221,22 +282,26 @@ async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
     APP_MAIL_BRAND,
   ].join("\n");
 
-  const link = escapeHtml(String(setupUrl || "").trim());
-  const html = `
-<!DOCTYPE html>
-<html>
-<body style="font-family: Segoe UI, Arial, sans-serif; line-height: 1.5; color: #1c1d1f;">
-  <p>Hello${name ? ` ${escapeHtml(name)}` : ""},</p>
-  <p>An administrator created an account for you. Use the button below to choose your password.</p>
-  <p style="margin: 24px 0;">
-    <a href="${link}" style="display:inline-block;padding:12px 20px;background:#0B3EAF;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Set up password</a>
-  </p>
-  <p style="font-size: 13px; color: #5c5f66;">Or paste this URL into your browser:<br/><span style="word-break: break-all;">${link}</span></p>
-  <p style="font-size: 12px; color: #5c5f66;">This link expires in about ${validDays ?? 7} days.</p>
-  <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
-  <p style="font-size: 12px; color: #5c5f66;">${APP_MAIL_BRAND}</p>
-</body>
-</html>`;
+  const link = escapeHtml(rawUrl);
+  const bodyHtml = `
+  <p style="margin:0 0 12px 0;font-size:18px;font-weight:600;color:#0f172a;">Welcome${name ? `, ${escapeHtml(name)}` : ""}</p>
+  <p style="margin:0 0 16px 0;">Your administrator has created a <strong>${escapeHtml(APP_MAIL_BRAND)}</strong> account for you. Click the button below to choose a password and activate your access.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+    <tr>
+      <td align="center" bgcolor="#0B3EAF" style="border-radius:8px;">
+        <a href="${link}" style="display:inline-block;padding:14px 22px;font-family:Segoe UI, Arial, sans-serif;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">Set up your password</a>
+      </td>
+    </tr>
+  </table>
+  <p style="margin:0 0 8px 0;font-size:13px;color:#5c5f66;">If the button does not work, copy and paste this link into your browser:</p>
+  <p style="margin:0 0 20px 0;font-size:13px;color:#0B3EAF;word-break:break-all;">${link}</p>
+  <p style="margin:0;font-size:12px;color:#5c5f66;">For your security, this link expires in about <strong>${validDays ?? 7}</strong> days.</p>`;
+
+  const html = emailShell({
+    title: subject,
+    preheader: "Choose a password to activate your Member Portal account.",
+    bodyHtml,
+  });
 
   const out = await sendMail({ to, subject, text, html });
   if (out.skipped) {
@@ -254,12 +319,14 @@ async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
   if (!to) return { skipped: true };
   const mins = validMinutes ?? 60;
   const subject = `Reset your ${APP_MAIL_BRAND} password`;
+  const rawUrl = String(resetUrl || "").trim();
   const text = [
     `Hello${name ? ` ${name}` : ""},`,
     "",
-    "We received a request to reset your password. Open the link below to choose a new password:",
+    "We received a request to reset your Member Portal password.",
+    "Open the link below to choose a new password:",
     "",
-    String(resetUrl || "").trim(),
+    rawUrl,
     "",
     `This link expires in about ${mins} minutes.`,
     "",
@@ -268,22 +335,27 @@ async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
     APP_MAIL_BRAND,
   ].join("\n");
 
-  const link = escapeHtml(String(resetUrl || "").trim());
-  const html = `
-<!DOCTYPE html>
-<html>
-<body style="font-family: Segoe UI, Arial, sans-serif; line-height: 1.5; color: #1c1d1f;">
-  <p>Hello${name ? ` ${escapeHtml(name)}` : ""},</p>
-  <p>We received a request to reset your password.</p>
-  <p style="margin: 24px 0;">
-    <a href="${link}" style="display:inline-block;padding:12px 20px;background:#0B3EAF;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Reset password</a>
-  </p>
-  <p style="font-size: 13px; color: #5c5f66;">Or paste this URL into your browser:<br/><span style="word-break: break-all;">${link}</span></p>
-  <p style="font-size: 12px; color: #5c5f66;">This link expires in about ${mins} minutes.</p>
-  <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
-  <p style="font-size: 12px; color: #5c5f66;">${APP_MAIL_BRAND}</p>
-</body>
-</html>`;
+  const link = escapeHtml(rawUrl);
+  const bodyHtml = `
+  <p style="margin:0 0 12px 0;font-size:18px;font-weight:600;color:#0f172a;">Password reset</p>
+  <p style="margin:0 0 16px 0;">Hello${name ? ` ${escapeHtml(name)}` : ""},</p>
+  <p style="margin:0 0 16px 0;">We received a request to reset your <strong>${escapeHtml(APP_MAIL_BRAND)}</strong> password. If you made this request, use the button below to choose a new password.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+    <tr>
+      <td align="center" bgcolor="#0B3EAF" style="border-radius:8px;">
+        <a href="${link}" style="display:inline-block;padding:14px 22px;font-family:Segoe UI, Arial, sans-serif;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">Reset password</a>
+      </td>
+    </tr>
+  </table>
+  <p style="margin:0 0 8px 0;font-size:13px;color:#5c5f66;">If the button does not work, copy and paste this link into your browser:</p>
+  <p style="margin:0 0 20px 0;font-size:13px;color:#0B3EAF;word-break:break-all;">${link}</p>
+  <p style="margin:0;font-size:12px;color:#5c5f66;">This link expires in about <strong>${mins}</strong> minutes. If you did not request a reset, you can ignore this message.</p>`;
+
+  const html = emailShell({
+    title: subject,
+    preheader: "Reset your Member Portal password using the secure link below.",
+    bodyHtml,
+  });
 
   const out = await sendMail({ to, subject, text, html });
   if (out.skipped) {
