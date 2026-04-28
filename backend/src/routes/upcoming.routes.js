@@ -9,6 +9,16 @@ const router = express.Router();
 const ORDER_SQLITE = `COALESCE(NULLIF(TRIM(event_at), ''), NULLIF(TRIM(show_from_at), ''), NULLIF(TRIM(start_at), ''), created_at) ASC, sort_order ASC, id ASC`;
 const ORDER_PG = `COALESCE(NULLIF(TRIM(COALESCE(event_at, '')), ''), NULLIF(TRIM(COALESCE(show_from_at, '')), ''), NULLIF(TRIM(COALESCE(start_at, '')), ''), created_at::text) ASC, sort_order ASC, id ASC`;
 
+function normalizeBusinessUnitCode(v) {
+  const s = String(v ?? "").trim().toUpperCase();
+  if (!s) return "";
+  if (BUSINESS_UNITS.includes(s)) return s;
+  for (const bu of BUSINESS_UNITS) {
+    if (s.includes(bu)) return bu;
+  }
+  return "";
+}
+
 /** Facilities the user may see upcoming events for (member: profile; admin: all sites). */
 async function facilitiesForUpcomingUser(user) {
   if (String(user.role || "").trim() === ROLES.ADMIN) {
@@ -17,6 +27,7 @@ async function facilitiesForUpcomingUser(user) {
   let rows = [];
   if (isPostgres) {
     const pool = getPool();
+    if (!pool) return [];
     const r = await pool.query(
       "SELECT business_unit FROM user_facilities WHERE user_id = $1 ORDER BY business_unit ASC",
       [user.id]
@@ -29,11 +40,11 @@ async function facilitiesForUpcomingUser(user) {
   }
 
   let list = rows
-    .map((r) => String(r.business_unit || "").trim().toUpperCase())
+    .map((r) => normalizeBusinessUnitCode(r.business_unit))
     .filter((bu) => BUSINESS_UNITS.includes(bu));
   if (list.length === 0) {
-    const bu = String(user.business_unit || "").trim().toUpperCase();
-    if (BUSINESS_UNITS.includes(bu)) list = [bu];
+    const bu = normalizeBusinessUnitCode(user.business_unit);
+    if (bu) list = [bu];
   }
   return list;
 }
