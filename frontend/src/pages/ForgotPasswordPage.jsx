@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
               />
             </Link>
 
-            <div className="min-w-0 space-y-3 sm:space-y-4">
+            <div className="min-w-0 space-y-3 sm:space-y-4 lg:pr-24">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/80 sm:text-[11px] sm:tracking-[0.26em]">
                 {APP_DISPLAY_NAME}
               </p>

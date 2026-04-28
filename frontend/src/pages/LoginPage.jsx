@@ -154,6 +154,7 @@ export default function LoginPage() {
               <p className="mt-3 text-sm leading-relaxed text-[#5c5f66] dark:text-stone-400">
                 Sign in with your work email and password. If you haven’t set a password yet, use “Forgot password” to
                 resend your setup link.
+                <span className="ml-1">This portal is restricted to authorized personnel.</span>
               </p>
             </div>
 
@@ -166,7 +167,11 @@ export default function LoginPage() {
                 {" — "}override with <code className="font-mono text-[11px]">VITE_API_URL</code> in{" "}
                 <code className="font-mono text-[11px]">frontend/.env</code> if required.
               </p>
-            ) : null}
+            ) : (
+              <p className="mb-5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#9DA3A6] dark:text-stone-500 sm:mb-6 sm:text-xs sm:tracking-[0.14em]">
+                Secure session · authorized use only
+              </p>
+            )}
 
             {error && (
               <div className="mb-4 rounded-xl border border-brand-red/35 bg-red-50/95 p-3 text-sm text-brand-red dark:border-brand-red/40 dark:bg-red-950/55 dark:text-red-200 sm:mb-5 sm:p-3.5">
