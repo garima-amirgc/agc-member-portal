@@ -156,8 +156,8 @@ export default function LoginPage() {
                 Welcome back
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-[#5c5f66] dark:text-stone-400">
-                Sign in with your work email and the password issued by your administrator. This portal is restricted to
-                authorized personnel.
+                Sign in with your work email and password. If you haven’t set a password yet, use “Forgot password” to
+                resend your setup link.
               </p>
             </div>
 
