@@ -7,14 +7,7 @@ import UpcomingEventCards from "../components/UpcomingEventCards";
 import api from "../services/api";
 import BirthdayPopupModal from "../components/BirthdayPopupModal";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
-
-function getEventTimeIso(ev) {
-  const a = ev?.event_at ?? ev?.EVENT_AT;
-  const b = ev?.start_at ?? ev?.START_AT;
-  const s = (a != null && String(a).trim() !== "" ? a : b) ?? "";
-  const t = s ? new Date(String(s)).getTime() : NaN;
-  return Number.isFinite(t) ? String(s) : null;
-}
+import { getEventTimeIso } from "../utils/eventDate";
 
 function isSameLocalDay(a, b) {
   return (

@@ -4,6 +4,7 @@ const { db, isPostgres, getPool } = require("../config/db");
 const { BUSINESS_UNITS, ROLES } = require("../config/constants");
 const { authRequired, allowRoles } = require("../middleware/auth");
 const { syncUserAssignmentsForFacilities } = require("../services/assignmentSync.service");
+const { mergeFacilityAccess } = require("../utils/businessUnitCodes");
 const leaveSvc = require("../services/leaveRequests.service");
 const managerTeamSvc = require("../services/managerTeam.service");
 const { buildReportingHierarchy } = require("../services/reportingHierarchy.service");
@@ -66,7 +67,7 @@ router.get("/me", async (req, res) => {
   const facRows = await db
     .prepare("SELECT business_unit FROM user_facilities WHERE user_id = ? ORDER BY business_unit ASC")
     .all(req.user.id);
-  const facilities = facRows.map((r) => r.business_unit);
+  const facilities = mergeFacilityAccess(facRows, user.business_unit);
 
   const reporting_hierarchy = await buildReportingHierarchy(req.user.id);
   const departments = await userDeptSvc.listForUser(req.user.id);
@@ -263,7 +264,7 @@ router.get("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
   const facRows = await db
     .prepare("SELECT business_unit FROM user_facilities WHERE user_id = ? ORDER BY business_unit ASC")
     .all(req.params.id);
-  const facilities = facRows.map((r) => r.business_unit);
+  const facilities = mergeFacilityAccess(facRows, user.business_unit);
 
   const departments = await userDeptSvc.listForUser(req.params.id);
 

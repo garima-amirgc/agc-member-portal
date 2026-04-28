@@ -1,16 +1,5 @@
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
-
-/**
- * Pick ISO strings from API row (snake_case; tolerate odd casings).
- * @param {Record<string, unknown>} ev
- */
-function getEventTimeIso(ev) {
-  const a = ev?.event_at ?? ev?.EVENT_AT;
-  const b = ev?.start_at ?? ev?.START_AT;
-  const s = (a != null && String(a).trim() !== "" ? a : b) ?? "";
-  const t = s ? new Date(String(s)).getTime() : NaN;
-  return Number.isFinite(t) ? String(s) : null;
-}
+import { getEventTimeIso } from "../utils/eventDate";
 
 function getVisibleFromIso(ev) {
   const a = ev?.show_from_at ?? ev?.SHOW_FROM_AT;

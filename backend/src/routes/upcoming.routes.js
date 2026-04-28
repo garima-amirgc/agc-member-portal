@@ -3,21 +3,12 @@ const { db, isPostgres, getPool } = require("../config/db");
 const { ROLES, BUSINESS_UNITS } = require("../config/constants");
 const { authRequired, allowRoles } = require("../middleware/auth");
 const { deleteLessonVideoByUrl } = require("../services/objectStorage.service");
+const { mergeFacilityAccess } = require("../utils/businessUnitCodes");
 
 const router = express.Router();
 
 const ORDER_SQLITE = `COALESCE(NULLIF(TRIM(event_at), ''), NULLIF(TRIM(show_from_at), ''), NULLIF(TRIM(start_at), ''), created_at) ASC, sort_order ASC, id ASC`;
 const ORDER_PG = `COALESCE(NULLIF(TRIM(COALESCE(event_at, '')), ''), NULLIF(TRIM(COALESCE(show_from_at, '')), ''), NULLIF(TRIM(COALESCE(start_at, '')), ''), created_at::text) ASC, sort_order ASC, id ASC`;
-
-function normalizeBusinessUnitCode(v) {
-  const s = String(v ?? "").trim().toUpperCase();
-  if (!s) return "";
-  if (BUSINESS_UNITS.includes(s)) return s;
-  for (const bu of BUSINESS_UNITS) {
-    if (s.includes(bu)) return bu;
-  }
-  return "";
-}
 
 /** Facilities the user may see upcoming events for (member: profile; admin: all sites). */
 async function facilitiesForUpcomingUser(user) {
@@ -39,14 +30,7 @@ async function facilitiesForUpcomingUser(user) {
       .all(user.id);
   }
 
-  let list = rows
-    .map((r) => normalizeBusinessUnitCode(r.business_unit))
-    .filter((bu) => BUSINESS_UNITS.includes(bu));
-  if (list.length === 0) {
-    const bu = normalizeBusinessUnitCode(user.business_unit);
-    if (bu) list = [bu];
-  }
-  return list;
+  return mergeFacilityAccess(rows, user.business_unit);
 }
 
 function normalizeDateInput(v) {
