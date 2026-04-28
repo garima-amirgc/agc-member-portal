@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import AuthBirdsCorner from "../components/layout/AuthBirdsCorner";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../constants/branding";
 import { useAuth } from "../context/AuthContext";
 import { getApiBaseURL } from "../services/api";
@@ -67,6 +68,7 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-gradient-to-br from-[#eef2fb] via-[#f4f6fb] to-[#e2e8f3] dark:from-[#0a0a0a] dark:via-[#0c0c0c] dark:to-[#111111]">
+      <AuthBirdsCorner />
       <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-1 flex-col justify-center gap-5 px-4 py-8 sm:gap-6 sm:px-6 sm:py-10 md:px-8 lg:flex-row lg:items-center lg:justify-center lg:gap-0 lg:px-8 lg:py-12 xl:px-10">
         {/* Brand panel */}
         <section

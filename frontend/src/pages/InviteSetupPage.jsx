@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import AuthBirdsCorner from "../components/layout/AuthBirdsCorner";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../constants/branding";
 import { useAuth } from "../context/AuthContext";
 import api, { getApiBaseURL } from "../services/api";
@@ -100,6 +101,7 @@ export default function InviteSetupPage() {
 
   return (
     <div className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-gradient-to-br from-[#eef2fb] via-[#f4f6fb] to-[#e2e8f3] dark:from-[#0a0a0a] dark:via-[#0c0c0c] dark:to-[#111111]">
+      <AuthBirdsCorner />
       <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-1 flex-col justify-center gap-5 px-4 py-8 sm:gap-6 sm:px-6 sm:py-10 md:px-8 lg:flex-row lg:items-center lg:justify-center lg:gap-0 lg:px-8 lg:py-12 xl:px-10">
         {/* Brand panel */}
         <section className="agc-login-hero relative isolate z-0 order-1 flex w-full min-w-0 flex-col gap-6 overflow-hidden rounded-2xl px-6 py-8 shadow-[0_20px_60px_rgba(11,62,175,0.35)] sm:gap-7 sm:rounded-3xl sm:px-8 sm:py-10 md:px-10 md:py-11 lg:order-none lg:min-h-[min(520px,85vh)] lg:w-[min(100%,520px)] lg:flex-shrink-0 lg:rounded-3xl">
@@ -131,7 +133,7 @@ export default function InviteSetupPage() {
               />
             </Link>
 
-            <div className="min-w-0 space-y-3 sm:space-y-4">
+            <div className="min-w-0 space-y-3 sm:space-y-4 lg:pr-24">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/80 sm:text-[11px] sm:tracking-[0.26em]">
                 Official access
               </p>
@@ -231,9 +233,6 @@ export default function InviteSetupPage() {
               Already have a password? Sign in
             </Link>
           </form>
-          <p className="mt-3 text-center text-[11px] text-stone-500 dark:text-stone-500">
-            API: <code className="font-mono text-[11px]">{getApiBaseURL()}</code>
-          </p>
         </div>
       </div>
     </div>
