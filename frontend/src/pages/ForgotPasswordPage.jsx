@@ -90,7 +90,7 @@ export default function ForgotPasswordPage() {
           >
             <h2 className="font-sans text-2xl font-bold tracking-tight text-brand-blue dark:text-brand-green">Forgot password</h2>
             <p className="mt-3 text-sm leading-relaxed text-[#5c5f66] dark:text-stone-400">
-              Enter your work email. Pending invites receive a new setup link; active accounts receive a password reset link.
+              Enter your work email.
             </p>
 
             {error ? (
