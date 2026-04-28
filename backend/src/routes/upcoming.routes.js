@@ -14,12 +14,25 @@ async function facilitiesForUpcomingUser(user) {
   if (String(user.role || "").trim() === ROLES.ADMIN) {
     return [...BUSINESS_UNITS];
   }
-  const rows = await db
-    .prepare("SELECT business_unit FROM user_facilities WHERE user_id = ? ORDER BY business_unit ASC")
-    .all(user.id);
-  let list = rows.map((r) => r.business_unit).filter((bu) => BUSINESS_UNITS.includes(bu));
+  let rows = [];
+  if (isPostgres) {
+    const pool = getPool();
+    const r = await pool.query(
+      "SELECT business_unit FROM user_facilities WHERE user_id = $1 ORDER BY business_unit ASC",
+      [user.id]
+    );
+    rows = r.rows || [];
+  } else {
+    rows = await db
+      .prepare("SELECT business_unit FROM user_facilities WHERE user_id = ? ORDER BY business_unit ASC")
+      .all(user.id);
+  }
+
+  let list = rows
+    .map((r) => String(r.business_unit || "").trim().toUpperCase())
+    .filter((bu) => BUSINESS_UNITS.includes(bu));
   if (list.length === 0) {
-    const bu = String(user.business_unit || "").trim();
+    const bu = String(user.business_unit || "").trim().toUpperCase();
     if (BUSINESS_UNITS.includes(bu)) list = [bu];
   }
   return list;

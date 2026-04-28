@@ -11,6 +11,7 @@ const EMPTY_USER = {
   role: "Employee",
   business_units: ["AGC"],
   manager_id: "",
+  designation: "",
   departments: ["Production"],
 };
 
@@ -73,6 +74,7 @@ export default function AdminUsersSection({ className = "card" }) {
         role: form.role,
         business_units: form.business_units,
         manager_id: mid != null && Number.isFinite(mid) && mid > 0 ? mid : null,
+        designation: String(form.designation || "").trim(),
         departments: form.departments,
       };
       if (pw) payload.password = pw;
@@ -166,6 +168,7 @@ export default function AdminUsersSection({ className = "card" }) {
         email: data.email ?? u.email ?? "",
         role: data.role ?? u.role ?? "Employee",
         manager_id: managerIdStr,
+        designation: String(data.designation ?? u.designation ?? ""),
         facilities: Array.isArray(data.facilities)
           ? data.facilities
           : [data.business_unit ?? u.business_unit ?? "AGC"].filter(Boolean),
@@ -209,6 +212,7 @@ export default function AdminUsersSection({ className = "card" }) {
         email: ed.email.trim(),
         role: ed.role,
         manager_id,
+        designation: String(ed.designation || "").trim(),
         business_units:
           Array.isArray(ed.facilities) && ed.facilities.length > 0 ? ed.facilities : undefined,
         departments: deptPayload,
@@ -312,6 +316,12 @@ export default function AdminUsersSection({ className = "card" }) {
               placeholder="Email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+            <input
+              className="w-full rounded border p-2 dark:bg-slate-700"
+              placeholder="Designation (optional)"
+              value={form.designation}
+              onChange={(e) => setForm({ ...form, designation: e.target.value })}
             />
             <input
               className="w-full rounded border p-2 dark:bg-slate-700"
@@ -590,6 +600,18 @@ export default function AdminUsersSection({ className = "card" }) {
                   className="w-full rounded border p-2 dark:bg-slate-700"
                   value={editing.email}
                   onChange={(e) => setEditing({ ...editing, email: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                  Designation
+                </div>
+                <input
+                  className="w-full rounded border p-2 dark:bg-slate-700"
+                  placeholder="Optional"
+                  value={editing.designation ?? ""}
+                  onChange={(e) => setEditing({ ...editing, designation: e.target.value })}
                 />
               </div>
 

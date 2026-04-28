@@ -84,6 +84,7 @@ router.post("/login", async (req, res) => {
       role: user.role,
       business_unit: user.business_unit,
       manager_id: user.manager_id,
+      designation: user.designation != null ? String(user.designation) : "",
       department: dept,
       departments,
     },

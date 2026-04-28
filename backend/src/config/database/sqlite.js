@@ -109,6 +109,7 @@ const SCHEMA = `
     business_unit TEXT NOT NULL CHECK(business_unit IN ('AGC','AQM','SCF','ASP')),
     manager_id INTEGER,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    designation TEXT,
     FOREIGN KEY(manager_id) REFERENCES users(id)
   );
 
@@ -379,6 +380,11 @@ async function initDb() {
     rawDb.exec("ALTER TABLE users ADD COLUMN department TEXT");
   } catch {
     // column already exists
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN designation TEXT");
+  } catch {
+    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN invite_token_hash TEXT");

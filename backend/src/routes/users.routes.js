@@ -41,6 +41,7 @@ function adminUsersListSql() {
       SELECT
         u.id, u.name, u.email, u.role, u.business_unit, u.manager_id, u.created_at,
         COALESCE(NULLIF(TRIM(u.department), ''), 'Production') AS department,
+        u.designation,
         u.invite_token_hash,
         u.invite_expires_at,
         m.name AS manager_name,
@@ -56,7 +57,7 @@ function adminUsersListSql() {
 router.get("/me", async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, birth_month, birth_day, created_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, created_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
     )
     .get(req.user.id);
 
@@ -78,10 +79,12 @@ router.put("/me", async (req, res) => {
   const existing = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
   if (!existing) return res.status(404).json({ message: "User not found" });
 
-  const { name, email, password } = req.body;
+  const { name, email, password, designation } = req.body;
 
   const nextName = name ?? existing.name;
   const nextEmail = email ?? existing.email;
+  const nextDesignation =
+    designation !== undefined && designation !== null ? String(designation).trim().slice(0, 120) : existing.designation;
 
   if (!nextName || !nextEmail) return res.status(400).json({ message: "Missing name/email" });
 
@@ -117,23 +120,24 @@ router.put("/me", async (req, res) => {
     if (normalizedDob) {
       await db
         .prepare(
-          "UPDATE users SET name = ?, email = ?, password = ?, birth_month = ?, birth_day = ?, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
+          "UPDATE users SET name = ?, email = ?, designation = ?, password = ?, birth_month = ?, birth_day = ?, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
         )
-        .run(nextName, nextEmail, nextPassword, normalizedDob.birth_month, normalizedDob.birth_day, req.user.id);
+        .run(nextName, nextEmail, nextDesignation, nextPassword, normalizedDob.birth_month, normalizedDob.birth_day, req.user.id);
     } else {
       await db
         .prepare(
-          "UPDATE users SET name = ?, email = ?, password = ?, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
+          "UPDATE users SET name = ?, email = ?, designation = ?, password = ?, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
         )
-        .run(nextName, nextEmail, nextPassword, req.user.id);
+        .run(nextName, nextEmail, nextDesignation, nextPassword, req.user.id);
     }
   } else {
     if (normalizedDob) {
       await db
-        .prepare("UPDATE users SET name = ?, email = ?, password = ?, birth_month = ?, birth_day = ? WHERE id = ?")
+        .prepare("UPDATE users SET name = ?, email = ?, designation = ?, password = ?, birth_month = ?, birth_day = ? WHERE id = ?")
         .run(
           nextName,
           nextEmail,
+          nextDesignation,
           nextPassword,
           normalizedDob.birth_month,
           normalizedDob.birth_day,
@@ -146,6 +150,9 @@ router.put("/me", async (req, res) => {
         nextPassword,
         req.user.id
       );
+      if (nextDesignation !== existing.designation) {
+        await db.prepare("UPDATE users SET designation = ? WHERE id = ?").run(nextDesignation, req.user.id);
+      }
     }
   }
 
@@ -248,7 +255,7 @@ router.post("/:id/resend-invite", allowRoles(ROLES.ADMIN), async (req, res) => {
 router.get("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, created_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, created_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
     )
     .get(req.params.id);
   if (!user) return res.status(404).json({ message: "User not found" });
@@ -266,8 +273,18 @@ router.get("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
 });
 
 router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
-  const { name, email, password, role, business_unit, business_units, manager_id = null, department, departments } =
-    req.body;
+  const {
+    name,
+    email,
+    password,
+    role,
+    business_unit,
+    business_units,
+    manager_id = null,
+    department,
+    departments,
+    designation,
+  } = req.body;
   const businessUnits = Array.isArray(business_units)
     ? business_units
     : business_unit
@@ -304,6 +321,8 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
     deptList = ["Production"];
   }
   const primaryDept = deptList[0];
+  const designationTrim =
+    designation !== undefined && designation !== null ? String(designation).trim().slice(0, 120) : "";
 
   let pwHash;
   let inviteHash = null;
@@ -321,9 +340,20 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
   try {
     const result = await db
       .prepare(
-        "INSERT INTO users(name, email, password, role, business_unit, manager_id, department, invite_token_hash, invite_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO users(name, email, password, role, business_unit, manager_id, department, designation, invite_token_hash, invite_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(name, email, pwHash, role, businessUnits[0], manager_id, primaryDept, inviteHash, inviteExpires);
+      .run(
+        name,
+        email,
+        pwHash,
+        role,
+        businessUnits[0],
+        manager_id,
+        primaryDept,
+        designationTrim,
+        inviteHash,
+        inviteExpires
+      );
 
     const userId = result.lastInsertRowid;
 
@@ -384,10 +414,11 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
     return res.status(400).json({ message: "Invalid user id" });
   }
 
-  const { name, email, role, business_unit, business_units, manager_id, password, department, departments } = req.body;
+  const { name, email, role, business_unit, business_units, manager_id, password, department, departments, designation } =
+    req.body;
   const existing = await db
     .prepare(
-      `SELECT id, name, email, role, business_unit, manager_id, password, department, profile_image_url, created_at,
+      `SELECT id, name, email, role, business_unit, manager_id, password, department, designation, profile_image_url, created_at,
               invite_token_hash, invite_expires_at
        FROM users WHERE id = ?`
     )
@@ -432,6 +463,12 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
 
   let nextEmail = email !== undefined && email !== null ? String(email).trim() : existing.email;
   const nextName = name !== undefined && name !== null ? String(name).trim() : existing.name;
+  const nextDesignation =
+    designation !== undefined && designation !== null
+      ? String(designation).trim().slice(0, 120)
+      : existing.designation != null
+        ? String(existing.designation)
+        : "";
   if (!nextName || !nextEmail) {
     return res.status(400).json({ message: "Name and email are required" });
   }
@@ -483,7 +520,7 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
   try {
     await db
       .prepare(
-        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, invite_token_hash=?, invite_expires_at=? WHERE id=?"
+        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, designation=?, invite_token_hash=?, invite_expires_at=? WHERE id=?"
       )
       .run(
         nextName,
@@ -493,6 +530,7 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
         nextManagerId == null ? null : nextManagerId,
         newPassword,
         newDept,
+        nextDesignation,
         nextInviteHash,
         nextInviteExpires,
         userId
@@ -526,6 +564,7 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
     .prepare(
       `SELECT id, name, email, role,
         COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department,
+        designation,
         manager_id
        FROM users WHERE id = ?`
     )

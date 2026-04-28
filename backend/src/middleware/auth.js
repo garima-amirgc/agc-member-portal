@@ -17,7 +17,7 @@ const authRequired = (req, res, next) => {
 
     const user = await db
       .prepare(
-        "SELECT id, name, email, role, business_unit, manager_id, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
+        "SELECT id, name, email, role, business_unit, manager_id, designation, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
       )
       .get(payload.id);
 
@@ -33,6 +33,7 @@ const authRequired = (req, res, next) => {
       role,
       business_unit: user.business_unit,
       manager_id: user.manager_id,
+      designation: user.designation != null ? String(user.designation) : "",
       department,
       departments,
     };

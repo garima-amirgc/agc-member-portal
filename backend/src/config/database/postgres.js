@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   profile_image_url TEXT,
   department TEXT,
+  designation TEXT,
   birth_month INTEGER,
   birth_day INTEGER
 );
@@ -195,6 +196,7 @@ async function migrateColumns(client) {
     "ALTER TABLE facility_upcoming ADD COLUMN IF NOT EXISTS business_units TEXT",
     "ALTER TABLE birthday_list ADD COLUMN IF NOT EXISTS company_name TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS designation TEXT",
     "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS assignee_id INTEGER REFERENCES users(id)",
     "ALTER TABLE courses ADD COLUMN IF NOT EXISTS resource_category TEXT",
     "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS attachments TEXT",

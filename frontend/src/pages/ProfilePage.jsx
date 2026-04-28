@@ -14,7 +14,14 @@ export default function ProfilePage() {
 
   const [me, setMe] = useState(null);
   const [assignments, setAssignments] = useState([]);
-  const [form, setForm] = useState({ name: "", email: "", password: "", birth_month: "", birth_day: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    designation: "",
+    password: "",
+    birth_month: "",
+    birth_day: "",
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -30,6 +37,7 @@ export default function ProfilePage() {
       setForm({
         name: meRes.data?.name ?? "",
         email: meRes.data?.email ?? "",
+        designation: meRes.data?.designation ?? "",
         password: "",
         birth_month: meRes.data?.birth_month != null ? String(meRes.data.birth_month) : "",
         birth_day: meRes.data?.birth_day != null ? String(meRes.data.birth_day) : "",
@@ -64,6 +72,7 @@ export default function ProfilePage() {
       await api.put("/users/me", {
         name: form.name,
         email: form.email,
+        designation: form.designation,
         ...(includeDob ? { birth_month, birth_day } : {}),
         ...(form.password ? { password: form.password } : {}),
       });
@@ -131,6 +140,11 @@ export default function ProfilePage() {
           {" "}
           · <span className="font-semibold">Departments:</span> {formatDepartments(me)}
         </p>
+        {String(me.designation || "").trim() ? (
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+            <span className="font-semibold">Designation:</span> {me.designation}
+          </p>
+        ) : null}
 
         {me.facilities?.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -191,6 +205,15 @@ export default function ProfilePage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Email</label>
             <input className="w-full rounded border p-2 dark:bg-slate-700" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Designation (optional)</label>
+            <input
+              className="w-full rounded border p-2 dark:bg-slate-700"
+              value={form.designation}
+              onChange={(e) => setForm({ ...form, designation: e.target.value })}
+              placeholder="e.g. Safety Officer, Supervisor"
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">New Password (optional)</label>
