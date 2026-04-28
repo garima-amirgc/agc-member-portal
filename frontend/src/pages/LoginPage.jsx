@@ -126,10 +126,6 @@ export default function LoginPage() {
               <p className="break-words font-['Marcellus',Georgia,serif] text-[clamp(1.125rem,3.5vw,1.5rem)] font-semibold leading-snug text-white/95">
                 Learn. Comply. Grow.
               </p>
-              <p className="max-w-prose text-pretty text-sm leading-relaxed text-white/88 sm:text-[15px]">
-                Centralized learning, attestations, and workplace services—delivered through a single, secure entry
-                point for employees and managers across the group.
-              </p>
             </div>
           </div>
 
