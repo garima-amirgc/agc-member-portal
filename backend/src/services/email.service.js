@@ -4,7 +4,10 @@ const nodemailer = require("nodemailer");
 const APP_MAIL_BRAND = "Member Portal";
 
 /** Bump when invite/reset HTML changes (helps verify production deploy). */
-const EMAIL_TEMPLATE_VERSION = "20260427-email-v4";
+const EMAIL_TEMPLATE_VERSION = "20260427-email-v6";
+
+/** Friendly “From” name shown in inbox lists. */
+const EMAIL_FROM_NAME = String(process.env.EMAIL_FROM_NAME || "AGC Member Portal").trim();
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -130,8 +133,11 @@ async function sendMail({ to, subject, text, html }) {
     return { skipped: true };
   }
 
+  const rawFrom = String(process.env.EMAIL_FROM || "").trim();
+  const from = rawFrom.includes("<") ? rawFrom : EMAIL_FROM_NAME ? `${EMAIL_FROM_NAME} <${rawFrom}>` : rawFrom;
+
   await t.sendMail({
-    from: process.env.EMAIL_FROM,
+    from,
     to,
     subject,
     text,
@@ -248,7 +254,7 @@ async function sendITTicketCreatedEmail({
 <html>
 <body style="font-family: Segoe UI, Arial, sans-serif; line-height: 1.5; color: #0a0a0a;">
   <p>Hello${itName ? ` ${escapeHtml(itName)}` : ""},</p>
-  <p><strong>New IT ticket</strong> was raised in Member Portal.</p>
+  <p><strong>New IT ticket</strong> was raised in ${escapeHtml(APP_MAIL_BRAND)}.</p>
   <p style="margin: 16px 0; padding: 12px 16px; background: #eef2fb; border-left: 4px solid #0b3eaf;">
     <strong>#${escapeHtml(String(ticketId))}</strong> — ${escapeHtml(title)}
   </p>
@@ -276,7 +282,7 @@ async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
   const text = [
     `Hello${name ? ` ${name}` : ""},`,
     "",
-    "Your administrator has created a Member Portal account for you.",
+    `Your administrator has created an ${APP_MAIL_BRAND} account for you.`,
     "Use the link below to choose a password and activate your access:",
     "",
     rawUrl,
@@ -305,7 +311,7 @@ async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
 
   const html = emailShell({
     title: subject,
-    preheader: "Choose a password to activate your Member Portal account.",
+    preheader: `Choose a password to activate your ${APP_MAIL_BRAND} account.`,
     bodyHtml,
   });
 
@@ -329,7 +335,7 @@ async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
   const text = [
     `Hello${name ? ` ${name}` : ""},`,
     "",
-    "We received a request to reset your Member Portal password.",
+    `We received a request to reset your ${APP_MAIL_BRAND} password.`,
     "Open the link below to choose a new password:",
     "",
     rawUrl,
@@ -359,7 +365,7 @@ async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
 
   const html = emailShell({
     title: subject,
-    preheader: "Reset your Member Portal password using the secure link below.",
+    preheader: `Reset your ${APP_MAIL_BRAND} password using the secure link below.`,
     bodyHtml,
   });
 
