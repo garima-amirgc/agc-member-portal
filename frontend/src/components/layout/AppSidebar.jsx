@@ -102,7 +102,7 @@ export default function AppSidebar() {
           <img
             src={AMIR_GROUP_LOGO_SRC}
             alt="AMIR Group of Companies"
-            className="h-auto w-[190px] max-w-full object-contain object-center drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]"
+            className="h-auto w-[190px] max-w-full shrink-0 object-contain object-center drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]"
           />
           <div className="text-lg font-bold leading-tight tracking-tight text-white">{APP_DISPLAY_NAME}</div>
         </NavLink>

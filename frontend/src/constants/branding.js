@@ -2,7 +2,7 @@
  * Public logo under `frontend/public/amir-group-logo.png`.
  * Bump `LOGO_VERSION` whenever that file is replaced so browsers/CDNs refetch it.
  */
-export const LOGO_VERSION = "6";
+export const LOGO_VERSION = "8";
 
 export const AMIR_GROUP_LOGO_SRC = `/amir-group-logo.png?v=${LOGO_VERSION}`;
 

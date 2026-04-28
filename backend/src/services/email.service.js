@@ -4,7 +4,7 @@ const nodemailer = require("nodemailer");
 const APP_MAIL_BRAND = "Member Portal";
 
 /** Bump when invite/reset HTML changes (helps verify production deploy). */
-const EMAIL_TEMPLATE_VERSION = "20260427-email-v2";
+const EMAIL_TEMPLATE_VERSION = "20260427-email-v4";
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -21,13 +21,16 @@ function getEmailLogoUrl() {
   if (explicit) return explicit;
   const base = String(process.env.APP_BASE_URL || process.env.FRONTEND_URL || "").trim().replace(/\/+$/, "");
   if (!base) return "";
-  return `${base}/amir-group-logo.png?v=6`;
+  return `${base}/amir-group-logo.png?v=8`;
 }
 
 function emailShell({ title, preheader, bodyHtml }) {
   const logo = getEmailLogoUrl();
+  const headerCellAttrs = logo
+    ? 'align="center" style="padding:22px 24px;background:#000000;text-align:center;border-bottom:1px solid #1a1a1a;"'
+    : 'style="padding:24px 28px 8px 28px;border-bottom:1px solid #eef2f6;"';
   const logoBlock = logo
-    ? `<img src="${escapeHtml(logo)}" width="180" height="auto" alt="Amir Group" style="display:block;border:0;outline:none;text-decoration:none;max-width:180px;height:auto;" />`
+    ? `<img src="${escapeHtml(logo)}" width="220" height="auto" alt="AMIR Group of Companies" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:220px;width:100%;height:auto;" />`
     : `<div style="font-size:20px;font-weight:700;letter-spacing:0.02em;color:#0B3EAF;">${escapeHtml(APP_MAIL_BRAND)}</div>`;
 
   return `
@@ -47,7 +50,7 @@ function emailShell({ title, preheader, bodyHtml }) {
       <td align="center">
         <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6eaef;">
           <tr>
-            <td style="padding:24px 28px 8px 28px;border-bottom:1px solid #eef2f6;">
+            <td ${headerCellAttrs}>
               ${logoBlock}
             </td>
           </tr>
@@ -65,7 +68,7 @@ function emailShell({ title, preheader, bodyHtml }) {
           </tr>
         </table>
         <p style="font-family:Segoe UI, Arial, sans-serif;font-size:11px;color:#8a8f96;margin:16px 8px 0 8px;max-width:600px;">
-          Amir Group — internal member portal · ${escapeHtml(EMAIL_TEMPLATE_VERSION)}
+          AMIR Group — internal member portal · ${escapeHtml(EMAIL_TEMPLATE_VERSION)}
         </p>
       </td>
     </tr>
