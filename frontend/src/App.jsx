@@ -27,6 +27,9 @@ import EmployeeEngagementCalendarPage from "./pages/EmployeeEngagementCalendarPa
 import ReportsPage from "./pages/ReportsPage";
 import AdminReportsPage from "./pages/AdminReportsPage";
 import AdminSystemStatusPage from "./pages/AdminSystemStatusPage";
+import AdminEngagementCalendarPage from "./pages/AdminEngagementCalendarPage";
+import AdminPollsPage from "./pages/AdminPollsPage";
+import { ADMIN_GRANT_KEYS } from "./constants/adminGrants";
 
 function pickFacilityForLegacyResources(me) {
   try {
@@ -94,7 +97,7 @@ export default function App() {
         <Route
           path="upcoming"
           element={
-            <ProtectedRoute roles={["Admin"]}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
               <AdminUpcomingPage />
             </ProtectedRoute>
           }
@@ -102,7 +105,7 @@ export default function App() {
         <Route
           path="users"
           element={
-            <ProtectedRoute roles={["Admin"]}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.USERS}>
               <AdminUsersPage />
             </ProtectedRoute>
           }
@@ -126,7 +129,7 @@ export default function App() {
         <Route
           path="admin"
           element={
-            <ProtectedRoute roles={["Admin"]}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.LEARNING_ADMIN}>
               <AdminDashboardPage />
             </ProtectedRoute>
           }
@@ -134,7 +137,7 @@ export default function App() {
         <Route
           path="admin/reports"
           element={
-            <ProtectedRoute roles={["Admin"]}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.REPORTS}>
               <AdminReportsPage />
             </ProtectedRoute>
           }
@@ -142,8 +145,24 @@ export default function App() {
         <Route
           path="admin/system"
           element={
-            <ProtectedRoute roles={["Admin"]}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.SYSTEM}>
               <AdminSystemStatusPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/engagement-calendar"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.ENGAGEMENT_CALENDAR}>
+              <AdminEngagementCalendarPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/polls"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.FEEDBACK_POLLS}>
+              <AdminPollsPage />
             </ProtectedRoute>
           }
         />

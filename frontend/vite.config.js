@@ -2,7 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 /** Prefer 127.0.0.1 so the proxy matches the API (Windows `localhost` can hit ::1 while Node listens on IPv4). */
-const backendOrigin = "http://127.0.0.1:5000";
+/**
+ * On some Windows setups, `127.0.0.1` traffic can fail while `localhost` works.
+ * Use `localhost` here so `/api` and `/uploads` proxying matches the browser's reachable loopback.
+ */
+const backendOrigin = "http://localhost:5000";
 
 const backendProxy = {
   "/api": {

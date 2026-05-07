@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { PAGE_GUTTER_X } from "../../constants/pageLayout";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
+import { resolvePublicMediaUrl } from "../../utils/mediaUrl";
 
 function initials(name = "") {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
@@ -54,11 +55,12 @@ function TopBarNavLink({ item, onNavigate }) {
 export default function AppTopBar({ darkMode, setDarkMode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { mainItems, adminItems } = usePortalNavItems(user?.role);
+  const { mainItems, adminItems } = usePortalNavItems(user);
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
   const greeting = `${greetingForHour(new Date().getHours())}, ${firstName(user?.name)}`;
+  const profilePhoto = resolvePublicMediaUrl(user?.profile_image_url);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -100,8 +102,8 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
           aria-label="Open profile"
           title="Profile"
         >
-          {user.profile_image_url ? (
-            <img src={user.profile_image_url} alt="" className="h-full w-full object-cover" />
+          {profilePhoto ? (
+            <img src={profilePhoto} alt="" className="h-full w-full object-cover" />
           ) : (
             initials(user.name)
           )}
@@ -116,10 +118,10 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
             aria-haspopup="true"
             onClick={() => setOpen((v) => !v)}
           >
-            <span className="flex w-[1.125rem] flex-col gap-[5px]" aria-hidden>
-              <span className="h-[2px] w-full rounded-full bg-brand-red" />
-              <span className="h-[2px] w-full rounded-full bg-brand-red" />
-              <span className="h-[2px] w-full rounded-full bg-brand-red" />
+            <span className="flex flex-col items-start gap-1" aria-hidden>
+              <span className="h-[3px] w-5 rounded-full bg-[#0B3EAF]" />
+              <span className="h-[3px] w-4 rounded-full bg-[#0B3EAF]" />
+              <span className="h-[3px] w-3 rounded-full bg-[#0B3EAF]" />
             </span>
           </button>
 

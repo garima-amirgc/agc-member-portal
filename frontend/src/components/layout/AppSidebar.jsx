@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../../constants/branding";
 import { useAuth } from "../../context/AuthContext";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
-import { IconChevron, IconHelp, IconSearch } from "./SidebarIcons";
+import { IconChevron, IconHelp, IconSearch, IconSparkle } from "./SidebarIcons";
 
 function NavItem({ to, end, icon: Icon, label, desc }) {
   const sub = desc?.trim();
@@ -77,7 +77,7 @@ function NavSection({ title, defaultOpen, children }) {
 
 export default function AppSidebar() {
   const { user } = useAuth();
-  const { mainItems, adminItems } = usePortalNavItems(user?.role);
+  const { mainItems, adminItems } = usePortalNavItems(user);
   const [query, setQuery] = useState("");
 
   const q = query.trim().toLowerCase();
@@ -88,7 +88,7 @@ export default function AppSidebar() {
 
   const filteredMain = mainItems.filter(match);
   const filteredAdmin = adminItems.filter(match);
-  const showAdminSection = user?.role === "Admin" && (filteredAdmin.length > 0 || !q);
+  const showAdminSection = filteredAdmin.length > 0 || (user?.role === "Admin" && !q);
 
   if (!user) return null;
 
@@ -141,6 +141,34 @@ export default function AppSidebar() {
       </nav>
 
       <div className="mt-auto border-t border-black/10 p-3 dark:border-white/15">
+        <button
+          type="button"
+          className="group relative flex w-full items-center gap-3 rounded-portal px-3 py-2 text-sm font-semibold text-white transition hover:bg-black/10 hover:shadow-[0_10px_30px_rgba(0,0,0,0.18)] active:scale-[0.99] dark:hover:bg-white/10"
+          onClick={() => {
+            window.dispatchEvent(new Event("agc:whats-new"));
+          }}
+        >
+          <span className="relative">
+            <IconSparkle className="h-5 w-5 text-white transition-transform duration-300 group-hover:scale-[1.08]" />
+            <span
+              aria-hidden
+              className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 rounded-full bg-[#A7D344] shadow-[0_0_0_2px_rgba(255,255,255,0.25)]"
+            />
+            <span
+              aria-hidden
+              className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-[#A7D344]/80"
+            />
+          </span>
+          <span className="relative">
+            What's new
+            <span
+              aria-hidden
+              className="ml-2 inline-flex items-center rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white/90 ring-1 ring-white/20 transition group-hover:bg-white/20"
+            >
+              NEW
+            </span>
+          </span>
+        </button>
         <NavLink
           to="/profile"
           className="flex items-center gap-3 rounded-portal px-3 py-2 text-sm font-medium text-white hover:bg-black/10 dark:hover:bg-white/10"

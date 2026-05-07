@@ -5,6 +5,7 @@ import { FACILITY_CODES } from "../constants/facilities";
 import { PAGE_PADDING, PAGE_SHELL } from "../constants/pageLayout";
 import OrgChart from "../components/OrgChart";
 import UpcomingEventCards from "../components/UpcomingEventCards";
+import { splitUpcomingForHome } from "../utils/upcomingFeedSplit";
 
 export default function FacilityCoursesPage() {
   const { facility } = useParams();
@@ -74,6 +75,8 @@ export default function FacilityCoursesPage() {
 
   const hasAccess = useMemo(() => (me?.facilities ?? []).includes(facilityNorm), [me, facilityNorm]);
 
+  const { todayEvents, upcomingFutureOnly } = useMemo(() => splitUpcomingForHome(upcoming), [upcoming]);
+
   if (!FACILITY_CODES.includes(facilityNorm)) {
     return <div className={PAGE_PADDING}>Unknown facility.</div>;
   }
@@ -119,9 +122,19 @@ export default function FacilityCoursesPage() {
           <OrgChart />
         </div>
         <aside className="min-w-0 lg:col-span-3 lg:sticky lg:top-6 lg:self-start">
-          <div className="card upcoming-rail p-3 sm:p-4">
-            <h3 className="mb-2 text-sm font-semibold text-[#0B3EAF] dark:text-[#A7D344]">Upcoming</h3>
-            <UpcomingEventCards items={upcoming} loading={upcomingLoading} compact />
+          <div className="space-y-4">
+            {!upcomingLoading && todayEvents.length > 0 ? (
+              <div className="card no-title-underline upcoming-rail p-3 sm:p-4">
+                <h3 className="mb-2 text-sm font-semibold text-[#0B3EAF] dark:text-[#A7D344]">Today’s event</h3>
+                <UpcomingEventCards items={todayEvents.slice(0, 1)} loading={false} compact />
+              </div>
+            ) : null}
+            {upcomingLoading || upcomingFutureOnly.length > 0 ? (
+              <div className="card upcoming-rail p-3 sm:p-4">
+                <h3 className="mb-2 text-sm font-semibold text-[#0B3EAF] dark:text-[#A7D344]">Upcoming</h3>
+                <UpcomingEventCards items={upcomingFutureOnly} loading={upcomingLoading} compact />
+              </div>
+            ) : null}
           </div>
         </aside>
       </section>

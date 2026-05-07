@@ -2,12 +2,14 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
-const { authRequired, allowRoles } = require("../middleware/auth");
-const { ROLES } = require("../config/constants");
+const { authRequired } = require("../middleware/auth");
+const { requireAdminGrant } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 const {
   getPublicVideoUrl,
   getPublicDocumentUrl,
   getPublicUpcomingImageUrl,
+  getPublicPollBannerUrl,
   getPublicTicketAttachmentUrl,
 } = require("../services/storage.service");
 const {
@@ -15,6 +17,7 @@ const {
   uploadLessonVideoFromDisk,
   uploadResourceDocumentFromDisk,
   uploadUpcomingImageFromDisk,
+  uploadPollBannerImageFromDisk,
   uploadTicketAttachmentFromDisk,
 } = require("../services/objectStorage.service");
 
@@ -83,7 +86,12 @@ const ticketAttachmentUpload = multer({
 
 const router = express.Router();
 
-router.post("/", authRequired, allowRoles(ROLES.ADMIN), upload.single("video"), async (req, res, next) => {
+router.post(
+  "/",
+  authRequired,
+  requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN),
+  upload.single("video"),
+  async (req, res, next) => {
   if (!req.file) {
     return res.status(400).json({ message: "No video file uploaded (check type: mp4, webm, mov, mkv)." });
   }
@@ -134,7 +142,7 @@ router.post("/", authRequired, allowRoles(ROLES.ADMIN), upload.single("video"), 
 router.post(
   "/document",
   authRequired,
-  allowRoles(ROLES.ADMIN),
+  requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN),
   upload.single("file"),
   async (req, res) => {
     if (!req.file) {
@@ -256,7 +264,7 @@ router.post(
 router.post(
   "/upcoming-image",
   authRequired,
-  allowRoles(ROLES.ADMIN),
+  requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING),
   uploadImage.single("image"),
   async (req, res) => {
     if (!req.file) {
@@ -301,6 +309,65 @@ router.post(
       });
     } catch (err) {
       console.error("Upcoming image upload failed:", err);
+      try {
+        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+      } catch {
+        /* ignore */
+      }
+      const raw = err.message || String(err) || "Upload failed";
+      return res.status(502).json({ message: `Storage upload failed: ${raw}` });
+    }
+  }
+);
+
+router.post(
+  "/poll-banner",
+  authRequired,
+  requireAdminGrant(ADMIN_GRANT_KEYS.FEEDBACK_POLLS),
+  uploadImage.single("image"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image uploaded." });
+    }
+
+    const localPath = req.file.path;
+    const filename = req.file.filename;
+
+    try {
+      if (isCloudStorageEnabled()) {
+        const { url: imageUrl, provider } = await uploadPollBannerImageFromDisk(localPath, filename);
+        try {
+          fs.unlinkSync(localPath);
+        } catch {
+          /* ignore */
+        }
+        return res.json({
+          filename,
+          image_url: imageUrl,
+          storageProvider: provider,
+        });
+      }
+
+      const dir = path.join(uploadDir, "polls");
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const dest = path.join(dir, filename);
+      try {
+        fs.renameSync(localPath, dest);
+      } catch {
+        fs.copyFileSync(localPath, dest);
+        try {
+          fs.unlinkSync(localPath);
+        } catch {
+          /* ignore */
+        }
+      }
+      return res.json({
+        filename,
+        image_url: getPublicPollBannerUrl(filename),
+        storageProvider: "local",
+      });
+    } catch (err) {
+      console.error("Poll banner upload failed:", err);
       try {
         if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
       } catch {

@@ -1,7 +1,11 @@
 const express = require("express");
 const { db, isPostgres } = require("../config/db");
-const { ROLES, BUSINESS_UNITS } = require("../config/constants");
-const { authRequired, allowRoles } = require("../middleware/auth");
+const { BUSINESS_UNITS } = require("../config/constants");
+const { authRequired } = require("../middleware/auth");
+const { requireAdminGrant } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
+const portalVisitsSvc = require("../services/portalVisits.service");
+const { ROLES } = require("../config/constants");
 
 const router = express.Router();
 router.use(authRequired);
@@ -127,7 +131,7 @@ router.get("/", async (req, res) => {
 });
 
 /** Admin: list all reports (ignores facility filtering). */
-router.get("/admin/all", allowRoles(ROLES.ADMIN), async (_req, res) => {
+router.get("/admin/all", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (_req, res) => {
   try {
     const rows = await db
       .prepare(
@@ -159,8 +163,21 @@ router.get("/admin/all", allowRoles(ROLES.ADMIN), async (_req, res) => {
   }
 });
 
+/** Admin: top member portal visitors (dashboard usage). */
+router.get("/admin/top-portal-visitors", async (req, res) => {
+  // Keep this visible to Admins even if granular grants aren't configured yet.
+  if (req.user?.role !== ROLES.ADMIN) return res.status(403).json({ message: "Forbidden" });
+  try {
+    const out = await portalVisitsSvc.topPortalVisitors(5);
+    return res.json(out);
+  } catch (e) {
+    console.error("[reports] GET /admin/top-portal-visitors:", e);
+    return res.status(500).json({ message: "Could not load portal visitors" });
+  }
+});
+
 /** Admin: create. Accepts either `embed_src` or `iframe_code`. */
-router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res) => {
   const title = String(req.body?.title || "").trim();
   const description = req.body?.description != null ? String(req.body.description) : "";
   const sort_order = Number.isFinite(Number(req.body?.sort_order)) ? Number(req.body.sort_order) : 0;
@@ -205,7 +222,7 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
 });
 
 /** Admin: update. Accepts either `embed_src` or `iframe_code`. */
-router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res) => {
   const id = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid id" });
 
@@ -265,7 +282,7 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
 });
 
 /** Admin: delete. */
-router.delete("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.delete("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res) => {
   const id = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid id" });
   try {

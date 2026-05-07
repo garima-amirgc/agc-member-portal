@@ -1,89 +1,13 @@
+import { useEffect, useState } from "react";
 import PageHeader from "../components/PageHeader";
 import { PAGE_SHELL } from "../constants/pageLayout";
-
-const MONTHS = [
-  {
-    name: "January",
-    theme: { bar: "bg-[#b23b44]", accent: "text-[#b23b44]" },
-    items: [{ title: "New Year Month", meta: "" }],
-    art: "fireworks",
-  },
-  {
-    name: "February",
-    theme: { bar: "bg-[#c1a33b]", accent: "text-[#8a6a00]" },
-    items: [
-      { title: "Black History Week", meta: "" },
-      { title: "Chinese New Year", meta: "17th" },
-    ],
-    art: "ribbon",
-  },
-  {
-    name: "March",
-    theme: { bar: "bg-[#6aa0b7]", accent: "text-[#24566a]" },
-    items: [{ title: "International Women’s Day", meta: "8th" }],
-    art: "women",
-  },
-  {
-    name: "April",
-    theme: { bar: "bg-[#4e7b5d]", accent: "text-[#2f5c3f]" },
-    items: [{ title: "Earth Day (Tree Planting Day)", meta: "TBD · 22nd" }],
-    art: "earth",
-  },
-  {
-    name: "May",
-    theme: { bar: "bg-[#d59aa2]", accent: "text-[#7a3a45]" },
-    items: [{ title: "Mother’s Day", meta: "10th" }],
-    art: "mother",
-  },
-  {
-    name: "June",
-    theme: { bar: "bg-[#b23b44]", accent: "text-[#b23b44]" },
-    items: [
-      { title: "Father’s Day", meta: "21st" },
-      { title: "National Donut Day", meta: "5th" },
-    ],
-    art: "donut",
-  },
-  {
-    name: "July",
-    theme: { bar: "bg-[#c1a33b]", accent: "text-[#8a6a00]" },
-    items: [{ title: "Canada Day", meta: "July 1st" }],
-    art: "canada",
-  },
-  {
-    name: "August",
-    theme: { bar: "bg-[#6aa0b7]", accent: "text-[#24566a]" },
-    items: [{ title: "Employee Appreciation BBQ Month", meta: "" }],
-    art: "bbq",
-  },
-  {
-    name: "September",
-    theme: { bar: "bg-[#4e7b5d]", accent: "text-[#2f5c3f]" },
-    items: [{ title: "National Day for Truth and Reconciliation", meta: "30th" }],
-    art: "orange",
-  },
-  {
-    name: "October",
-    theme: { bar: "bg-[#d59aa2]", accent: "text-[#7a3a45]" },
-    items: [{ title: "Thanksgiving potluck", meta: "23rd" }],
-    art: "pumpkin",
-  },
-  {
-    name: "November",
-    theme: { bar: "bg-[#b23b44]", accent: "text-[#b23b44]" },
-    items: [{ title: "Remembrance Day", meta: "Nov 11" }],
-    art: "poppy",
-  },
-  {
-    name: "December",
-    theme: { bar: "bg-[#c1a33b]", accent: "text-[#8a6a00]" },
-    items: [
-      { title: "Year End Gala Party", meta: "" },
-      { title: "Festive Fusion Week", meta: "" },
-    ],
-    art: "party",
-  },
-];
+import api from "../services/api";
+import {
+  DEFAULT_CALENDAR_MONTHS,
+  DEFAULT_CALENDAR_SUBTITLE,
+  DEFAULT_CALENDAR_YEAR,
+  normalizeEngagementMonths,
+} from "../data/engagementCalendarDefault";
 
 function TinyArt({ kind }) {
   const common = "h-12 w-12 sm:h-14 sm:w-14";
@@ -368,13 +292,39 @@ function TinyArt({ kind }) {
 }
 
 export default function EmployeeEngagementCalendarPage() {
+  const [year, setYear] = useState(DEFAULT_CALENDAR_YEAR);
+  const [subtitle, setSubtitle] = useState(DEFAULT_CALENDAR_SUBTITLE);
+  const [months, setMonths] = useState(DEFAULT_CALENDAR_MONTHS);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("/api/engagement-calendar")
+      .then(({ data }) => {
+        if (!alive) return;
+        if (data?.year != null) setYear(Number(data.year));
+        if (data?.subtitle != null) setSubtitle(String(data.subtitle));
+        const normalized = normalizeEngagementMonths(data?.months);
+        if (normalized) setMonths(normalized);
+      })
+      .catch(() => {
+        /* keep defaults */
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   return (
-    <>
+    <main className={PAGE_SHELL}>
       <PageHeader
         title="Employee engagement calendar"
         subtitle="Monthly moments and activities — consistent across all facilities."
       />
-      <main className={PAGE_SHELL}>
         <section className="card overflow-hidden p-0">
           <div className="relative border-b border-slate-200/80 bg-white px-4 py-5 dark:border-white/10 dark:bg-[#0f0f0f] sm:px-6">
             <div className="pointer-events-none absolute inset-0 opacity-60" aria-hidden>
@@ -385,22 +335,23 @@ export default function EmployeeEngagementCalendarPage() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center rounded-full bg-[#eef2fb] px-3 py-1 text-xs font-extrabold text-[#0B3EAF] ring-1 ring-[#0B3EAF]/10 dark:bg-white/10 dark:text-[#A7D344] dark:ring-white/10">
-                    2026
+                    {year}
                   </span>
                   <p className="text-sm font-semibold text-slate-900 dark:text-white">Employee Engagement Calendar</p>
                 </div>
-                <p className="mt-1 text-xs text-slate-600 dark:text-white/70">
-                  Quick reference for the year — events are coordinated by HR/Leadership.
-                </p>
+                <p className="mt-1 text-xs text-slate-600 dark:text-white/70">{subtitle}</p>
               </div>
             </div>
           </div>
 
           <div className="bg-slate-50 px-4 py-5 dark:bg-white/5 sm:px-6">
+            {loading ? (
+              <p className="text-sm text-slate-600 dark:text-slate-400">Loading calendar…</p>
+            ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
-              {MONTHS.map((m) => (
+              {months.map((m, mi) => (
                 <section
-                  key={m.name}
+                  key={mi}
                   className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ring-1 ring-slate-200/60 transition duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-md dark:border-white/10 dark:bg-[#0f0f0f] dark:ring-white/5"
                 >
                   <div className="flex items-center justify-between gap-3 px-3 py-2.5">
@@ -414,8 +365,8 @@ export default function EmployeeEngagementCalendarPage() {
                   </div>
                   <div className="border-t border-slate-200/70 px-3 py-3 dark:border-white/10">
                     <ul className="space-y-1.5">
-                      {m.items.map((it) => (
-                        <li key={it.title} className="text-sm font-semibold text-slate-900 dark:text-white">
+                      {(m.items || []).map((it, ii) => (
+                        <li key={`${mi}-${ii}`} className="text-sm font-semibold text-slate-900 dark:text-white">
                           {it.title}
                           {it.meta ? (
                             <span className={`ml-1 font-bold ${m.theme.accent}`}>{it.meta}</span>
@@ -427,9 +378,9 @@ export default function EmployeeEngagementCalendarPage() {
                 </section>
               ))}
             </div>
+            )}
           </div>
         </section>
-      </main>
-    </>
+    </main>
   );
 }

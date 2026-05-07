@@ -33,9 +33,8 @@ export default function AdminSystemStatusPage() {
   }, []);
 
   return (
-    <>
+    <main className={PAGE_SHELL}>
       <PageHeader title="System status" subtitle="Admin-only health and quick metrics." />
-      <main className={PAGE_SHELL}>
         <div className="card">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-semibold text-slate-900 dark:text-white">Overview</div>
@@ -69,8 +68,7 @@ export default function AdminSystemStatusPage() {
             <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">No data.</div>
           )}
         </div>
-      </main>
-    </>
+    </main>
   );
 }
 

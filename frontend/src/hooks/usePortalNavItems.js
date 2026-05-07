@@ -10,31 +10,28 @@ import {
   IconUser,
   IconUsers,
 } from "../components/layout/SidebarIcons";
+import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
+import { hasAdminGrant } from "../utils/adminAccess";
 
 /**
  * Same main/admin nav items and home link target as the sidebar (role-aware).
+ * Pass the full `user` object so scoped admins only see administration areas they were granted.
  */
-export function usePortalNavItems(role) {
+export function usePortalNavItems(user) {
+  const role = user?.role;
   return useMemo(() => {
-    const isAdmin = role === "Admin";
     const isManager = role === "Manager";
+    const hasScopedGrants = Array.isArray(user?.admin_grants) && user.admin_grants.length > 0;
+    const showAdministrationNav = role === "Admin" || hasScopedGrants;
 
     const main = [];
-    if (isAdmin) {
-      main.push({
-        to: "/dashboard",
-        end: true,
-        icon: IconHome,
-        label: "Home",
-      });
-    } else {
-      main.push({
-        to: "/",
-        end: true,
-        icon: IconHome,
-        label: "Home",
-      });
-    }
+    /** Same home route for every role so `/` and upcoming feed behavior stay aligned (DashboardPage). */
+    main.push({
+      to: "/",
+      end: true,
+      icon: IconHome,
+      label: "Home",
+    });
 
     if (isManager) {
       main.push({
@@ -74,23 +71,33 @@ export function usePortalNavItems(role) {
     );
 
     const admin = [];
-    if (isAdmin) {
-      admin.push(
+    if (showAdministrationNav) {
+      const candidates = [
+        {
+          to: "/admin/engagement-calendar",
+          icon: IconCalendar,
+          label: "Engagement calendar",
+          desc: "Admin · yearly activities",
+          grantKey: ADMIN_GRANT_KEYS.ENGAGEMENT_CALENDAR,
+        },
         {
           to: "/upcoming",
           icon: IconCalendar,
           label: "Upcoming events",
+          grantKey: ADMIN_GRANT_KEYS.UPCOMING,
         },
         {
           to: "/users",
           icon: IconUsers,
           label: "Users",
+          grantKey: ADMIN_GRANT_KEYS.USERS,
         },
         {
           to: "/admin",
           icon: IconCog,
           label: "Learning admin",
           end: true,
+          grantKey: ADMIN_GRANT_KEYS.LEARNING_ADMIN,
         },
         {
           to: "/admin/reports",
@@ -98,6 +105,7 @@ export function usePortalNavItems(role) {
           label: "Manage reports",
           desc: "Add Power BI embeds",
           end: true,
+          grantKey: ADMIN_GRANT_KEYS.REPORTS,
         },
         {
           to: "/admin/system",
@@ -105,12 +113,27 @@ export function usePortalNavItems(role) {
           label: "System status",
           desc: "Health & metrics",
           end: true,
+          grantKey: ADMIN_GRANT_KEYS.SYSTEM,
         },
-      );
+        {
+          to: "/admin/polls",
+          icon: IconCog,
+          label: "Feedback & polls",
+          desc: "Popup surveys",
+          end: true,
+          grantKey: ADMIN_GRANT_KEYS.FEEDBACK_POLLS,
+        },
+      ];
+      for (const item of candidates) {
+        if (hasAdminGrant(user, item.grantKey)) {
+          const { grantKey: _k, ...nav } = item;
+          admin.push(nav);
+        }
+      }
     }
 
     const homeTo = "/";
 
     return { mainItems: main, adminItems: admin, homeTo };
-  }, [role]);
+  }, [role, user]);
 }

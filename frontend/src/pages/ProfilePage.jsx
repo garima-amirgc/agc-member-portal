@@ -8,6 +8,7 @@ import ReportingHierarchyTree from "../components/ReportingHierarchyTree";
 import { useAuth } from "../context/AuthContext";
 import { formatDepartments } from "../utils/userDepts";
 import { friendlyErrorMessage } from "../services/friendlyError";
+import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 
 export default function ProfilePage() {
   const { user, refreshMe } = useAuth();
@@ -170,7 +171,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-3">
               <div className="h-14 w-14 overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-300 dark:bg-slate-700 dark:ring-slate-600">
                 {me.profile_image_url ? (
-                  <img src={me.profile_image_url} alt="Profile" className="h-full w-full object-cover" />
+                  <img src={resolvePublicMediaUrl(me.profile_image_url)} alt="Profile" className="h-full w-full object-cover" />
                 ) : null}
               </div>
               <div className="text-sm text-slate-600 dark:text-slate-300">

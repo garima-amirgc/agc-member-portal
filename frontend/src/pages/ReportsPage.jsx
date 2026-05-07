@@ -106,12 +106,8 @@ export default function ReportsPage() {
   }, [activeFacility, activeId, reportsForFacility]);
 
   return (
-    <>
-      <PageHeader
-        title="Reports"
-        subtitle="Power BI dashboards embedded in Member Portal"
-      />
-      <main className={PAGE_SHELL}>
+    <main className={PAGE_SHELL}>
+      <PageHeader title="Reports" subtitle="Power BI dashboards embedded in Member Portal" />
         {loading ? (
           <div className="card">
             <div className="text-sm text-slate-600 dark:text-slate-300">Loading reports…</div>
@@ -221,8 +217,7 @@ export default function ReportsPage() {
             </section>
           </section>
         )}
-      </main>
-    </>
+    </main>
   );
 }
 

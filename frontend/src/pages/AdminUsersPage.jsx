@@ -4,11 +4,9 @@ import { PAGE_SHELL } from "../constants/pageLayout";
 
 export default function AdminUsersPage() {
   return (
-    <>
+    <main className={PAGE_SHELL}>
       <PageHeader title="Users" />
-      <div className={PAGE_SHELL}>
-        <AdminUsersSection className="card" />
-      </div>
-    </>
+      <AdminUsersSection className="card" />
+    </main>
   );
 }

@@ -140,6 +140,13 @@ CREATE TABLE IF NOT EXISTS report_access_users (
   UNIQUE(report_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS engagement_calendar (
+  id SERIAL PRIMARY KEY,
+  year INTEGER NOT NULL UNIQUE,
+  data_json JSONB NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS it_tickets (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -151,6 +158,35 @@ CREATE TABLE IF NOT EXISTS it_tickets (
   closed_at TIMESTAMPTZ,
   assignee_id INTEGER REFERENCES users(id),
   attachments TEXT
+);
+
+CREATE TABLE IF NOT EXISTS polls (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  poll_json TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 0,
+  start_at TEXT,
+  end_at TEXT,
+  banner_image_url TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS poll_submissions (
+  id SERIAL PRIMARY KEY,
+  poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  answers_json TEXT NOT NULL,
+  submitted_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(poll_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS portal_visits (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  visit_count INTEGER NOT NULL DEFAULT 0,
+  last_visit_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS resource_documents (
@@ -207,6 +243,36 @@ async function migrateColumns(client) {
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_month INTEGER",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_day INTEGER",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_grants TEXT",
+    `CREATE TABLE IF NOT EXISTS polls (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      poll_json TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 0,
+      start_at TEXT,
+      end_at TEXT,
+      banner_image_url TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "ALTER TABLE polls ADD COLUMN IF NOT EXISTS start_at TEXT",
+    "ALTER TABLE polls ADD COLUMN IF NOT EXISTS end_at TEXT",
+    "ALTER TABLE polls ADD COLUMN IF NOT EXISTS banner_image_url TEXT",
+    `CREATE TABLE IF NOT EXISTS poll_submissions (
+      id SERIAL PRIMARY KEY,
+      poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      answers_json TEXT NOT NULL,
+      submitted_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(poll_id, user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS portal_visits (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      visit_count INTEGER NOT NULL DEFAULT 0,
+      last_visit_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
     "CREATE TABLE IF NOT EXISTS report_access_users (report_id INTEGER NOT NULL REFERENCES embedded_reports(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, UNIQUE(report_id, user_id))",
   ];
   for (const q of alters) {
@@ -352,6 +418,23 @@ async function initDb() {
       WHERE NOT EXISTS (SELECT 1 FROM user_departments ud WHERE ud.user_id = u.id)
       ON CONFLICT (user_id, department) DO NOTHING
     `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS engagement_calendar (
+        id SERIAL PRIMARY KEY,
+        year INTEGER NOT NULL UNIQUE,
+        data_json JSONB NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    const ecSeed = await client.query("SELECT 1 FROM engagement_calendar LIMIT 1");
+    if (ecSeed.rows.length === 0) {
+      const def = require("../../data/engagementCalendarDefault");
+      await client.query("INSERT INTO engagement_calendar (year, data_json) VALUES ($1, $2::jsonb)", [
+        def.DEFAULT_YEAR,
+        def.defaultDataJson(),
+      ]);
+    }
   } finally {
     client.release();
   }

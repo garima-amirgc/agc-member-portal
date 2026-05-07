@@ -32,7 +32,10 @@ export default function AdminDashboardPage() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const load = () => {
-    api.get("/users").then((r) => setUsers(r.data));
+    api
+      .get("/users")
+      .then((r) => setUsers(r.data))
+      .catch(() => setUsers([]));
     api.get("/courses").then((r) => setCourses(r.data));
     api.get("/assignments").then((r) => setAssignments(r.data));
   };

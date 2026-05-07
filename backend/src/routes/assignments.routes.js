@@ -1,7 +1,9 @@
 const express = require("express");
 const { db } = require("../config/db");
 const { ROLES } = require("../config/constants");
-const { authRequired, allowRoles } = require("../middleware/auth");
+const { authRequired } = require("../middleware/auth");
+const { requireAdminGrant } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS, hasAdminGrant } = require("../config/adminGrants");
 const { notifyManagerCourseCompletion } = require("../services/notification.service");
 const { parsePositiveInt } = require("../utils/ids");
 
@@ -43,7 +45,7 @@ router.get("/me", async (req, res) => {
   return res.json(rows);
 });
 
-router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
   const user_id = parsePositiveInt(req.body?.user_id);
   const course_id = parsePositiveInt(req.body?.course_id);
   if (user_id == null || course_id == null) {
@@ -74,7 +76,8 @@ router.post("/:id/progress", async (req, res) => {
   }
   const assignment = await db.prepare("SELECT * FROM assignments WHERE id = ?").get(req.params.id);
   if (!assignment) return res.status(404).json({ message: "Assignment not found" });
-  if (req.user.role !== ROLES.ADMIN && req.user.id !== assignment.user_id) {
+  const canAdminEditOthers = hasAdminGrant(req.user, ADMIN_GRANT_KEYS.LEARNING_ADMIN);
+  if (!canAdminEditOthers && req.user.id !== assignment.user_id) {
     return res.status(403).json({ message: "Forbidden" });
   }
 
@@ -133,7 +136,11 @@ router.post("/:id/progress", async (req, res) => {
   });
 });
 
-router.get("/", allowRoles(ROLES.ADMIN, ROLES.MANAGER), async (req, res) => {
+router.get("/", async (req, res) => {
+  const canListAll = hasAdminGrant(req.user, ADMIN_GRANT_KEYS.LEARNING_ADMIN);
+  if (req.user.role !== ROLES.MANAGER && !canListAll) {
+    return res.status(403).json({ message: "You do not have access to this administration area." });
+  }
   let rows = await db
     .prepare(
       `SELECT a.*, u.name as user_name, c.title as course_title, c.business_unit as course_business_unit

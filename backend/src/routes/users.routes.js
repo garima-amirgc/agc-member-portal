@@ -1,7 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const { db, isPostgres, getPool } = require("../config/db");
-const { BUSINESS_UNITS, ROLES } = require("../config/constants");
+const { BUSINESS_UNITS, ROLES, canonicalRole } = require("../config/constants");
 const { authRequired, allowRoles } = require("../middleware/auth");
 const { syncUserAssignmentsForFacilities } = require("../services/assignmentSync.service");
 const { mergeFacilityAccess } = require("../utils/businessUnitCodes");
@@ -13,9 +13,42 @@ const userDeptSvc = require("../services/userDepartments.service");
 const inviteSvc = require("../services/invite.service");
 const emailSvc = require("../services/email.service");
 const { issueInviteAndEmail } = require("../services/inviteResend.service");
+const portalVisitsSvc = require("../services/portalVisits.service");
+const {
+  ADMIN_GRANT_KEYS,
+  parseAdminGrantsColumn,
+  sanitizeAdminGrantsPayload,
+  isFullAdminUser,
+} = require("../config/adminGrants");
+const { requireAdminGrant } = require("../middleware/adminGrants");
 
 const router = express.Router();
 router.use(authRequired);
+
+/** Client may send `admin_grants` or `adminGrants`; treat key presence as intent (including explicit `null`). */
+function readAdminGrantsFromBody(body) {
+  if (!body || typeof body !== "object") return { present: false, value: undefined };
+  function normalizeAdminGrantsValue(v) {
+    if (v == null) return v;
+    if (typeof v === "string") {
+      const t = v.trim();
+      if (t === "" || t.toLowerCase() === "null") return null;
+      try {
+        return JSON.parse(t);
+      } catch {
+        return v;
+      }
+    }
+    return v;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "admin_grants")) {
+    return { present: true, value: normalizeAdminGrantsValue(body.admin_grants) };
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "adminGrants")) {
+    return { present: true, value: normalizeAdminGrantsValue(body.adminGrants) };
+  }
+  return { present: false, value: undefined };
+}
 
 function normalizeBirthMonthDay(month, day) {
   const m = Number(month);
@@ -43,6 +76,7 @@ function adminUsersListSql() {
         u.id, u.name, u.email, u.role, u.business_unit, u.manager_id, u.created_at,
         COALESCE(NULLIF(TRIM(u.department), ''), 'Production') AS department,
         u.designation,
+        u.admin_grants,
         u.invite_token_hash,
         u.invite_expires_at,
         m.name AS manager_name,
@@ -58,7 +92,7 @@ function adminUsersListSql() {
 router.get("/me", async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, created_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, created_at, admin_grants, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
     )
     .get(req.user.id);
 
@@ -72,7 +106,28 @@ router.get("/me", async (req, res) => {
   const reporting_hierarchy = await buildReportingHierarchy(req.user.id);
   const departments = await userDeptSvc.listForUser(req.user.id);
 
-  return res.json({ ...user, facilities, departments, reporting_hierarchy });
+  const { admin_grants: rawAg, ...rest } = user;
+  const adminGrantsOut = parseAdminGrantsColumn(rawAg);
+  return res.json({
+    ...rest,
+    role: canonicalRole(rest.role),
+    admin_grants: adminGrantsOut,
+    is_full_admin: isFullAdminUser(req.user),
+    facilities,
+    departments,
+    reporting_hierarchy,
+  });
+});
+
+/** Track member portal visit (home/dashboard). */
+router.post("/me/portal-visit", async (req, res) => {
+  try {
+    await portalVisitsSvc.recordPortalVisit(req.user.id);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[users] POST /me/portal-visit:", e);
+    return res.status(500).json({ message: "Could not record visit" });
+  }
 });
 
 // Update logged-in user's profile details
@@ -179,7 +234,7 @@ router.get("/me/leave-requests", async (req, res) => {
   }
 });
 
-router.get("/", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.get("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const rowsRaw = await db.prepare(adminUsersListSql()).all();
   const rows = rowsRaw.map((r) => {
     const departments = String(r.departments_csv || "")
@@ -192,13 +247,22 @@ router.get("/", allowRoles(ROLES.ADMIN), async (req, res) => {
       .map((s) => s.trim())
       .filter(Boolean)
       .sort();
-    const { facilities_csv, departments_csv, invite_token_hash, invite_expires_at, ...rest } = r;
+    const {
+      facilities_csv,
+      departments_csv,
+      invite_token_hash,
+      invite_expires_at,
+      admin_grants: rawGrants,
+      ...rest
+    } = r;
     const invite_status = inviteSvc.inviteStatusForRow({
       invite_token_hash,
       invite_expires_at,
     });
     return {
       ...rest,
+      role: canonicalRole(rest.role),
+      admin_grants: parseAdminGrantsColumn(rawGrants),
       facilities,
       departments: departments.length > 0 ? departments : [rest.department || "Production"],
       department: departments[0] || rest.department || "Production",
@@ -233,10 +297,15 @@ router.get("/manager/team-overview", async (req, res) => {
 });
 
 /** Before GET /:id — explicit path so it is never shadowed. */
-router.post("/:id/resend-invite", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.post("/:id/resend-invite", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const userId = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(userId) || userId < 1) {
     return res.status(400).json({ message: "Invalid user id" });
+  }
+  const target = await db.prepare("SELECT id, role FROM users WHERE id = ?").get(userId);
+  if (!target) return res.status(404).json({ message: "User not found" });
+  if (canonicalRole(target.role) === ROLES.ADMIN && !isFullAdminUser(req.user)) {
+    return res.status(403).json({ message: "Only a full administrator can manage administrator accounts." });
   }
   try {
     const { setup_url, email_sent } = await issueInviteAndEmail(db, userId);
@@ -253,13 +322,16 @@ router.post("/:id/resend-invite", allowRoles(ROLES.ADMIN), async (req, res) => {
 });
 
 // Admin: fetch a specific user + facilities
-router.get("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.get("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, created_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, created_at, admin_grants, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
     )
     .get(req.params.id);
   if (!user) return res.status(404).json({ message: "User not found" });
+  if (canonicalRole(user.role) === ROLES.ADMIN && !isFullAdminUser(req.user)) {
+    return res.status(403).json({ message: "Only a full administrator can open administrator account details." });
+  }
 
   const facRows = await db
     .prepare("SELECT business_unit FROM user_facilities WHERE user_id = ? ORDER BY business_unit ASC")
@@ -269,11 +341,18 @@ router.get("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
   const departments = await userDeptSvc.listForUser(req.params.id);
 
   const invite_status = inviteSvc.inviteStatusForRow(user);
-  const { invite_token_hash: _h, invite_expires_at: _e, ...safe } = user;
-  return res.json({ ...safe, facilities, departments, invite_status });
+  const { invite_token_hash: _h, invite_expires_at: _e, admin_grants: rawAg, ...safe } = user;
+  return res.json({
+    ...safe,
+    role: canonicalRole(safe.role),
+    admin_grants: parseAdminGrantsColumn(rawAg),
+    facilities,
+    departments,
+    invite_status,
+  });
 });
 
-router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const {
     name,
     email,
@@ -286,6 +365,7 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
     departments,
     designation,
   } = req.body;
+  const adminGrantsInBody = readAdminGrantsFromBody(req.body || {});
   const businessUnits = Array.isArray(business_units)
     ? business_units
     : business_unit
@@ -297,6 +377,25 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
 
   if (!name || !email || !role || businessUnits.length === 0) {
     return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  const roleNorm = canonicalRole(role);
+  if (![ROLES.ADMIN, ROLES.MANAGER, ROLES.EMPLOYEE].includes(roleNorm)) {
+    return res.status(400).json({ message: "Invalid role" });
+  }
+
+  if (roleNorm === ROLES.ADMIN && !isFullAdminUser(req.user)) {
+    return res.status(403).json({ message: "Only a full administrator can create administrator accounts." });
+  }
+
+  let insertAdminGrants = null;
+  if (adminGrantsInBody.present) {
+    if (!isFullAdminUser(req.user)) {
+      return res.status(403).json({ message: "Only a full administrator can assign administration area access." });
+    }
+    const g = sanitizeAdminGrantsPayload(adminGrantsInBody.value, { targetIsAdminRole: roleNorm === ROLES.ADMIN });
+    if (g.error) return res.status(400).json({ message: g.error });
+    if (!g.omit) insertAdminGrants = g.db;
   }
 
   if (!useInvite) {
@@ -341,19 +440,20 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
   try {
     const result = await db
       .prepare(
-        "INSERT INTO users(name, email, password, role, business_unit, manager_id, department, designation, invite_token_hash, invite_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO users(name, email, password, role, business_unit, manager_id, department, designation, invite_token_hash, invite_expires_at, admin_grants) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         name,
         email,
         pwHash,
-        role,
+        roleNorm,
         businessUnits[0],
         manager_id,
         primaryDept,
         designationTrim,
         inviteHash,
-        inviteExpires
+        inviteExpires,
+        insertAdminGrants
       );
 
     const userId = result.lastInsertRowid;
@@ -409,22 +509,36 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
   }
 });
 
-router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const userId = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(userId) || userId < 1) {
     return res.status(400).json({ message: "Invalid user id" });
   }
 
-  const { name, email, role, business_unit, business_units, manager_id, password, department, departments, designation } =
-    req.body;
+  const {
+    name,
+    email,
+    role,
+    business_unit,
+    business_units,
+    manager_id,
+    password,
+    department,
+    departments,
+    designation,
+  } = req.body;
+  const adminGrantsInBody = readAdminGrantsFromBody(req.body || {});
   const existing = await db
     .prepare(
       `SELECT id, name, email, role, business_unit, manager_id, password, department, designation, profile_image_url, created_at,
-              invite_token_hash, invite_expires_at
+              invite_token_hash, invite_expires_at, admin_grants
        FROM users WHERE id = ?`
     )
     .get(userId);
   if (!existing) return res.status(404).json({ message: "User not found" });
+  if (canonicalRole(existing.role) === ROLES.ADMIN && !isFullAdminUser(req.user)) {
+    return res.status(403).json({ message: "Only a full administrator can edit administrator accounts." });
+  }
 
   let newPassword = existing.password;
   let clearInvite = false;
@@ -513,15 +627,41 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
   }
   const newDept = newDeptList[0] || "Production";
 
-  const nextRole = role !== undefined && role !== null && String(role).trim() !== "" ? String(role).trim() : existing.role;
+  const nextRole =
+    role !== undefined && role !== null && String(role).trim() !== ""
+      ? canonicalRole(role)
+      : canonicalRole(existing.role);
   if (![ROLES.ADMIN, ROLES.MANAGER, ROLES.EMPLOYEE].includes(nextRole)) {
     return res.status(400).json({ message: "Invalid role" });
   }
 
+  if (nextRole === ROLES.ADMIN && !isFullAdminUser(req.user)) {
+    return res.status(403).json({ message: "Only a full administrator can assign the administrator role." });
+  }
+
+  let nextAdminGrantsDb;
+  if (adminGrantsInBody.present) {
+    if (!isFullAdminUser(req.user)) {
+      return res.status(403).json({ message: "Only a full administrator can change administration area access." });
+    }
+    const g = sanitizeAdminGrantsPayload(adminGrantsInBody.value, { targetIsAdminRole: nextRole === ROLES.ADMIN });
+    if (g.error) return res.status(400).json({ message: g.error });
+    if (g.omit) {
+      const parsedExisting = parseAdminGrantsColumn(existing.admin_grants);
+      nextAdminGrantsDb = parsedExisting ? JSON.stringify(parsedExisting) : null;
+    } else {
+      nextAdminGrantsDb = g.db;
+    }
+  } else {
+    const parsed = parseAdminGrantsColumn(existing.admin_grants);
+    nextAdminGrantsDb = parsed ? JSON.stringify(parsed) : null;
+  }
+  if (nextAdminGrantsDb === undefined) nextAdminGrantsDb = null;
+
   try {
     await db
       .prepare(
-        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, designation=?, invite_token_hash=?, invite_expires_at=? WHERE id=?"
+        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, designation=?, invite_token_hash=?, invite_expires_at=?, admin_grants=? WHERE id=?"
       )
       .run(
         nextName,
@@ -534,6 +674,7 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
         nextDesignation,
         nextInviteHash,
         nextInviteExpires,
+        nextAdminGrantsDb,
         userId
       );
 
@@ -566,14 +707,23 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
       `SELECT id, name, email, role,
         COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department,
         designation,
-        manager_id
+        manager_id,
+        admin_grants
        FROM users WHERE id = ?`
     )
     .get(userId);
 
   const departmentsOut = await userDeptSvc.listForUser(userId);
+  const { admin_grants: rawAg2, ...updatedRest } = updated;
 
-  return res.json({ message: "User updated", user: { ...updated, departments: departmentsOut } });
+  return res.json({
+    message: "User updated",
+    user: {
+      ...updatedRest,
+      admin_grants: parseAdminGrantsColumn(rawAg2),
+      departments: departmentsOut,
+    },
+  });
 });
 
 /**
@@ -640,13 +790,18 @@ async function deleteAdminUserCascade(userId, actingAdminId) {
   await db.prepare("DELETE FROM users WHERE id = ?").run(userId);
 }
 
-router.delete("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.delete("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const userId = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(userId) || userId < 1) {
     return res.status(400).json({ message: "Invalid user id" });
   }
   if (userId === req.user.id) {
     return res.status(400).json({ message: "You cannot delete your own account." });
+  }
+  const victim = await db.prepare("SELECT id, role FROM users WHERE id = ?").get(userId);
+  if (!victim) return res.status(404).json({ message: "User not found" });
+  if (canonicalRole(victim.role) === ROLES.ADMIN && !isFullAdminUser(req.user)) {
+    return res.status(403).json({ message: "Only a full administrator can delete administrator accounts." });
   }
   try {
     await deleteAdminUserCascade(userId, req.user.id);

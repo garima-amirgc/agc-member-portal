@@ -2,9 +2,26 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { db } = require("../config/db");
-const { BUSINESS_UNITS, ROLES } = require("../config/constants");
+const { BUSINESS_UNITS, ROLES, canonicalRole } = require("../config/constants");
 const userDeptSvc = require("../services/userDepartments.service");
-const { authRequired, allowRoles } = require("../middleware/auth");
+const { authRequired } = require("../middleware/auth");
+const { requireAdminGrant } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS, isFullAdminUser, parseAdminGrantsColumn } = require("../config/adminGrants");
+
+function authResponseUser(userRow, departments, dept) {
+  const { password: _pw, invite_token_hash: _i, invite_expires_at: _ie, admin_grants: rawAg, ...safe } = userRow;
+  const adminGrants = parseAdminGrantsColumn(rawAg);
+  const role = canonicalRole(userRow.role);
+  return {
+    ...safe,
+    role,
+    password: undefined,
+    admin_grants: adminGrants,
+    is_full_admin: isFullAdminUser({ role, adminGrants }),
+    departments,
+    department: dept,
+  };
+}
 const leaveSvc = require("../services/leaveRequests.service");
 const managerTeamSvc = require("../services/managerTeam.service");
 const { managerLeaveInboxWithTeam } = require("../handlers/managerInbox.handler");
@@ -21,10 +38,17 @@ function jwtExpiresForSession(rememberMe) {
   return r ? "30d" : "8h";
 }
 
-router.post("/register", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
+router.post("/register", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const { name, email, password, role, business_unit, manager_id = null } = req.body;
   if (!name || !email || !password || !role || !business_unit) {
     return res.status(400).json({ message: "Missing required fields" });
+  }
+  const roleNorm = canonicalRole(role);
+  if (![ROLES.ADMIN, ROLES.MANAGER, ROLES.EMPLOYEE].includes(roleNorm)) {
+    return res.status(400).json({ message: "Invalid role" });
+  }
+  if (roleNorm === ROLES.ADMIN && !isFullAdminUser(req.user)) {
+    return res.status(403).json({ message: "Only a full administrator can create administrator accounts." });
   }
   if (!BUSINESS_UNITS.includes(business_unit)) {
     return res.status(400).json({ message: "Invalid business unit" });
@@ -40,7 +64,7 @@ router.post("/register", authRequired, allowRoles(ROLES.ADMIN), async (req, res)
     const stmt = db.prepare(
       "INSERT INTO users(name, email, password, role, business_unit, manager_id) VALUES (?, ?, ?, ?, ?, ?)"
     );
-    const result = await stmt.run(name, email, hash, role, business_unit, manager_id);
+    const result = await stmt.run(name, email, hash, roleNorm, business_unit, manager_id);
     return res.status(201).json({ id: result.lastInsertRowid, message: "User created" });
   } catch {
     return res.status(400).json({ message: "User already exists or invalid data" });
@@ -92,10 +116,9 @@ router.post("/login", async (req, res) => {
     { expiresIn: jwtExpiresForSession(rememberMe) }
   );
 
-  const { password: _pw, invite_token_hash: _i, invite_expires_at: _ie, ...safe } = user;
   return res.json({
     token,
-    user: { ...safe, password: undefined, departments, department: dept },
+    user: authResponseUser(user, departments, dept),
   });
 });
 
@@ -198,10 +221,9 @@ router.post("/reset-password", async (req, res) => {
       process.env.JWT_SECRET || "dev_secret",
       { expiresIn: jwtExpiresForSession(rememberMe) }
     );
-    const { password: _p, invite_token_hash: _i, invite_expires_at: _ie, ...safe } = user;
     return res.json({
       token,
-      user: { ...safe, password: undefined, departments, department: dept },
+      user: authResponseUser(user, departments, dept),
     });
   } catch (e) {
     const code = e.statusCode || 500;
@@ -263,10 +285,9 @@ router.post("/complete-invite", async (req, res) => {
       process.env.JWT_SECRET || "dev_secret",
       { expiresIn: jwtExpiresForSession(rememberMe) }
     );
-    const { password: _p, invite_token_hash: _i, invite_expires_at: _ie, ...safe } = user;
     return res.json({
       token,
-      user: { ...safe, password: undefined, departments, department: dept },
+      user: authResponseUser(user, departments, dept),
     });
   } catch (e) {
     const code = e.statusCode || 500;

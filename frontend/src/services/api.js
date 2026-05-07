@@ -1,7 +1,10 @@
 import axios from "axios";
 
-/** Prefer 127.0.0.1 on Windows — `localhost` can hit IPv6 (::1) while Node listens on IPv4 only, causing odd failures. */
-const LOOPBACK_API = "http://127.0.0.1:5000";
+/**
+ * Loopback API for local dev.
+ * Use `localhost` here because this environment can reach `localhost:*` but not `127.0.0.1:*` reliably.
+ */
+const LOOPBACK_API = "http://localhost:5000";
 
 const DEV_LIKE_PORTS = new Set([
   "5173",
@@ -117,6 +120,34 @@ export function usersResendInvitePath(userId) {
 }
 
 /**
+ * Same URL axios uses for `api.put(\`/users/${id}\`, ...)` — for fetch() with a raw JSON body.
+ * - Absolute API base (e.g. http://127.0.0.1:5000): /users/:id on that host.
+ * - Relative /api: page origin + /api/users/:id
+ */
+export function resolveUserPutUrl(userId) {
+  const id = encodeURIComponent(String(userId));
+  const base = String(getApiBaseURL() || "").replace(/\/+$/, "");
+  if (base.startsWith("http://") || base.startsWith("https://")) {
+    return `${base}/users/${id}`;
+  }
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  if (base === "/api" || base.endsWith("/api")) {
+    return `${origin}${base}/users/${id}`;
+  }
+  return `${origin}/api/users/${id}`;
+}
+
+/**
+ * PUT /users/:id — use the shared axios instance so baseURL, auth, and HTTPS/loopback rules match GET /users.
+ * (A prior fetch-based path could hit a different resolved URL than list/load in some environments.)
+ */
+export async function putUserSave(userId, body) {
+  const id = encodeURIComponent(String(userId));
+  const { data } = await api.put(`/users/${id}`, body);
+  return { data };
+}
+
+/**
  * Resend invite — same networking rules as `postItTicketAttachment`:
  * when the SPA and API are same-origin (or base is relative `/api`), POST via the page origin + `/api/users/...`
  * so Vite’s proxy is used. When API is cross-origin (e.g. page on localhost:5173, API on 127.0.0.1:5000),
@@ -203,6 +234,7 @@ api.interceptors.response.use(
       );
     const isResourcesCall = /\/resources\//.test(reqPath);
     const isUpcomingCall = /\/upcoming(\/|$)/.test(reqPath);
+    const isEngagementCalendarCall = /\/engagement-calendar(\/|$)/.test(reqPath);
     const isUploadCall = /\/upload(\/|$)/.test(reqPath);
     const isUsersResendInvite = /\/users\/[^/]+\/resend-invite/.test(reqPath);
     const alreadyRetried = cfg?.__agcRetryBackend === true;
@@ -212,7 +244,12 @@ api.interceptors.response.use(
     if (
       status === 404 &&
       cfg &&
-      (isLeaveCall || isResourcesCall || isUpcomingCall || isUploadCall || isUsersResendInvite) &&
+      (isLeaveCall ||
+        isResourcesCall ||
+        isUpcomingCall ||
+        isEngagementCalendarCall ||
+        isUploadCall ||
+        isUsersResendInvite) &&
       !alreadyRetried &&
       !alreadyOnLoopback5000
     ) {

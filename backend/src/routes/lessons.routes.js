@@ -1,7 +1,8 @@
 const express = require("express");
 const { db } = require("../config/db");
-const { ROLES } = require("../config/constants");
-const { authRequired, allowRoles } = require("../middleware/auth");
+const { authRequired } = require("../middleware/auth");
+const { requireAdminGrant } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 const { deleteLessonVideoByUrl } = require("../services/objectStorage.service");
 const { parsePositiveInt } = require("../utils/ids");
 
@@ -21,7 +22,7 @@ router.get("/:id", async (req, res) => {
   res.json(lesson);
 });
 
-router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
   const { title, video_url } = req.body;
   const course_id = parsePositiveInt(req.body?.course_id);
   const order_index = parsePositiveInt(req.body?.order_index);
@@ -40,7 +41,7 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
-router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
   const { title, video_url, order_index } = req.body;
   await db.prepare("UPDATE lessons SET title=?, video_url=?, order_index=? WHERE id=?").run(
     title,
@@ -51,7 +52,7 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
   res.json({ message: "Lesson updated" });
 });
 
-router.delete("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.delete("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
   const lesson = await db.prepare("SELECT id, video_url FROM lessons WHERE id=?").get(req.params.id);
   if (!lesson) return res.status(404).json({ message: "Lesson not found" });
 

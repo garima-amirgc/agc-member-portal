@@ -1,37 +1,15 @@
 const express = require("express");
 const { db, isPostgres, getPool } = require("../config/db");
 const { ROLES, BUSINESS_UNITS } = require("../config/constants");
-const { authRequired, allowRoles } = require("../middleware/auth");
+const { authRequired } = require("../middleware/auth");
+const { requireAdminGrant } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS, hasAdminGrant } = require("../config/adminGrants");
 const { deleteLessonVideoByUrl } = require("../services/objectStorage.service");
-const { mergeFacilityAccess } = require("../utils/businessUnitCodes");
 
 const router = express.Router();
 
 const ORDER_SQLITE = `COALESCE(NULLIF(TRIM(event_at), ''), NULLIF(TRIM(show_from_at), ''), NULLIF(TRIM(start_at), ''), created_at) ASC, sort_order ASC, id ASC`;
 const ORDER_PG = `COALESCE(NULLIF(TRIM(COALESCE(event_at, '')), ''), NULLIF(TRIM(COALESCE(show_from_at, '')), ''), NULLIF(TRIM(COALESCE(start_at, '')), ''), created_at::text) ASC, sort_order ASC, id ASC`;
-
-/** Facilities the user may see upcoming events for (member: profile; admin: all sites). */
-async function facilitiesForUpcomingUser(user) {
-  if (String(user.role || "").trim() === ROLES.ADMIN) {
-    return [...BUSINESS_UNITS];
-  }
-  let rows = [];
-  if (isPostgres) {
-    const pool = getPool();
-    if (!pool) return [];
-    const r = await pool.query(
-      "SELECT business_unit FROM user_facilities WHERE user_id = $1 ORDER BY business_unit ASC",
-      [user.id]
-    );
-    rows = r.rows || [];
-  } else {
-    rows = await db
-      .prepare("SELECT business_unit FROM user_facilities WHERE user_id = ? ORDER BY business_unit ASC")
-      .all(user.id);
-  }
-
-  return mergeFacilityAccess(rows, user.business_unit);
-}
 
 function normalizeDateInput(v) {
   if (v === undefined || v === null) return null;
@@ -79,56 +57,40 @@ function shapeUpcomingRow(row) {
 }
 
 /**
- * Published, non-expired events across all facilities the user can access.
+ * Published, non-expired events for the merged home/dashboard feed.
+ * Intentionally not filtered by user facility: every role (Employee / Manager / Admin) gets the same list
+ * so the home page always matches the global “Upcoming” intent. Facility pages use GET /upcoming?business_unit=…
  */
 router.get("/feed", authRequired, async (req, res) => {
-  const facs = await facilitiesForUpcomingUser(req.user);
-  if (facs.length === 0) return res.json([]);
-
   const nowIso = new Date().toISOString();
-  let rows;
   if (isPostgres) {
     const pool = getPool();
     const r = await pool.query(
       `
       SELECT *
       FROM facility_upcoming
-      WHERE (
-        business_unit = ANY($1::text[])
-        OR EXISTS (
-          SELECT 1 FROM unnest($1::text[]) AS u(bu)
-          WHERE POSITION(('"' || u.bu || '"') IN COALESCE(business_units, '')) > 0
-        )
-      )
-        AND COALESCE(published, 1) = 1
-        AND (show_from_at IS NULL OR TRIM(COALESCE(show_from_at, '')) = '' OR show_from_at <= $2)
-        AND (end_at IS NULL OR TRIM(COALESCE(end_at, '')) = '' OR end_at > $3)
+      WHERE COALESCE(published, 1) = 1
+        AND (show_from_at IS NULL OR TRIM(COALESCE(show_from_at, '')) = '' OR show_from_at <= $1)
+        AND (end_at IS NULL OR TRIM(COALESCE(end_at, '')) = '' OR end_at > $2)
       ORDER BY ${ORDER_PG}
       `,
-      [facs, nowIso, nowIso]
+      [nowIso, nowIso]
     );
-    rows = r.rows;
-  } else {
-    const ph = facs.map(() => "?").join(", ");
-    const instrFallback = facs.map(() => `INSTR(COALESCE(business_units, ''), '"' || ? || '"') > 0`).join(" OR ");
-    const sql = `
+    return res.json(r.rows.map(shapeUpcomingRow));
+  }
+
+  const rows = await db
+    .prepare(
+      `
     SELECT *
     FROM facility_upcoming
-    WHERE (
-      business_unit IN (${ph})
-      OR EXISTS (
-        SELECT 1 FROM json_each(business_units) AS j
-        WHERE j.value IN (${ph})
-      )
-      OR (${instrFallback})
-    )
-      AND COALESCE(published, 1) = 1
+    WHERE COALESCE(published, 1) = 1
       AND (show_from_at IS NULL OR TRIM(IFNULL(show_from_at, '')) = '' OR show_from_at <= ?)
       AND (end_at IS NULL OR TRIM(end_at) = '' OR end_at > ?)
     ORDER BY ${ORDER_SQLITE}
-  `;
-    rows = await db.prepare(sql).all(...facs, ...facs, ...facs, nowIso, nowIso);
-  }
+  `
+    )
+    .all(nowIso, nowIso);
   return res.json(rows.map(shapeUpcomingRow));
 });
 
@@ -136,7 +98,7 @@ router.get("/", authRequired, async (req, res) => {
   const raw = req.query.business_unit;
   const bu = Array.isArray(raw) ? raw[0] : raw;
 
-  if (req.user.role === ROLES.ADMIN && !bu) {
+  if (!bu && (req.user.role === ROLES.ADMIN || hasAdminGrant(req.user, ADMIN_GRANT_KEYS.UPCOMING))) {
     const rows = isPostgres
       ? (await getPool().query(`SELECT * FROM facility_upcoming ORDER BY ${ORDER_PG}`)).rows
       : await db.prepare(`SELECT * FROM facility_upcoming ORDER BY ${ORDER_SQLITE}`).all();
@@ -235,7 +197,7 @@ function resolveBusinessUnitsFromBody(body) {
   return [];
 }
 
-router.post("/", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
+router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
   const { title, detail, start_at, end_at, published, image_url, show_from_at, event_at } = req.body;
   if (!title || typeof title !== "string") {
     return res.status(400).json({ message: "title is required" });
@@ -298,7 +260,7 @@ router.post("/", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
   return res.status(201).json({ created: [shaped], count: 1 });
 });
 
-router.put("/:id", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
+router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
   const existing = await db.prepare("SELECT * FROM facility_upcoming WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ message: "Not found" });
 
@@ -382,7 +344,7 @@ router.put("/:id", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
   return res.json(shapeUpcomingRow(row));
 });
 
-router.delete("/:id", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
+router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
   const existing = await db.prepare("SELECT * FROM facility_upcoming WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ message: "Not found" });
   if (existing.image_url) {

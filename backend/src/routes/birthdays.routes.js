@@ -1,7 +1,8 @@
 const express = require("express");
 const { db } = require("../config/db");
-const { ROLES } = require("../config/constants");
-const { authRequired, allowRoles } = require("../middleware/auth");
+const { authRequired } = require("../middleware/auth");
+const { requireAdminGrant } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 
 const router = express.Router();
 
@@ -65,12 +66,12 @@ function shapeRow(r) {
 }
 
 // Admin CRUD
-router.get("/", authRequired, allowRoles(ROLES.ADMIN), async (_req, res) => {
+router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS), async (_req, res) => {
   const rows = await db.prepare("SELECT * FROM birthday_list ORDER BY dob ASC, name ASC, id ASC").all();
   return res.json((Array.isArray(rows) ? rows : []).map(shapeRow));
 });
 
-router.post("/", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
+router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS), async (req, res) => {
   const name = req.body?.name != null ? String(req.body.name).trim() : "";
   const facilityRaw =
     req.body?.facility_name != null
@@ -93,7 +94,7 @@ router.post("/", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
   return res.status(201).json(shapeRow(row));
 });
 
-router.put("/:id", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
+router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS), async (req, res) => {
   const existing = await db.prepare("SELECT * FROM birthday_list WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ message: "Not found" });
 
@@ -124,7 +125,7 @@ router.put("/:id", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
   return res.json(shapeRow(row));
 });
 
-router.delete("/:id", authRequired, allowRoles(ROLES.ADMIN), async (req, res) => {
+router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS), async (req, res) => {
   const existing = await db.prepare("SELECT * FROM birthday_list WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ message: "Not found" });
   await db.prepare("DELETE FROM birthday_list WHERE id = ?").run(req.params.id);

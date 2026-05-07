@@ -1,14 +1,16 @@
 const express = require("express");
 const { db } = require("../config/db");
 const { ROLES } = require("../config/constants");
-const { authRequired, allowRoles } = require("../middleware/auth");
+const { authRequired } = require("../middleware/auth");
+const { requireAdminGrant } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS, hasAdminGrant } = require("../config/adminGrants");
 const { deleteLessonVideoByUrl } = require("../services/objectStorage.service");
 
 const router = express.Router();
 router.use(authRequired);
 
 router.get("/", async (req, res) => {
-  if (req.user.role === ROLES.ADMIN) {
+  if (hasAdminGrant(req.user, ADMIN_GRANT_KEYS.LEARNING_ADMIN)) {
     const businessUnit = req.query.business_unit;
     const sql = businessUnit
       ? "SELECT * FROM courses WHERE business_unit = ? ORDER BY id DESC"
@@ -53,7 +55,8 @@ router.get("/:id", async (req, res) => {
   const course = await db.prepare("SELECT * FROM courses WHERE id = ?").get(req.params.id);
   if (!course) return res.status(404).json({ message: "Course not found" });
 
-  if (req.user.role !== ROLES.ADMIN) {
+  const adminAllCourses = hasAdminGrant(req.user, ADMIN_GRANT_KEYS.LEARNING_ADMIN);
+  if (!adminAllCourses) {
     const facilityAllowed = await db
       .prepare("SELECT 1 FROM user_facilities WHERE user_id = ? AND business_unit = ? LIMIT 1")
       .get(req.user.id, course.business_unit);
@@ -71,7 +74,7 @@ function normalizeResourceCategory(raw) {
   return String(raw).trim().toLowerCase();
 }
 
-router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
   const { title, description, business_unit, resource_category } = req.body;
   const rc = normalizeResourceCategory(resource_category);
   const result = await db
@@ -82,7 +85,7 @@ router.post("/", allowRoles(ROLES.ADMIN), async (req, res) => {
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
-router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
   const { title, description, business_unit, resource_category } = req.body;
   const rc = normalizeResourceCategory(resource_category);
   await db
@@ -91,7 +94,7 @@ router.put("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
   res.json({ message: "Course updated" });
 });
 
-router.delete("/:id", allowRoles(ROLES.ADMIN), async (req, res) => {
+router.delete("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
   try {
     const existing = await db.prepare("SELECT id FROM courses WHERE id=?").get(req.params.id);
     if (!existing) return res.status(404).json({ message: "Course not found" });

@@ -2,7 +2,7 @@ const path = require("path");
 const fs = require("fs");
 
 /** Backend package root (…/backend), not process.cwd() — avoids a second empty DB when Node starts from the repo root. */
-const backendRoot = path.join(__dirname, "..", "..");
+const backendRoot = path.join(__dirname, "..", "..", "..");
 const envDb = process.env.DB_PATH != null ? String(process.env.DB_PATH).trim() : "";
 const dbPath = envDb
   ? path.isAbsolute(envDb)
@@ -251,6 +251,48 @@ const SCHEMA = `
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE(report_id, user_id)
   );
+
+  CREATE TABLE IF NOT EXISTS engagement_calendar (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year INTEGER NOT NULL UNIQUE,
+    data_json TEXT NOT NULL,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Admin-configured poll/feedback popup (definition JSON) + per-user submissions (answers JSON).
+  CREATE TABLE IF NOT EXISTS polls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    poll_json TEXT NOT NULL, -- JSON definition (questions, types, etc.)
+    active INTEGER NOT NULL DEFAULT 0,
+    start_at TEXT, -- ISO datetime; popup appears at/after this time (optional)
+    end_at TEXT, -- ISO datetime; popup disappears after this time (optional)
+    banner_image_url TEXT, -- optional URL or /uploads/... path shown at top of popup
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS poll_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    answers_json TEXT NOT NULL,
+    submitted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(poll_id) REFERENCES polls(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(poll_id, user_id)
+  );
+
+  -- Per-user member portal visits (for home dashboard analytics).
+  CREATE TABLE IF NOT EXISTS portal_visits (
+    user_id INTEGER PRIMARY KEY,
+    visit_count INTEGER NOT NULL DEFAULT 0,
+    last_visit_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `;
 
 async function initDb() {
@@ -315,6 +357,20 @@ async function initDb() {
     rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN image_url TEXT");
   } catch {
     /* column already exists */
+  }
+
+  // New table (added after some DBs already existed).
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS portal_visits (
+        user_id INTEGER PRIMARY KEY,
+        visit_count INTEGER NOT NULL DEFAULT 0,
+        last_visit_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) {
+    console.error("[db] portal_visits table:", e.message || e);
   }
   try {
     const info2 = rawDb.exec("PRAGMA table_info(facility_upcoming)");
@@ -415,6 +471,64 @@ async function initDb() {
     rawDb.exec("ALTER TABLE users ADD COLUMN birth_day INTEGER");
   } catch {
     /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN admin_grants TEXT");
+  } catch {
+    /* exists */
+  }
+
+  // Polls/feedback popup tables (safe no-op if already exist).
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS polls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        poll_json TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 0,
+        start_at TEXT,
+        end_at TEXT,
+        banner_image_url TEXT,
+        created_by INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+  } catch {
+    /* ignore */
+  }
+  try {
+    rawDb.exec("ALTER TABLE polls ADD COLUMN start_at TEXT");
+  } catch {
+    /* column exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE polls ADD COLUMN end_at TEXT");
+  } catch {
+    /* column exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE polls ADD COLUMN banner_image_url TEXT");
+  } catch {
+    /* column exists */
+  }
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS poll_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        poll_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        answers_json TEXT NOT NULL,
+        submitted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(poll_id) REFERENCES polls(id) ON DELETE CASCADE,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(poll_id, user_id)
+      );
+    `);
+  } catch {
+    /* ignore */
   }
 
   rawDb.exec(`
@@ -532,6 +646,20 @@ async function initDb() {
     FROM users u
     WHERE NOT EXISTS (SELECT 1 FROM user_departments ud WHERE ud.user_id = u.id)
   `);
+
+  try {
+    const cntRow = await db.prepare("SELECT COUNT(*) AS c FROM engagement_calendar").get();
+    const n = Number(cntRow?.c ?? 0);
+    if (!n) {
+      const def = require("../../data/engagementCalendarDefault");
+      await db
+        .prepare("INSERT INTO engagement_calendar (year, data_json, updated_at) VALUES (?, ?, datetime('now'))")
+        .run(def.DEFAULT_YEAR, def.defaultDataJson());
+    }
+  } catch (e) {
+    console.error("[db] engagement_calendar seed:", e.message || e);
+  }
+
   persist();
 }
 

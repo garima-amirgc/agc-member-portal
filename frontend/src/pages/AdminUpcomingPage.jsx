@@ -8,12 +8,10 @@ export default function AdminUpcomingPage() {
   const { user } = useAuth();
 
   return (
-    <>
+    <main className={PAGE_SHELL}>
       <PageHeader title="Upcoming events" />
-      <div className={PAGE_SHELL}>
-        <DashboardAssignmentNotice user={user} />
-        <AdminUpcomingSection className="card" />
-      </div>
-    </>
+      <DashboardAssignmentNotice user={user} />
+      <AdminUpcomingSection className="card" />
+    </main>
   );
 }

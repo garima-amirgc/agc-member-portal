@@ -43,6 +43,37 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  /** If an admin updates this account’s grants, refetch when the user comes back to the tab (avoids stale nav / access). */
+  useEffect(() => {
+    let debounce = null;
+    let tabWasHidden = false;
+    const pull = () => {
+      if (!localStorage.getItem("token")) return;
+      api
+        .get("/users/me")
+        .then(({ data }) => {
+          localStorage.setItem("user", JSON.stringify(data));
+          setUser(data);
+        })
+        .catch(() => {});
+    };
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        tabWasHidden = true;
+        return;
+      }
+      if (document.visibilityState !== "visible" || !tabWasHidden) return;
+      tabWasHidden = false;
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(pull, 400);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      if (debounce) clearTimeout(debounce);
+    };
+  }, []);
+
   const login = async (email, password, rememberMe = false) => {
     const { data } = await api.post("/auth/login", { email, password, rememberMe });
     localStorage.setItem("token", data.token);

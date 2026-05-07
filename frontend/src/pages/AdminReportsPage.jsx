@@ -54,18 +54,22 @@ export default function AdminReportsPage() {
   const [userQuery, setUserQuery] = useState("");
   const [editUserQuery, setEditUserQuery] = useState("");
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
-    return Promise.all([api.get("/reports/admin/all"), api.get("/users")])
-      .then(([reportsRes, usersRes]) => {
-        setRows(Array.isArray(reportsRes.data) ? reportsRes.data : []);
-        setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
-      })
-      .catch(() => {
-        setRows([]);
-        setUsers([]);
-      })
-      .finally(() => setLoading(false));
+    try {
+      const reportsRes = await api.get("/reports/admin/all");
+      setRows(Array.isArray(reportsRes.data) ? reportsRes.data : []);
+    } catch {
+      setRows([]);
+    }
+    try {
+      const usersRes = await api.get("/users");
+      setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
+    } catch {
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -195,12 +199,8 @@ export default function AdminReportsPage() {
   }, [users, editUserQuery]);
 
   return (
-    <>
-      <PageHeader
-        title="Manage reports"
-        subtitle="Add Power BI embed links and control which facilities can see them."
-      />
-      <main className={PAGE_SHELL}>
+    <main className={PAGE_SHELL}>
+      <PageHeader title="Manage reports" subtitle="Add Power BI embed links and control which facilities can see them." />
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="card">
             <h2 className="mb-2 text-lg font-semibold">Add report</h2>
@@ -591,8 +591,7 @@ export default function AdminReportsPage() {
             </div>
           </div>
         ) : null}
-      </main>
-    </>
+    </main>
   );
 }
 

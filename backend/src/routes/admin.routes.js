@@ -1,11 +1,12 @@
 const express = require("express");
-const { authRequired, allowRoles } = require("../middleware/auth");
-const { ROLES } = require("../config/constants");
+const { authRequired } = require("../middleware/auth");
+const { requireAdminGrant } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 const { db, isPostgres } = require("../config/db");
 
 const router = express.Router();
 router.use(authRequired);
-router.use(allowRoles(ROLES.ADMIN));
+router.use(requireAdminGrant(ADMIN_GRANT_KEYS.SYSTEM));
 
 async function scalar(sql) {
   try {

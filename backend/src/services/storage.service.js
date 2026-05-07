@@ -16,6 +16,9 @@ const getPublicDocumentUrl = (filename) => `/uploads/docs/${filename}`;
 /** Upcoming event images under `uploads/upcoming/` when not using object storage. */
 const getPublicUpcomingImageUrl = (filename) => `/uploads/upcoming/${filename}`;
 
+/** Poll banner images under `uploads/polls/` when not using object storage. */
+const getPublicPollBannerUrl = (filename) => `/uploads/polls/${filename}`;
+
 /** IT ticket attachments under `uploads/tickets/` when not using object storage. */
 const getPublicTicketAttachmentUrl = (filename) => `/uploads/tickets/${filename}`;
 
@@ -42,6 +45,7 @@ module.exports = {
   getPublicVideoUrl,
   getPublicDocumentUrl,
   getPublicUpcomingImageUrl,
+  getPublicPollBannerUrl,
   getPublicTicketAttachmentUrl,
   resolveStoragePath,
   resolveLocalUploadFileUrl,
