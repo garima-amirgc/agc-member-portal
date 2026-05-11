@@ -107,7 +107,7 @@ export default function ReportsPage() {
 
   return (
     <main className={PAGE_SHELL}>
-      <PageHeader title="Reports" subtitle="Power BI dashboards embedded in Member Portal" />
+      <PageHeader title="Reports" subtitle="Power BI dashboards embedded in AGC Member Portal" />
         {loading ? (
           <div className="card">
             <div className="text-sm text-slate-600 dark:text-slate-300">Loading reports…</div>

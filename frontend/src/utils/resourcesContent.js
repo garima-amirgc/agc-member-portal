@@ -4,6 +4,7 @@ export const CATEGORIES = [
   { key: "hr", label: "HR" },
   { key: "safety", label: "Safety" },
   { key: "production", label: "Production" },
+  { key: "it", label: "IT" },
 ];
 
 /** @param {string} facilityCode uppercase e.g. AGC */

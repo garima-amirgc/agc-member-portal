@@ -1,7 +1,7 @@
 const nodemailer = require("nodemailer");
 
 /** Display name in email subjects, footers, and plain-text signatures. */
-const APP_MAIL_BRAND = "Member Portal";
+const APP_MAIL_BRAND = "AGC Member Portal";
 
 /** Bump when invite/reset HTML changes (helps verify production deploy). */
 const EMAIL_TEMPLATE_VERSION = "20260427-email-v6";

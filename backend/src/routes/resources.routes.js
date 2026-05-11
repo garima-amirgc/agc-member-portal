@@ -12,7 +12,12 @@ const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 const { deleteLessonVideoByUrl } = require("../services/objectStorage.service");
 
 const FACILITIES = new Set(["AGC", "AQM", "SCF", "ASP"]);
-const RESOURCE_CATEGORIES = new Set(["finance", "sales", "hr", "safety", "production"]);
+const RESOURCE_CATEGORIES = new Set(["finance", "sales", "hr", "safety", "production", "it"]);
+
+function documentDisplayAddedAt(fileUploadedAt, createdAt) {
+  if (fileUploadedAt != null && String(fileUploadedAt).trim()) return fileUploadedAt;
+  return createdAt != null ? createdAt : null;
+}
 
 const router = express.Router();
 router.use(authRequired);
@@ -130,7 +135,8 @@ router.get("/facility/:facility/category/:category", async (req, res) => {
 
   const rows = await db
     .prepare(
-      `SELECT l.id, l.title, l.video_url, l.order_index, c.title AS course_title
+      `SELECT l.id, l.title, l.video_url, l.order_index, l.video_uploaded_at AS lesson_uploaded_at,
+              c.title AS course_title, c.description AS course_description, c.created_at AS course_created_at
        FROM lessons l
        INNER JOIN courses c ON c.id = l.course_id
        WHERE c.business_unit = ?
@@ -139,13 +145,30 @@ router.get("/facility/:facility/category/:category", async (req, res) => {
     )
     .all(facility, category);
 
-  const videos = rows.map((r) => ({
-    id: `lesson-${r.id}`,
-    lessonId: r.id,
-    title: r.title,
-    meta: r.course_title || "Training",
-    url: r.video_url,
-  }));
+  const videos = rows.map((r) => {
+    const courseDesc =
+      r.course_description != null && String(r.course_description).trim()
+        ? String(r.course_description).trim()
+        : null;
+    return {
+      id: `lesson-${r.id}`,
+      lessonId: r.id,
+      /** Lesson / file row title (internal). */
+      title: r.title,
+      /** Course title from Learning admin — use as Resources card heading. */
+      course_title: r.course_title != null && String(r.course_title).trim() ? String(r.course_title).trim() : "",
+      meta: r.course_title || "Training",
+      /** Course description only; no auto-filled filler text. */
+      description: courseDesc,
+      added_at:
+        r.lesson_uploaded_at != null && String(r.lesson_uploaded_at).trim()
+          ? r.lesson_uploaded_at
+          : r.course_created_at != null
+            ? r.course_created_at
+            : null,
+      url: r.video_url,
+    };
+  });
   res.json({ videos });
 });
 
@@ -158,7 +181,7 @@ router.get("/facility/:facility/category/:category/documents", async (req, res) 
 
   const rows = await db
     .prepare(
-      `SELECT id, title, file_url, created_at
+      `SELECT id, title, file_url, created_at, file_uploaded_at
        FROM resource_documents
        WHERE business_unit = ?
          AND LOWER(TRIM(COALESCE(category, ''))) = ?
@@ -172,6 +195,7 @@ router.get("/facility/:facility/category/:category/documents", async (req, res) 
     title: r.title,
     url: r.file_url,
     created_at: r.created_at,
+    added_at: documentDisplayAddedAt(r.file_uploaded_at, r.created_at),
   }));
   res.json({ documents });
 });
@@ -184,12 +208,17 @@ function normalizeCategory(raw) {
 router.get("/documents", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
   const rows = await db
     .prepare(
-      `SELECT id, business_unit, category, title, file_url, created_at
+      `SELECT id, business_unit, category, title, file_url, created_at, file_uploaded_at
        FROM resource_documents
        ORDER BY id DESC`
     )
     .all();
-  res.json(rows);
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      added_at: documentDisplayAddedAt(r.file_uploaded_at, r.created_at),
+    }))
+  );
 });
 
 router.get("/documents/:id/stream", authRequired, async (req, res) => {
@@ -247,7 +276,7 @@ router.get("/documents/:id", authRequired, async (req, res) => {
 
   const row = await db
     .prepare(
-      `SELECT id, business_unit, category, title, file_url, created_at
+      `SELECT id, business_unit, category, title, file_url, created_at, file_uploaded_at
        FROM resource_documents
        WHERE id = ?`
     )
@@ -258,7 +287,10 @@ router.get("/documents/:id", authRequired, async (req, res) => {
     return res.status(403).json({ message: "No access to this facility" });
   }
 
-  res.json(row);
+  res.json({
+    ...row,
+    added_at: documentDisplayAddedAt(row.file_uploaded_at, row.created_at),
+  });
 });
 
 router.post("/documents", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
@@ -273,12 +305,48 @@ router.post("/documents", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARN
   if (!t) return res.status(400).json({ message: "Title is required" });
   if (!url) return res.status(400).json({ message: "file_url is required" });
 
+  const uploadedAt = new Date().toISOString();
   const out = await db
     .prepare(
-      "INSERT INTO resource_documents(business_unit, category, title, file_url, created_by) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO resource_documents(business_unit, category, title, file_url, created_by, file_uploaded_at) VALUES (?, ?, ?, ?, ?, ?)"
     )
-    .run(facility, cat, t, url, req.user.id);
+    .run(facility, cat, t, url, req.user.id, uploadedAt);
   return res.status(201).json({ id: out.lastInsertRowid });
+});
+
+router.put("/documents/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+
+  const { business_unit, category, title, file_url } = req.body || {};
+  const facility = String(business_unit || "").toUpperCase();
+  const cat = normalizeCategory(category);
+  const t = String(title || "").trim();
+  const url = String(file_url || "").trim();
+
+  if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
+  if (!RESOURCE_CATEGORIES.has(cat)) return res.status(400).json({ message: "Invalid category" });
+  if (!t) return res.status(400).json({ message: "Title is required" });
+  if (!url) return res.status(400).json({ message: "file_url is required" });
+
+  const existing = await db
+    .prepare("SELECT id, file_url, file_uploaded_at FROM resource_documents WHERE id = ?")
+    .get(id);
+  if (!existing) return res.status(404).json({ message: "Not found" });
+
+  const prevUrl = String(existing.file_url ?? "");
+  const urlChanged = prevUrl !== url;
+  const nextUploaded = urlChanged ? new Date().toISOString() : existing.file_uploaded_at;
+
+  await db
+    .prepare(
+      `UPDATE resource_documents
+       SET business_unit = ?, category = ?, title = ?, file_url = ?, file_uploaded_at = ?
+       WHERE id = ?`
+    )
+    .run(facility, cat, t, url, nextUploaded, id);
+
+  return res.json({ message: "Document updated" });
 });
 
 router.delete("/documents/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {

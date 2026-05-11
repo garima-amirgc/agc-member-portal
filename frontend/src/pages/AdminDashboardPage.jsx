@@ -318,7 +318,7 @@ export default function AdminDashboardPage() {
                 <h2 className="mb-3 text-lg font-semibold">Add video</h2>
                 <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
                   Videos are stored on DigitalOcean and listed under{" "}
-                  <strong className="font-semibold">Member Portal → (facility) → Resources → (category) → Videos</strong> when
+                  <strong className="font-semibold">AGC Member Portal → (facility) → Resources → (category) → Videos</strong> when
                   you set “List under Resources” below. Assignments still use the same entry in the Assignments tab.
                 </p>
                 <form className="agc-form space-y-2" onSubmit={createCourse}>
@@ -371,7 +371,7 @@ export default function AdminDashboardPage() {
                       ))}
                     </select>
                     <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      Example: Member Portal → {courseForm.business_unit} → Resources → Finance → <strong>Videos</strong>.
+                      Example: AGC Member Portal → {courseForm.business_unit} → Resources → Finance → <strong>Videos</strong>.
                     </p>
                   </div>
                   <div>
@@ -587,7 +587,7 @@ export default function AdminDashboardPage() {
                   Files are uploaded to the <strong className="font-semibold">same DigitalOcean Space</strong> as training
                   videos (under <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">docs/</code> keys), then
                   listed under{" "}
-                  <strong className="font-semibold">Member Portal → (facility) → Resources → (category) → Documents</strong>
+                  <strong className="font-semibold">AGC Member Portal → (facility) → Resources → (category) → Documents</strong>
                   . Use the <strong className="font-semibold">Videos</strong> tab for video files only.
                 </p>
                 <form className="agc-form space-y-3" onSubmit={uploadResourceDocument}>
@@ -663,13 +663,31 @@ export default function AdminDashboardPage() {
                       const catLabel = CATEGORIES.find((c) => c.key === d.category)?.label || d.category;
                       const metaLine = `${d.business_unit} · ${catLabel} · Documents`;
                       const docTo = `/facilities/${d.business_unit}/resources/${d.category}/document/${d.id}`;
+                      let addedLabel = null;
+                      const docDate = d.added_at ?? d.created_at;
+                      if (docDate) {
+                        try {
+                          const dt = new Date(docDate);
+                          if (!Number.isNaN(dt.getTime())) {
+                            addedLabel = dt.toLocaleDateString(undefined, {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            });
+                          }
+                        } catch {
+                          /* ignore */
+                        }
+                      }
                       return (
                         <ResourceDocumentGridCard
                           key={d.id}
                           title={d.title}
                           url={d.file_url}
                           metaLine={metaLine}
+                          addedLabel={addedLabel}
                           linkTo={docTo}
+                          openButtonLabel="Open document"
                           tailHint="Click title or preview to open. Delete removes the file from storage."
                           rightSlot={
                             <button

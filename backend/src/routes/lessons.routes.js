@@ -6,6 +6,10 @@ const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 const { deleteLessonVideoByUrl } = require("../services/objectStorage.service");
 const { parsePositiveInt } = require("../utils/ids");
 
+function isoNow() {
+  return new Date().toISOString();
+}
+
 const router = express.Router();
 router.use(authRequired);
 
@@ -35,20 +39,34 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req,
   if (!title || !String(title).trim() || video_url == null || !String(video_url).trim()) {
     return res.status(400).json({ message: "title and video_url are required" });
   }
+  const uploadedAt = isoNow();
   const result = await db
-    .prepare("INSERT INTO lessons(course_id, title, video_url, order_index) VALUES (?, ?, ?, ?)")
-    .run(course_id, title, video_url, order_index);
+    .prepare(
+      "INSERT INTO lessons(course_id, title, video_url, order_index, video_uploaded_at) VALUES (?, ?, ?, ?, ?)"
+    )
+    .run(course_id, title, video_url, order_index, uploadedAt);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
 router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+  const lessonId = parsePositiveInt(req.params.id);
+  if (lessonId == null) {
+    return res.status(400).json({ message: "id must be a positive integer" });
+  }
   const { title, video_url, order_index } = req.body;
-  await db.prepare("UPDATE lessons SET title=?, video_url=?, order_index=? WHERE id=?").run(
-    title,
-    video_url,
-    order_index,
-    req.params.id
-  );
+  const existing = await db
+    .prepare("SELECT id, video_url, video_uploaded_at FROM lessons WHERE id=?")
+    .get(lessonId);
+  if (!existing) return res.status(404).json({ message: "Lesson not found" });
+
+  const prevUrl = String(existing.video_url ?? "");
+  const nextUrl = video_url != null ? String(video_url).trim() : "";
+  const urlChanged = prevUrl !== nextUrl;
+  const nextUploaded = urlChanged ? isoNow() : existing.video_uploaded_at;
+
+  await db
+    .prepare("UPDATE lessons SET title=?, video_url=?, order_index=?, video_uploaded_at=? WHERE id=?")
+    .run(title, video_url, order_index, nextUploaded, lessonId);
   res.json({ message: "Lesson updated" });
 });
 

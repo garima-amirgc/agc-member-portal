@@ -24,6 +24,7 @@ const EMPTY_USER = {
   departments: ["Production"],
   admin_full_access: false,
   admin_grants: [],
+  facility_university_only: false,
 };
 
 export default function AdminUsersSection({ className = "card" }) {
@@ -88,6 +89,20 @@ export default function AdminUsersSection({ className = "card" }) {
     setCreating(true);
     setInviteBanner(null);
     try {
+      if (!isAdminRole(form.role) && form.facility_university_only) {
+        if ((form.business_units || []).length !== 1) {
+          window.alert(
+            "Restrict to facility University only: select exactly one site for this user, or turn off that option."
+          );
+          return;
+        }
+        if (formGrantsSnapshotRef.current.filter(Boolean).length > 0) {
+          window.alert(
+            "University-only accounts cannot have optional administration access. Clear those checkboxes or turn off University-only."
+          );
+          return;
+        }
+      }
       let actor = me;
       try {
         actor = await refreshMe();
@@ -128,6 +143,9 @@ export default function AdminUsersSection({ className = "card" }) {
           const keys = formGrantsSnapshotRef.current.filter(Boolean);
           if (keys.length) payload.admin_grants = keys;
         }
+      }
+      if (!isAdminRole(form.role)) {
+        payload.facility_university_only = Boolean(form.facility_university_only);
       }
       const { data } = await api.post("/users", payload);
       formGrantsSnapshotRef.current = [];
@@ -249,6 +267,7 @@ export default function AdminUsersSection({ className = "card" }) {
         password: "",
         admin_full_access: isAdminRole(roleResolved) && grantsResolved.length === 0,
         admin_grants: grantsResolved,
+        facility_university_only: Boolean(data.facility_university_only),
       });
     } catch (err) {
       const st = err.response?.status;
@@ -298,6 +317,24 @@ export default function AdminUsersSection({ className = "card" }) {
       }
       const deptPayload = [...new Set(departments)].sort();
 
+      if (!isAdminRole(ed.role) && ed.facility_university_only) {
+        const facs = Array.isArray(ed.facilities) ? ed.facilities : [];
+        if (facs.length !== 1) {
+          window.alert(
+            "Restrict to facility University only: assign exactly one site, or turn off that option."
+          );
+          setUpdatingId(null);
+          return;
+        }
+        if (editGrantsSnapshotRef.current.filter(Boolean).length > 0) {
+          window.alert(
+            "University-only accounts cannot have optional administration access. Clear those checkboxes or turn off University-only."
+          );
+          setUpdatingId(null);
+          return;
+        }
+      }
+
       const body = {
         name: ed.name.trim(),
         email: ed.email.trim(),
@@ -309,6 +346,9 @@ export default function AdminUsersSection({ className = "card" }) {
         departments: deptPayload,
         password: ed.password?.trim() ? ed.password.trim() : undefined,
       };
+      if (!isAdminRole(ed.role)) {
+        body.facility_university_only = Boolean(ed.facility_university_only);
+      }
       if (canGrant) {
         if (isAdminRole(ed.role)) {
           if (ed.admin_full_access) {
@@ -630,7 +670,15 @@ export default function AdminUsersSection({ className = "card" }) {
                           const current = new Set(form.business_units || []);
                           if (current.has(f)) current.delete(f);
                           else current.add(f);
-                          setForm({ ...form, business_units: Array.from(current) });
+                          const units = Array.from(current);
+                          setForm({
+                            ...form,
+                            business_units: units,
+                            facility_university_only:
+                              form.facility_university_only && units.length === 1
+                                ? form.facility_university_only
+                                : false,
+                          });
                         }}
                       />
                       {f}
@@ -639,6 +687,35 @@ export default function AdminUsersSection({ className = "card" }) {
                 })}
               </div>
             </div>
+
+            {!isAdminRole(form.role) ? (
+              <label className="flex cursor-pointer items-start gap-2 rounded border border-slate-200 p-3 text-sm dark:border-slate-600">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={Boolean(form.facility_university_only)}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    if (on && (form.business_units || []).length !== 1) {
+                      window.alert("Select exactly one site first, then enable this option.");
+                      return;
+                    }
+                    if (on && formGrantsSnapshotRef.current.filter(Boolean).length > 0) {
+                      window.alert("Clear optional administration access before enabling University-only.");
+                      return;
+                    }
+                    setForm({ ...form, facility_university_only: on });
+                  }}
+                />
+                <span>
+                  <span className="font-medium">University page only</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
+                    User only sees that facility’s AGC University (training, resources, courses). Home, reports, calendar,
+                    and other portal pages are hidden. Use with a single site.
+                  </span>
+                </span>
+              </label>
+            ) : null}
 
             <div>
               <div className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">Manager (for leave requests)</div>
@@ -683,6 +760,11 @@ export default function AdminUsersSection({ className = "card" }) {
                       {Array.isArray(u.admin_grants) && u.admin_grants.length > 0 ? (
                         <span className="rounded-full bg-violet-100 px-2 py-0.5 font-bold text-violet-900 dark:bg-violet-900/40 dark:text-violet-100">
                           {isAdminRole(u.role) ? "Scoped admin" : "Admin areas"}
+                        </span>
+                      ) : null}
+                      {u.facility_university_only && !isAdminRole(u.role) ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-900 dark:bg-emerald-900/45 dark:text-emerald-100">
+                          University only
                         </span>
                       ) : null}
                       <span>
@@ -831,6 +913,7 @@ export default function AdminUsersSection({ className = "card" }) {
                           role: r,
                           admin_full_access: true,
                           admin_grants: [],
+                          facility_university_only: false,
                         });
                       } else {
                         const fromAdmin = isAdminRole(editing.role);
@@ -1033,7 +1116,15 @@ export default function AdminUsersSection({ className = "card" }) {
                             const current = new Set(editing.facilities || []);
                             if (current.has(f)) current.delete(f);
                             else current.add(f);
-                            setEditing({ ...editing, facilities: Array.from(current) });
+                            const facs = Array.from(current);
+                            setEditing({
+                              ...editing,
+                              facilities: facs,
+                              facility_university_only:
+                                editing.facility_university_only && facs.length === 1
+                                  ? editing.facility_university_only
+                                  : false,
+                            });
                           }}
                         />
                         {f}
@@ -1042,6 +1133,35 @@ export default function AdminUsersSection({ className = "card" }) {
                   })}
                 </div>
               </div>
+
+              {!isAdminRole(editing.role) ? (
+                <label className="flex cursor-pointer items-start gap-2 rounded border border-slate-200 p-3 text-sm dark:border-slate-600">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={Boolean(editing.facility_university_only)}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      const facs = editing.facilities || [];
+                      if (on && facs.length !== 1) {
+                        window.alert("Assign exactly one site first, then enable this option.");
+                        return;
+                      }
+                      if (on && editGrantsSnapshotRef.current.filter(Boolean).length > 0) {
+                        window.alert("Clear optional administration access before enabling University-only.");
+                        return;
+                      }
+                      setEditing({ ...editing, facility_university_only: on });
+                    }}
+                  />
+                  <span>
+                    <span className="font-medium">University page only</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
+                      Hides the rest of the member portal; user only uses this facility’s training hub.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
 
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">

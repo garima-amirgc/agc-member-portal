@@ -21,7 +21,7 @@ router.get("/", async (req, res) => {
     const ph = ids.map(() => "?").join(",");
     const allLessons = await db
       .prepare(
-        `SELECT id, course_id, title, video_url, order_index FROM lessons WHERE course_id IN (${ph}) ORDER BY course_id ASC, order_index ASC`
+        `SELECT id, course_id, title, video_url, order_index, video_uploaded_at FROM lessons WHERE course_id IN (${ph}) ORDER BY course_id ASC, order_index ASC`
       )
       .all(...ids);
     const byCourse = {};
@@ -32,6 +32,7 @@ router.get("/", async (req, res) => {
         title: l.title,
         video_url: l.video_url,
         order_index: l.order_index,
+        video_uploaded_at: l.video_uploaded_at ?? null,
       });
     }
     return res.json(rows.map((c) => ({ ...c, lessons: byCourse[c.id] || [] })));

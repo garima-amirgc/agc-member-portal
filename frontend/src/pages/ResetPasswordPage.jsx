@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import AuthBirdsCorner from "../components/layout/AuthBirdsCorner";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../constants/branding";
 import { useAuth } from "../context/AuthContext";
+import { postAuthLandingPath } from "../utils/facilityUniversityOnly";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
@@ -14,7 +15,7 @@ export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const navigate = useNavigate();
-  const { establishSession } = useAuth();
+  const { establishSession, refreshMe } = useAuth();
 
   const [status, setStatus] = useState("checking");
   const [maskedEmail, setMaskedEmail] = useState("");
@@ -60,7 +61,17 @@ export default function ResetPasswordPage() {
     try {
       const { data } = await api.post("/auth/reset-password", { token, password, rememberMe });
       establishSession(data);
-      navigate("/", { replace: true });
+      let nextUser = null;
+      try {
+        nextUser = await refreshMe();
+      } catch {
+        try {
+          nextUser = JSON.parse(localStorage.getItem("user") || "null");
+        } catch {
+          nextUser = null;
+        }
+      }
+      navigate(postAuthLandingPath(nextUser || data?.user), { replace: true });
     } catch (err) {
       setError(friendlyErrorMessage(err, "Could not reset password."));
     } finally {

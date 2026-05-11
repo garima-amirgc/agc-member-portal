@@ -2,38 +2,53 @@ import { Link } from "react-router-dom";
 import ResourceDocumentPreview from "./ResourceDocumentPreview";
 
 /**
- * Card layout aligned with training video tiles: title row, aspect preview, helper line.
+ * Resource library document tile: title, description, added date, actions, preview.
  */
 export default function ResourceDocumentGridCard({
   title,
   url,
+  description,
+  /** @deprecated use `description` — still supported for older call sites */
   metaLine,
+  addedLabel,
   linkTo,
   rightSlot,
-  tailHint = "Click to open.",
+  tailHint,
+  openButtonLabel = "Open document",
 }) {
+  const descText = description || metaLine;
   return (
-    <div className="rounded-xl border p-3 dark:border-slate-700">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          {linkTo ? (
-            <Link
-              to={linkTo}
-              className="font-bold text-brand-blue hover:text-brand-blue-hover hover:underline dark:text-brand-green"
-            >
-              {title}
-            </Link>
-          ) : (
-            <div className="font-bold text-brand-blue dark:text-brand-green">{title}</div>
-          )}
-          {metaLine ? (
-            <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">{metaLine}</div>
-          ) : null}
-        </div>
-        {rightSlot ? <div className="shrink-0">{rightSlot}</div> : null}
+    <div className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40">
+      <div className="min-w-0">
+        {linkTo ? (
+          <Link
+            to={linkTo}
+            className="text-lg font-bold text-brand-blue hover:text-brand-blue-hover hover:underline dark:text-brand-green"
+          >
+            {title}
+          </Link>
+        ) : (
+          <div className="text-lg font-bold text-brand-blue dark:text-brand-green">{title}</div>
+        )}
+        {descText ? (
+          <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{descText}</p>
+        ) : null}
       </div>
 
-      <div className="mt-3 overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
+      <div className="flex flex-wrap items-center gap-2">
+        {linkTo ? (
+          <Link to={linkTo} className="btn-primary inline-flex text-sm no-underline">
+            {openButtonLabel}
+          </Link>
+        ) : null}
+        {rightSlot ? <div className="flex flex-wrap gap-2">{rightSlot}</div> : null}
+      </div>
+
+      {addedLabel ? (
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Uploaded on {addedLabel}</p>
+      ) : null}
+
+      <div className="overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
         {linkTo ? (
           <Link to={linkTo} className="block">
             <ResourceDocumentPreview url={url} />
@@ -43,7 +58,7 @@ export default function ResourceDocumentGridCard({
         )}
       </div>
 
-      <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{tailHint}</div>
+      {tailHint ? <p className="text-xs text-slate-500 dark:text-slate-400">{tailHint}</p> : null}
     </div>
   );
 }

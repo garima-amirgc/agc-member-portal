@@ -23,11 +23,11 @@ import ResourcesCategoryPage from "./pages/ResourcesCategoryPage";
 import ResourceVideoPage from "./pages/ResourceVideoPage";
 import ResourceDocumentPage from "./pages/ResourceDocumentPage";
 import ItTicketsPage from "./pages/ItTicketsPage";
-import EmployeeEngagementCalendarPage from "./pages/EmployeeEngagementCalendarPage";
+import CalendarPage from "./pages/CalendarPage";
 import ReportsPage from "./pages/ReportsPage";
 import AdminReportsPage from "./pages/AdminReportsPage";
 import AdminSystemStatusPage from "./pages/AdminSystemStatusPage";
-import AdminEngagementCalendarPage from "./pages/AdminEngagementCalendarPage";
+import AdminCalendarPage from "./pages/AdminCalendarPage";
 import AdminPollsPage from "./pages/AdminPollsPage";
 import { ADMIN_GRANT_KEYS } from "./constants/adminGrants";
 
@@ -112,7 +112,7 @@ export default function App() {
         />
         <Route path="it-tickets" element={<ItTicketsPage />} />
         <Route path="reports" element={<ReportsPage />} />
-        <Route path="employee-engagement-calendar" element={<EmployeeEngagementCalendarPage />} />
+        <Route path="calendar" element={<CalendarPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="facilities" element={<FacilitiesPage />} />
         <Route
@@ -151,10 +151,10 @@ export default function App() {
           }
         />
         <Route
-          path="admin/engagement-calendar"
+          path="admin/calendar"
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.ENGAGEMENT_CALENDAR}>
-              <AdminEngagementCalendarPage />
+              <AdminCalendarPage />
             </ProtectedRoute>
           }
         />
@@ -174,6 +174,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="employee-engagement-calendar" element={<Navigate to="/calendar" replace />} />
+        <Route path="admin/engagement-calendar" element={<Navigate to="/admin/calendar" replace />} />
         <Route path="resources/:category/video/:videoId" element={<LegacyResourceVideoRedirect />} />
         <Route path="resources/:category" element={<LegacyResourcesCategoryRedirect />} />
       </Route>

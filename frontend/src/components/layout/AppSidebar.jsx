@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../../constants/branding";
 import { useAuth } from "../../context/AuthContext";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
+import { isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
 import { IconChevron, IconHelp, IconSearch, IconSparkle } from "./SidebarIcons";
 
 function NavItem({ to, end, icon: Icon, label, desc }) {
@@ -77,7 +78,8 @@ function NavSection({ title, defaultOpen, children }) {
 
 export default function AppSidebar() {
   const { user } = useAuth();
-  const { mainItems, adminItems } = usePortalNavItems(user);
+  const { mainItems, adminItems, homeTo } = usePortalNavItems(user);
+  const universityOnly = isFacilityUniversityOnlyPortal(user);
   const [query, setQuery] = useState("");
 
   const q = query.trim().toLowerCase();
@@ -96,7 +98,7 @@ export default function AppSidebar() {
     <aside className="agc-sidebar-shell z-20 hidden w-[288px] shrink-0 flex-col border-r border-black/10 lg:sticky lg:top-0 lg:flex lg:h-dvh">
       <div className="border-b border-black/10 px-4 py-5 dark:border-white/15">
         <NavLink
-          to="/"
+          to={homeTo}
           className="flex flex-col items-center gap-2.5 text-center text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B3EAF] rounded-portal"
         >
           <img
@@ -141,41 +143,45 @@ export default function AppSidebar() {
       </nav>
 
       <div className="mt-auto border-t border-black/10 p-3 dark:border-white/15">
-        <button
-          type="button"
-          className="group relative flex w-full items-center gap-3 rounded-portal px-3 py-2 text-sm font-semibold text-white transition hover:bg-black/10 hover:shadow-[0_10px_30px_rgba(0,0,0,0.18)] active:scale-[0.99] dark:hover:bg-white/10"
-          onClick={() => {
-            window.dispatchEvent(new Event("agc:whats-new"));
-          }}
-        >
-          <span className="relative">
-            <IconSparkle className="h-5 w-5 text-white transition-transform duration-300 group-hover:scale-[1.08]" />
-            <span
-              aria-hidden
-              className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 rounded-full bg-[#A7D344] shadow-[0_0_0_2px_rgba(255,255,255,0.25)]"
-            />
-            <span
-              aria-hidden
-              className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-[#A7D344]/80"
-            />
-          </span>
-          <span className="relative">
-            What's new
-            <span
-              aria-hidden
-              className="ml-2 inline-flex items-center rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white/90 ring-1 ring-white/20 transition group-hover:bg-white/20"
+        {!universityOnly ? (
+          <>
+            <button
+              type="button"
+              className="group relative flex w-full items-center gap-3 rounded-portal px-3 py-2 text-sm font-semibold text-white transition hover:bg-black/10 hover:shadow-[0_10px_30px_rgba(0,0,0,0.18)] active:scale-[0.99] dark:hover:bg-white/10"
+              onClick={() => {
+                window.dispatchEvent(new Event("agc:whats-new"));
+              }}
             >
-              NEW
-            </span>
-          </span>
-        </button>
-        <NavLink
-          to="/profile"
-          className="flex items-center gap-3 rounded-portal px-3 py-2 text-sm font-medium text-white hover:bg-black/10 dark:hover:bg-white/10"
-        >
-          <IconHelp className="h-5 w-5 text-white" />
-          Help
-        </NavLink>
+              <span className="relative">
+                <IconSparkle className="h-5 w-5 text-white transition-transform duration-300 group-hover:scale-[1.08]" />
+                <span
+                  aria-hidden
+                  className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 rounded-full bg-[#A7D344] shadow-[0_0_0_2px_rgba(255,255,255,0.25)]"
+                />
+                <span
+                  aria-hidden
+                  className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-[#A7D344]/80"
+                />
+              </span>
+              <span className="relative">
+                What's new
+                <span
+                  aria-hidden
+                  className="ml-2 inline-flex items-center rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white/90 ring-1 ring-white/20 transition group-hover:bg-white/20"
+                >
+                  NEW
+                </span>
+              </span>
+            </button>
+            <NavLink
+              to="/profile"
+              className="flex items-center gap-3 rounded-portal px-3 py-2 text-sm font-medium text-white hover:bg-black/10 dark:hover:bg-white/10"
+            >
+              <IconHelp className="h-5 w-5 text-white" />
+              Help
+            </NavLink>
+          </>
+        ) : null}
       </div>
     </aside>
   );

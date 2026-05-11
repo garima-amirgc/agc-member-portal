@@ -6,19 +6,18 @@ import { PAGE_PADDING, PAGE_SHELL } from "../constants/pageLayout";
 import { useAuth } from "../context/AuthContext";
 import { useResourceProgress } from "../hooks/useResourceProgress";
 import api from "../services/api";
-import ResourceDocumentGridCard from "../components/resources/ResourceDocumentGridCard";
+import ResourceDocumentPreview from "../components/resources/ResourceDocumentPreview";
 import { CATEGORIES, computeProgress, mergeLmsResourceItems, seedItems } from "../utils/resourcesContent";
 
-function documentMetaLine(d) {
-  if (d.meta) return d.meta;
-  if (d.created_at) {
-    try {
-      return `Uploaded ${new Date(d.created_at).toLocaleDateString()}`;
-    } catch {
-      return "Document";
-    }
+function formatAddedDate(raw) {
+  if (raw == null || raw === "") return null;
+  try {
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  } catch {
+    return null;
   }
-  return "Document";
 }
 
 export default function ResourcesCategoryPage() {
@@ -26,6 +25,7 @@ export default function ResourcesCategoryPage() {
   const facilityNorm = normalizeFacilityParam(facility);
   const key = (category || "").toLowerCase();
   const { user } = useAuth();
+  const [contentTab, setContentTab] = useState("videos"); // videos | documentation
 
   const current = useMemo(() => CATEGORIES.find((c) => c.key === key), [key]);
   const seedBlock = useMemo(() => seedItems(key), [key]);
@@ -92,6 +92,10 @@ export default function ResourcesCategoryPage() {
     };
   }, [facilityNorm, key, current]);
 
+  useEffect(() => {
+    setContentTab("videos");
+  }, [key, facilityNorm]);
+
   if (!facilityNorm) {
     return <div className={PAGE_PADDING}>Unknown facility.</div>;
   }
@@ -122,13 +126,6 @@ export default function ResourcesCategoryPage() {
           Resources · {facilityNorm}
         </div>
         <h1 className="mt-1 text-2xl font-bold">{current.label}</h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          Videos and documents for {current.label} at {facilityNorm}. Training videos from{" "}
-          <strong className="font-semibold text-slate-800 dark:text-slate-100">Learning admin</strong> appear here when
-          the course facility is <strong className="font-semibold">{facilityNorm}</strong> and the course is set to{" "}
-          <strong className="font-semibold">Resources → {current.label}</strong> (“Also list under Resources”). Upload
-          documents from Learning admin as well.
-        </p>
         {lmsLoadError ? (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
             {lmsLoadError}
@@ -147,124 +144,190 @@ export default function ResourcesCategoryPage() {
         )}
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr,220px]">
-        <section className="space-y-6">
-          <section className="card">
-            <h2 className="mb-1 text-lg font-semibold">Videos</h2>
-            {lmsVideos.length > 0 ? (
-              <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
-                Includes {lmsVideos.length} training upload{lmsVideos.length === 1 ? "" : "s"} from Learning admin
-                (tagged {current.label} · {facilityNorm}).
-              </p>
-            ) : (
-              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                No admin-uploaded videos for <strong className="font-semibold text-slate-700 dark:text-slate-200">{current.label}</strong> at{" "}
-                <strong className="font-semibold text-slate-700 dark:text-slate-200">{facilityNorm}</strong> yet. In Learning admin, the course facility and{" "}
-                <strong className="font-semibold">Also list under Resources</strong> must match this page (e.g. Sales
-                uploads only appear under the <strong className="font-semibold">Sales</strong> tile). Open{" "}
-                <strong className="font-semibold">Member Portal → {facilityNorm} → Resources → {current.label}</strong> after
-                saving the course.
-              </p>
-            )}
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {items.videos.length === 0 ? (
-                <div className="text-sm text-slate-500 dark:text-slate-400">No videos yet.</div>
-              ) : (
-                items.videos.map((v) => {
-                  const done = completed.has(v.id);
-                  return (
-                    <div key={v.id} className="rounded-xl border p-3 dark:border-slate-700">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <Link
-                            to={`${resourcesBase}/${key}/video/${v.id}`}
-                            className="font-bold text-brand-blue hover:text-brand-blue-hover hover:underline dark:text-brand-green"
-                          >
-                            {v.title}
-                          </Link>
-                          <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                            {v.meta}
-                            {String(v.id || "").startsWith("lesson-") ? (
-                              <span className="ml-2 font-medium text-brand-blue dark:text-brand-green">
-                                · Training upload
-                              </span>
+      <div className="grid gap-4 lg:grid-cols-[1fr,176px]">
+        <section className="min-w-0">
+          <div className="relative flex items-end gap-3">
+            <button
+              type="button"
+              onClick={() => setContentTab("videos")}
+              className={[
+                "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+                "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
+                "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
+                contentTab === "videos"
+                  ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
+                  : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
+              ].join(" ")}
+              role="tab"
+              aria-selected={contentTab === "videos"}
+            >
+              Video
+            </button>
+            <button
+              type="button"
+              onClick={() => setContentTab("documentation")}
+              className={[
+                "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+                "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
+                "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
+                contentTab === "documentation"
+                  ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
+                  : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
+              ].join(" ")}
+              role="tab"
+              aria-selected={contentTab === "documentation"}
+            >
+              Documentation
+            </button>
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-px bg-slate-200 dark:bg-slate-700" />
+          </div>
+
+          <div
+            className="rounded-b-2xl border border-t-0 border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+            role="tabpanel"
+          >
+            {contentTab === "videos" ? (
+              <div>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {items.videos.length === 0 ? (
+                    <div className="text-sm text-slate-500 dark:text-slate-400">No videos yet.</div>
+                  ) : (
+                    items.videos.map((v) => {
+                      const done = completed.has(v.id);
+                      const courseTitle =
+                        (v.course_title != null && String(v.course_title).trim()
+                          ? String(v.course_title).trim()
+                          : null) ||
+                        (v.meta != null && String(v.meta).trim() ? String(v.meta).trim() : "");
+                      /** Card heading = course title from Learning admin (not lesson/video filename). */
+                      const heading =
+                        courseTitle || (v.title != null && String(v.title).trim() ? String(v.title).trim() : "Training");
+                      const courseDesc =
+                        v.description != null && String(v.description).trim()
+                          ? String(v.description).trim()
+                          : "";
+                      const added = formatAddedDate(v.added_at);
+                      const videoPath = `${resourcesBase}/${key}/video/${v.id}`;
+                      return (
+                        <div
+                          key={v.id}
+                          className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40"
+                        >
+                          <div className="min-w-0">
+                            <Link
+                              to={videoPath}
+                              className="text-base font-bold leading-snug text-brand-blue hover:text-brand-blue-hover hover:underline dark:text-brand-green"
+                            >
+                              {heading}
+                            </Link>
+                            {courseDesc ? (
+                              <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                                {courseDesc}
+                              </p>
                             ) : null}
                           </div>
+
+                          <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-3 dark:border-slate-600/60">
+                            <span className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">
+                              {added ? <>Uploaded on {added}</> : <span className="text-slate-400">Upload date —</span>}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void toggleComplete(v.id)}
+                              className={
+                                done
+                                  ? "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-emerald-700 bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.99] dark:border-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+                                  : "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-[rgba(11,62,175,0.28)] bg-white px-2.5 py-1 text-xs font-semibold text-[#000000] transition hover:border-[#0B3EAF] hover:bg-[#f7f9fe] hover:text-[#0B3EAF] active:scale-[0.99] dark:border-[rgba(167,211,68,0.4)] dark:bg-[#141414] dark:text-[#f5f5f5] dark:hover:border-[#A7D344] dark:hover:bg-[#1a1a1a] dark:hover:text-[#A7D344]"
+                              }
+                            >
+                              {done ? "Completed" : "Mark done"}
+                            </button>
+                          </div>
+
+                          <div className="overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
+                            <Link to={videoPath} className="block" aria-label={`Open video: ${heading}`}>
+                              <video preload="metadata" className="aspect-video w-full" src={v.url} />
+                            </Link>
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void toggleComplete(v.id)}
-                          className={done ? "btn-success shrink-0" : "btn-outline shrink-0"}
-                        >
-                          {done ? "Completed" : "Mark done"}
-                        </button>
-                      </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : null}
 
-                      <div className="mt-3 overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
-                        <Link to={`${resourcesBase}/${key}/video/${v.id}`} className="block">
-                          <video preload="metadata" className="aspect-video w-full" src={v.url} />
-                        </Link>
-                      </div>
-                      <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">Click to open.</div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
-
-          <section className="card">
-            <h2 className="mb-1 text-lg font-semibold">Documents</h2>
-            {lmsDocs.length > 0 ? (
-              <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
-                Includes {lmsDocs.length} file{lmsDocs.length === 1 ? "" : "s"} from Learning admin ({current.label} ·{" "}
-                {facilityNorm}).
-              </p>
-            ) : (
-              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                No PDFs or files uploaded for <strong className="font-semibold text-slate-700 dark:text-slate-200">{current.label}</strong> at{" "}
-                <strong className="font-semibold text-slate-700 dark:text-slate-200">{facilityNorm}</strong> yet. Upload
-                them in Learning admin → <strong className="font-semibold">Documents</strong> with the same facility and
-                category.
-              </p>
-            )}
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {items.docs.length === 0 ? (
-                <div className="text-sm text-slate-500 dark:text-slate-400">No documents yet.</div>
-              ) : (
-                items.docs.map((d) => {
-                  const done = completed.has(d.id);
-                  const docPath =
-                    d.docId != null && resourcesBase
-                      ? `${resourcesBase}/${key}/document/${d.docId}`
-                      : null;
-                  const metaLine = documentMetaLine(d);
-                  const hint = docPath
-                    ? "Opens in this app (same as videos)."
-                    : "Checklist item — use Mark done when finished.";
-                  return (
-                    <ResourceDocumentGridCard
-                      key={d.id}
-                      title={d.title}
-                      url={d.url}
-                      metaLine={metaLine}
-                      linkTo={docPath || undefined}
-                      tailHint={hint}
-                      rightSlot={
-                        <button
-                          type="button"
-                          onClick={() => void toggleComplete(d.id)}
-                          className={done ? "btn-success" : "btn-outline"}
+            {contentTab === "documentation" ? (
+              <div>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {items.docs.length === 0 ? (
+                    <div className="text-sm text-slate-500 dark:text-slate-400">No documents yet.</div>
+                  ) : (
+                    items.docs.map((d) => {
+                      const done = completed.has(d.id);
+                      const docPath =
+                        d.docId != null && resourcesBase
+                          ? `${resourcesBase}/${key}/document/${d.docId}`
+                          : null;
+                      const added = formatAddedDate(d.added_at ?? d.created_at);
+                      return (
+                        <div
+                          key={d.id}
+                          className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40"
                         >
-                          {done ? "Completed" : "Mark done"}
-                        </button>
-                      }
-                    />
-                  );
-                })
-              )}
-            </div>
-          </section>
+                          <div className="min-w-0">
+                            {docPath ? (
+                              <Link
+                                to={docPath}
+                                className="text-base font-bold leading-snug text-brand-blue hover:text-brand-blue-hover hover:underline dark:text-brand-green"
+                              >
+                                {d.title}
+                              </Link>
+                            ) : (
+                              <div className="text-base font-bold leading-snug text-brand-blue dark:text-brand-green">
+                                {d.title}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-3 dark:border-slate-600/60">
+                            <span className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">
+                              {added ? (
+                                <>Uploaded on {added}</>
+                              ) : (
+                                <span className="text-slate-400">Upload date —</span>
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void toggleComplete(d.id)}
+                              className={
+                                done
+                                  ? "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-emerald-700 bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.99] dark:border-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+                                  : "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-[rgba(11,62,175,0.28)] bg-white px-2.5 py-1 text-xs font-semibold text-[#000000] transition hover:border-[#0B3EAF] hover:bg-[#f7f9fe] hover:text-[#0B3EAF] active:scale-[0.99] dark:border-[rgba(167,211,68,0.4)] dark:bg-[#141414] dark:text-[#f5f5f5] dark:hover:border-[#A7D344] dark:hover:bg-[#1a1a1a] dark:hover:text-[#A7D344]"
+                              }
+                            >
+                              {done ? "Completed" : "Mark done"}
+                            </button>
+                          </div>
+
+                          <div className="overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
+                            {docPath ? (
+                              <Link to={docPath} className="block" aria-label={`Open document: ${d.title}`}>
+                                <ResourceDocumentPreview url={d.url} />
+                              </Link>
+                            ) : (
+                              <ResourceDocumentPreview url={d.url} />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </section>
 
         <aside className="card p-3">

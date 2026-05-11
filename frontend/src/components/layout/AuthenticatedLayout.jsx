@@ -1,4 +1,9 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import {
+  getFacilityUniversityHomePath,
+  isFacilityUniversityOnlyPortal,
+  isPathAllowedForFacilityUniversityOnly,
+} from "../../utils/facilityUniversityOnly";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import AppSidebar from "./AppSidebar";
@@ -40,6 +45,13 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   const location = useLocation();
+
+  if (isFacilityUniversityOnlyPortal(user)) {
+    const home = getFacilityUniversityHomePath(user);
+    if (home && !isPathAllowedForFacilityUniversityOnly(location.pathname)) {
+      return <Navigate to={home} replace />;
+    }
+  }
 
   const [poll, setPoll] = useState(null);
   const [pollOpen, setPollOpen] = useState(false);
@@ -117,7 +129,7 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
       <AppSidebar />
       <div className="agc-main-column relative flex min-w-0 flex-1 flex-col">
         <AppTopBar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <div className="min-h-0 min-w-0 flex-1 pb-6">
+        <div className="min-h-0 min-w-0 flex-1 pb-2 sm:pb-3">
           <Outlet />
         </div>
         <BottomBirdBand />

@@ -21,6 +21,10 @@ const {
   isFullAdminUser,
 } = require("../config/adminGrants");
 const { requireAdminGrant } = require("../middleware/adminGrants");
+const {
+  parseFacilityUniversityOnlyFlag,
+  validateFacilityUniversityOnlyForUser,
+} = require("../utils/facilityUniversityOnly");
 
 const router = express.Router();
 router.use(authRequired);
@@ -77,6 +81,7 @@ function adminUsersListSql() {
         COALESCE(NULLIF(TRIM(u.department), ''), 'Production') AS department,
         u.designation,
         u.admin_grants,
+        COALESCE(u.facility_university_only, 0) AS facility_university_only,
         u.invite_token_hash,
         u.invite_expires_at,
         m.name AS manager_name,
@@ -92,7 +97,7 @@ function adminUsersListSql() {
 router.get("/me", async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, created_at, admin_grants, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
     )
     .get(req.user.id);
 
@@ -113,6 +118,7 @@ router.get("/me", async (req, res) => {
     role: canonicalRole(rest.role),
     admin_grants: adminGrantsOut,
     is_full_admin: isFullAdminUser(req.user),
+    facility_university_only: Boolean(rest.facility_university_only),
     facilities,
     departments,
     reporting_hierarchy,
@@ -263,6 +269,7 @@ router.get("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
       ...rest,
       role: canonicalRole(rest.role),
       admin_grants: parseAdminGrantsColumn(rawGrants),
+      facility_university_only: Boolean(rest.facility_university_only),
       facilities,
       departments: departments.length > 0 ? departments : [rest.department || "Production"],
       department: departments[0] || rest.department || "Production",
@@ -325,7 +332,7 @@ router.post("/:id/resend-invite", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), asy
 router.get("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, created_at, admin_grants, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
     )
     .get(req.params.id);
   if (!user) return res.status(404).json({ message: "User not found" });
@@ -346,6 +353,7 @@ router.get("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
     ...safe,
     role: canonicalRole(safe.role),
     admin_grants: parseAdminGrantsColumn(rawAg),
+    facility_university_only: Boolean(safe.facility_university_only),
     facilities,
     departments,
     invite_status,
@@ -398,6 +406,18 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
     if (!g.omit) insertAdminGrants = g.db;
   }
 
+  const facilityUniversityOnlyFlag = parseFacilityUniversityOnlyFlag(
+    req.body?.facility_university_only,
+    roleNorm
+  );
+  const uniCheck = validateFacilityUniversityOnlyForUser({
+    flag: facilityUniversityOnlyFlag,
+    roleNorm,
+    businessUnits,
+    adminGrantsDb: insertAdminGrants,
+  });
+  if (!uniCheck.ok) return res.status(400).json({ message: uniCheck.message });
+
   if (!useInvite) {
     try {
       inviteSvc.validateNewPassword(passwordTrim);
@@ -440,7 +460,7 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
   try {
     const result = await db
       .prepare(
-        "INSERT INTO users(name, email, password, role, business_unit, manager_id, department, designation, invite_token_hash, invite_expires_at, admin_grants) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO users(name, email, password, role, business_unit, manager_id, department, designation, invite_token_hash, invite_expires_at, admin_grants, facility_university_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         name,
@@ -453,7 +473,8 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
         designationTrim,
         inviteHash,
         inviteExpires,
-        insertAdminGrants
+        insertAdminGrants,
+        uniCheck.flag ? 1 : 0
       );
 
     const userId = result.lastInsertRowid;
@@ -531,7 +552,7 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
   const existing = await db
     .prepare(
       `SELECT id, name, email, role, business_unit, manager_id, password, department, designation, profile_image_url, created_at,
-              invite_token_hash, invite_expires_at, admin_grants
+              invite_token_hash, invite_expires_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only
        FROM users WHERE id = ?`
     )
     .get(userId);
@@ -658,10 +679,25 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
   }
   if (nextAdminGrantsDb === undefined) nextAdminGrantsDb = null;
 
+  let nextFacilityUniversityOnly = Boolean(Number(existing.facility_university_only) === 1);
+  if (Object.prototype.hasOwnProperty.call(req.body, "facility_university_only")) {
+    nextFacilityUniversityOnly = parseFacilityUniversityOnlyFlag(req.body.facility_university_only, nextRole);
+  } else if (nextRole === ROLES.ADMIN) {
+    nextFacilityUniversityOnly = false;
+  }
+
+  const uniPut = validateFacilityUniversityOnlyForUser({
+    flag: nextFacilityUniversityOnly,
+    roleNorm: nextRole,
+    businessUnits: newFacilities,
+    adminGrantsDb: nextAdminGrantsDb,
+  });
+  if (!uniPut.ok) return res.status(400).json({ message: uniPut.message });
+
   try {
     await db
       .prepare(
-        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, designation=?, invite_token_hash=?, invite_expires_at=?, admin_grants=? WHERE id=?"
+        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, designation=?, invite_token_hash=?, invite_expires_at=?, admin_grants=?, facility_university_only=? WHERE id=?"
       )
       .run(
         nextName,
@@ -675,6 +711,7 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
         nextInviteHash,
         nextInviteExpires,
         nextAdminGrantsDb,
+        uniPut.flag ? 1 : 0,
         userId
       );
 
@@ -708,7 +745,8 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
         COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department,
         designation,
         manager_id,
-        admin_grants
+        admin_grants,
+        COALESCE(facility_university_only, 0) AS facility_university_only
        FROM users WHERE id = ?`
     )
     .get(userId);
@@ -721,6 +759,7 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
     user: {
       ...updatedRest,
       admin_grants: parseAdminGrantsColumn(rawAg2),
+      facility_university_only: Boolean(updatedRest.facility_university_only),
       departments: departmentsOut,
     },
   });

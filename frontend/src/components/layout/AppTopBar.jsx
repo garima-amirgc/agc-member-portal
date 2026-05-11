@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { PAGE_GUTTER_X } from "../../constants/pageLayout";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
 import { resolvePublicMediaUrl } from "../../utils/mediaUrl";
+import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
 
 function initials(name = "") {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
@@ -82,6 +83,9 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
 
   const closeMenu = () => setOpen(false);
 
+  const universityOnly = isFacilityUniversityOnlyPortal(user);
+  const profileOrHomeLink = universityOnly ? getFacilityUniversityHomePath(user) : "/profile";
+
   return (
     <header
       className={`sticky top-0 z-30 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white/95 py-3.5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-[#0f0f0f]/95 ${PAGE_GUTTER_X}`}
@@ -97,10 +101,10 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
         </div>
 
         <Link
-          to="/profile"
+          to={profileOrHomeLink}
           className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0B3EAF] text-sm font-bold text-white shadow-md ring-2 ring-[#A7D344] ring-offset-2 ring-offset-white transition hover:bg-[#082d82] dark:ring-offset-[#0f0f0f]"
-          aria-label="Open profile"
-          title="Profile"
+          aria-label={universityOnly ? "Open facility training" : "Open profile"}
+          title={universityOnly ? "Facility training" : "Profile"}
         >
           {profilePhoto ? (
             <img src={profilePhoto} alt="" className="h-full w-full object-cover" />

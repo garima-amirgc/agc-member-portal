@@ -2,9 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 
-/** Served from `frontend/public` — thumbs-up / feedback illustration for modal chrome */
-const POLL_POPUP_BACKGROUND_URL = "/poll-feedback-popup-bg.png";
-
 function normalizeQuestions(def) {
   const d = def && typeof def === "object" ? def : {};
   const qs = Array.isArray(d.questions) ? d.questions : [];
@@ -95,12 +92,7 @@ export default function PollPopupModal({ poll, open, onClose, onSubmitted }) {
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-[#b6c9f5]/45 bg-white shadow-2xl ring-1 ring-white/60 dark:border-white/10 dark:bg-slate-950 dark:ring-white/5">
-        <div
-          className="pointer-events-none absolute inset-0 bg-right bg-no-repeat [background-size:1024px_auto]"
-          style={{ backgroundImage: `url(${POLL_POPUP_BACKGROUND_URL})` }}
-          aria-hidden
-        />
+      <div className="relative flex w-full max-w-2xl max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-2xl border border-[#b6c9f5]/45 bg-white shadow-2xl ring-1 ring-white/60 dark:border-white/10 dark:bg-slate-950 dark:ring-white/5">
         <div
           className="pointer-events-none absolute inset-0 bg-black/10 backdrop-blur-[1px] dark:bg-black/25"
           aria-hidden
@@ -112,7 +104,7 @@ export default function PollPopupModal({ poll, open, onClose, onSubmitted }) {
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full text-[#21408c]/80 transition hover:bg-white/50 hover:text-[#0B3EAF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B3EAF] dark:text-white/70 dark:hover:bg-white/15 dark:hover:text-white"
+          className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full text-white/95 transition hover:bg-black/15 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B3EAF] dark:text-white/95 dark:hover:bg-white/15 dark:hover:text-white"
           aria-label="Close"
         >
           <span className="text-3xl leading-none font-black tracking-tight" aria-hidden>
@@ -120,7 +112,7 @@ export default function PollPopupModal({ poll, open, onClose, onSubmitted }) {
           </span>
         </button>
 
-        <div className="relative z-10 p-5 sm:p-6">
+        <div className="relative z-10 min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
           {bannerUrl ? (
             <div className="-mx-5 -mt-5 mb-4 overflow-hidden border-b border-[#b6c9f5]/35 dark:border-white/10 sm:-mx-6 sm:-mt-6">
               <img

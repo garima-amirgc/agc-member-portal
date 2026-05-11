@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS lessons (
   course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   video_url TEXT NOT NULL,
-  order_index INTEGER NOT NULL
+  order_index INTEGER NOT NULL,
+  video_uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS assignments (
@@ -147,6 +148,19 @@ CREATE TABLE IF NOT EXISTS engagement_calendar (
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'holiday' CHECK(kind IN ('holiday','activity')),
+  start_date TEXT NOT NULL, -- YYYY-MM-DD
+  end_date TEXT, -- YYYY-MM-DD inclusive
+  color TEXT,
+  notes TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS it_tickets (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -196,7 +210,8 @@ CREATE TABLE IF NOT EXISTS resource_documents (
   title TEXT NOT NULL,
   file_url TEXT NOT NULL,
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  file_uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS resource_progress (
@@ -235,6 +250,8 @@ async function migrateColumns(client) {
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS designation TEXT",
     "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS assignee_id INTEGER REFERENCES users(id)",
     "ALTER TABLE courses ADD COLUMN IF NOT EXISTS resource_category TEXT",
+    "ALTER TABLE lessons ADD COLUMN IF NOT EXISTS video_uploaded_at TIMESTAMPTZ",
+    "ALTER TABLE resource_documents ADD COLUMN IF NOT EXISTS file_uploaded_at TIMESTAMPTZ",
     "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS attachments TEXT",
     "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token_hash TEXT",
@@ -244,6 +261,7 @@ async function migrateColumns(client) {
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_month INTEGER",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_day INTEGER",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_grants TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS facility_university_only INTEGER NOT NULL DEFAULT 0",
     `CREATE TABLE IF NOT EXISTS polls (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
@@ -299,6 +317,28 @@ async function migrateColumns(client) {
     `);
   } catch (e) {
     console.warn("[pg migrate] birthday_list company_name backfill:", e.message);
+  }
+
+  try {
+    await client.query(`
+      UPDATE lessons l
+      SET video_uploaded_at = c.created_at
+      FROM courses c
+      WHERE c.id = l.course_id
+        AND l.video_uploaded_at IS NULL
+    `);
+  } catch (e) {
+    console.warn("[pg migrate] lessons video_uploaded_at backfill:", e.message);
+  }
+
+  try {
+    await client.query(`
+      UPDATE resource_documents
+      SET file_uploaded_at = created_at
+      WHERE file_uploaded_at IS NULL
+    `);
+  } catch (e) {
+    console.warn("[pg migrate] resource_documents file_uploaded_at backfill:", e.message);
   }
 }
 

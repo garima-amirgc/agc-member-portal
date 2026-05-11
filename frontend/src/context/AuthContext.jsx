@@ -110,11 +110,12 @@ export const AuthProvider = ({ children }) => {
         className="flex min-h-screen flex-col items-center justify-center gap-2 bg-slate-50 px-4 text-center text-slate-600 dark:bg-slate-900 dark:text-slate-300"
         style={{ background: "#f8fafc", color: "#475569" }}
       >
-        <p className="text-sm font-medium">Connecting to server…</p>
-        <p className="max-w-md text-xs" style={{ color: "#64748b" }}>
-          If this never finishes, start the backend from the <code className="rounded bg-slate-200 px-1 dark:bg-slate-700">backend</code> folder
-          (port 5000) and reload.
-        </p>
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#0B3EAF] dark:border-slate-700 dark:border-t-[#A7D344]"
+          aria-label="Loading"
+          role="status"
+        />
+        <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">Loading…</div>
       </div>
     );
   }

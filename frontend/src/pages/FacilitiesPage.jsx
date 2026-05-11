@@ -8,6 +8,7 @@ import ProgressBar from "../components/ProgressBar";
 export default function FacilitiesPage() {
   const [me, setMe] = useState(null);
   const [assignments, setAssignments] = useState([]);
+  const [notice, setNotice] = useState(null); // string | null
 
   useEffect(() => {
     (async () => {
@@ -44,6 +45,24 @@ export default function FacilitiesPage() {
       </section>
 
       <section className="min-w-0">
+        {notice ? (
+          <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold">Access restricted</div>
+                <div className="mt-0.5 text-xs leading-relaxed opacity-90">{notice}</div>
+              </div>
+              <button
+                type="button"
+                className="shrink-0 rounded-full border border-amber-300/70 bg-white/60 px-2 py-1 text-xs font-semibold text-amber-950 transition hover:bg-white dark:border-amber-800/60 dark:bg-white/10 dark:text-amber-100 dark:hover:bg-white/15"
+                onClick={() => setNotice(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
           {FACILITY_CODES.map((f) => {
             const hasAccess = accessSet.has(f);
@@ -52,7 +71,19 @@ export default function FacilitiesPage() {
               <Link
                 key={f}
                 to={`/facilities/${f}`}
-                className={`card block transition ${hasAccess ? "" : "opacity-70 ring-1 ring-amber-200/80 dark:ring-amber-900/50"}`}
+                onClick={(e) => {
+                  if (hasAccess) return;
+                  e.preventDefault();
+                  setNotice(
+                    `You don’t currently have access to the ${f} facility. If you believe this is a mistake, please contact your administrator to update your facility access.`
+                  );
+                }}
+                className={`card block transition ${
+                  hasAccess
+                    ? ""
+                    : "cursor-not-allowed opacity-70 ring-1 ring-amber-200/80 dark:ring-amber-900/50"
+                }`}
+                aria-disabled={!hasAccess}
               >
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-semibold">{f}</div>
@@ -63,7 +94,7 @@ export default function FacilitiesPage() {
                 </div>
                 <div className="mt-2 text-sm font-medium text-[#000000] dark:text-white/90">{meta.avgProgress}% avg progress</div>
                 {!hasAccess && (
-                  <div className="mt-2 text-xs font-semibold text-[#E02B20]">View page — course access not assigned</div>
+                  <div className="mt-2 text-xs font-semibold text-[#E02B20]">Access restricted</div>
                 )}
               </Link>
             );

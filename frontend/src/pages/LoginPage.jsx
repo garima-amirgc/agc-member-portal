@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import AuthBirdsCorner from "../components/layout/AuthBirdsCorner";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../constants/branding";
 import { useAuth } from "../context/AuthContext";
+import { postAuthLandingPath } from "../utils/facilityUniversityOnly";
 import { getApiBaseURL } from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
@@ -13,7 +14,7 @@ const isDev = import.meta.env.DEV;
 const inputWrapFocus = "focus-within:ring-2 focus-within:ring-brand-blue/25 dark:focus-within:ring-brand-green/20";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, refreshMe } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     email: isDev ? "admin@company.com" : "",
@@ -29,7 +30,17 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(form.email, form.password, rememberMe);
-      navigate("/", { replace: true });
+      let nextUser = null;
+      try {
+        nextUser = await refreshMe();
+      } catch {
+        try {
+          nextUser = JSON.parse(localStorage.getItem("user") || "null");
+        } catch {
+          nextUser = null;
+        }
+      }
+      navigate(postAuthLandingPath(nextUser), { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
         if (err.code === "ECONNABORTED") {
@@ -49,7 +60,7 @@ export default function LoginPage() {
           }
         } else if (err.response?.status === 401) {
           setError(
-            "No account found for that email, or the password is incorrect. If you don’t have an account yet, ask an administrator to add you to the Member Portal."
+            "No account found for that email, or the password is incorrect. If you don’t have an account yet, ask an administrator to add you to the AGC Member Portal."
           );
         } else if (!err.response) {
           setError(
@@ -123,7 +134,7 @@ export default function LoginPage() {
                 id="login-brand-heading"
                 className="break-words font-sans text-[clamp(1.35rem,4.2vw,1.875rem)] font-bold leading-tight tracking-[0.06em] text-white sm:tracking-[0.1em]"
               >
-                MEMBER PORTAL
+                AGC MEMBER PORTAL
               </h1>
               <p className="break-words font-['Marcellus',Georgia,serif] text-[clamp(1.125rem,3.5vw,1.5rem)] font-semibold leading-snug text-white/95">
                 Learn. Comply. Grow.

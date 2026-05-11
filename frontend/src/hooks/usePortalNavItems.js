@@ -12,6 +12,7 @@ import {
 } from "../components/layout/SidebarIcons";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { hasAdminGrant } from "../utils/adminAccess";
+import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../utils/facilityUniversityOnly";
 
 /**
  * Same main/admin nav items and home link target as the sidebar (role-aware).
@@ -20,6 +21,15 @@ import { hasAdminGrant } from "../utils/adminAccess";
 export function usePortalNavItems(user) {
   const role = user?.role;
   return useMemo(() => {
+    if (isFacilityUniversityOnlyPortal(user)) {
+      const home = getFacilityUniversityHomePath(user);
+      return {
+        mainItems: [{ to: home, icon: IconBuilding, label: "AGC University", end: false }],
+        adminItems: [],
+        homeTo: home,
+      };
+    }
+
     const isManager = role === "Manager";
     const hasScopedGrants = Array.isArray(user?.admin_grants) && user.admin_grants.length > 0;
     const showAdministrationNav = role === "Admin" || hasScopedGrants;
@@ -54,9 +64,9 @@ export function usePortalNavItems(user) {
         desc: "Power BI dashboards",
       },
       {
-        to: "/employee-engagement-calendar",
+        to: "/calendar",
         icon: IconCalendar,
-        label: "Engagement calendar",
+        label: "Calendar",
       },
       {
         to: "/it-tickets",
@@ -74,10 +84,10 @@ export function usePortalNavItems(user) {
     if (showAdministrationNav) {
       const candidates = [
         {
-          to: "/admin/engagement-calendar",
+          to: "/admin/calendar",
           icon: IconCalendar,
-          label: "Engagement calendar",
-          desc: "Admin · yearly activities",
+          label: "Calendar",
+          desc: "Add holidays / activities",
           grantKey: ADMIN_GRANT_KEYS.ENGAGEMENT_CALENDAR,
         },
         {

@@ -147,6 +147,7 @@ const SCHEMA = `
     title TEXT NOT NULL,
     video_url TEXT NOT NULL,
     order_index INTEGER NOT NULL,
+    video_uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(course_id) REFERENCES courses(id) ON DELETE CASCADE
   );
 
@@ -257,6 +258,21 @@ const SCHEMA = `
     year INTEGER NOT NULL UNIQUE,
     data_json TEXT NOT NULL,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Admin-managed calendar events (holidays / activities) shown in the portal calendar.
+  CREATE TABLE IF NOT EXISTS calendar_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'holiday', -- holiday | activity
+    start_date TEXT NOT NULL, -- YYYY-MM-DD (local calendar date)
+    end_date TEXT, -- optional YYYY-MM-DD (inclusive)
+    color TEXT, -- optional hex or CSS color (used by UI chips)
+    notes TEXT,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
   );
 
   -- Admin-configured poll/feedback popup (definition JSON) + per-user submissions (answers JSON).
@@ -477,6 +493,11 @@ async function initDb() {
   } catch {
     /* exists */
   }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN facility_university_only INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* exists */
+  }
 
   // Polls/feedback popup tables (safe no-op if already exist).
   try {
@@ -583,6 +604,23 @@ async function initDb() {
     /* column already exists */
   }
 
+  try {
+    rawDb.exec("ALTER TABLE lessons ADD COLUMN video_uploaded_at TEXT");
+  } catch {
+    /* column already exists */
+  }
+  try {
+    rawDb.exec(`
+      UPDATE lessons
+      SET video_uploaded_at = (
+        SELECT c.created_at FROM courses c WHERE c.id = lessons.course_id
+      )
+      WHERE video_uploaded_at IS NULL OR TRIM(COALESCE(video_uploaded_at, '')) = ''
+    `);
+  } catch {
+    /* ignore */
+  }
+
   rawDb.exec(`
     CREATE TABLE IF NOT EXISTS resource_documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -592,9 +630,25 @@ async function initDb() {
       file_url TEXT NOT NULL,
       created_by INTEGER,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      file_uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     );
   `);
+
+  try {
+    rawDb.exec("ALTER TABLE resource_documents ADD COLUMN file_uploaded_at TEXT");
+  } catch {
+    /* column already exists */
+  }
+  try {
+    rawDb.exec(`
+      UPDATE resource_documents
+      SET file_uploaded_at = created_at
+      WHERE file_uploaded_at IS NULL OR TRIM(COALESCE(file_uploaded_at, '')) = ''
+    `);
+  } catch {
+    /* ignore */
+  }
 
   rawDb.exec(`
     CREATE TABLE IF NOT EXISTS resource_progress (

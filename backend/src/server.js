@@ -71,6 +71,7 @@ async function start() {
   const adminRoutes = require("./routes/admin.routes");
   const adminPollsRoutes = require("./routes/adminPolls.routes");
   const engagementCalendarRoutes = require("./routes/engagement-calendar.routes");
+  const calendarRoutes = require("./routes/calendar.routes");
   const pollsRoutes = require("./routes/polls.routes");
   const { authRequired } = require("./middleware/auth");
   const leaveSvc = require("./services/leaveRequests.service");
@@ -153,6 +154,7 @@ async function start() {
   api.use("/admin", adminRoutes);
   api.use("/admin", adminPollsRoutes);
   api.use("/engagement-calendar", engagementCalendarRoutes);
+  api.use("/calendar", calendarRoutes);
   api.use("/polls", pollsRoutes);
   app.use("/api", api);
 
@@ -173,6 +175,7 @@ async function start() {
   app.use("/admin", adminRoutes);
   app.use("/admin", adminPollsRoutes);
   app.use("/engagement-calendar", engagementCalendarRoutes);
+  app.use("/calendar", calendarRoutes);
   app.use("/polls", pollsRoutes);
 
   const seedAdminFlag = String(process.env.SEED_DEFAULT_ADMIN ?? "1").toLowerCase();
