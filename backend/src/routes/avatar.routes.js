@@ -4,6 +4,10 @@ const fs = require("fs");
 const multer = require("multer");
 const { db } = require("../config/db");
 const { authRequired } = require("../middleware/auth");
+const {
+  isCloudStorageEnabled,
+  uploadAvatarImageFromDisk,
+} = require("../services/objectStorage.service");
 
 const router = express.Router();
 router.use(authRequired);
@@ -34,10 +38,37 @@ const upload = multer({
 router.post("/me", upload.single("avatar"), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No image uploaded" });
 
-  const publicUrl = `/uploads/avatars/${req.file.filename}`;
-  await db.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?").run(publicUrl, req.user.id);
+  const localPath = req.file.path;
+  const filename = req.file.filename;
 
-  return res.json({ profile_image_url: publicUrl });
+  try {
+    let publicUrl = `/uploads/avatars/${filename}`;
+    let storageProvider = "local";
+
+    if (isCloudStorageEnabled()) {
+      const uploaded = await uploadAvatarImageFromDisk(localPath, filename);
+      publicUrl = uploaded.url;
+      storageProvider = uploaded.provider;
+      try {
+        fs.unlinkSync(localPath);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    await db.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?").run(publicUrl, req.user.id);
+
+    return res.json({ profile_image_url: publicUrl, storageProvider });
+  } catch (err) {
+    console.error("Avatar upload failed:", err);
+    try {
+      if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+    } catch {
+      /* ignore */
+    }
+    const raw = err.message || String(err) || "Upload failed";
+    return res.status(502).json({ message: `Avatar upload failed: ${raw}` });
+  }
 });
 
 module.exports = router;
