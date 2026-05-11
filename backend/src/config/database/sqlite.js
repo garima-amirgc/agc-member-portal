@@ -260,11 +260,11 @@ const SCHEMA = `
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
-  -- Admin-managed calendar events (holidays / activities) shown in the portal calendar.
+  -- Admin-managed calendar events (holidays / activities / other) shown in the portal calendar.
   CREATE TABLE IF NOT EXISTS calendar_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
-    kind TEXT NOT NULL DEFAULT 'holiday', -- holiday | activity
+    kind TEXT NOT NULL DEFAULT 'holiday', -- holiday | activity | other
     start_date TEXT NOT NULL, -- YYYY-MM-DD (local calendar date)
     end_date TEXT, -- optional YYYY-MM-DD (inclusive)
     color TEXT, -- optional hex or CSS color (used by UI chips)

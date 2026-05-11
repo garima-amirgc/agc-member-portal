@@ -200,13 +200,10 @@ export default function AdminReportsPage() {
 
   return (
     <main className={PAGE_SHELL}>
-      <PageHeader title="Manage reports" subtitle="Add Power BI embed links and control which facilities can see them." />
+      <PageHeader title="Manage reports" />
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="card">
             <h2 className="mb-2 text-lg font-semibold">Add report</h2>
-            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
-              Paste the <strong className="font-semibold">iframe embed code</strong> from Power BI (or just the embed URL). We store only the iframe <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">src</code> for safety.
-            </p>
             <form className="agc-form space-y-3" onSubmit={create}>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Title</label>
@@ -250,9 +247,6 @@ export default function AdminReportsPage() {
                     );
                   })}
                 </div>
-                <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                  Users only see reports that match their facility access.
-                </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
@@ -277,10 +271,6 @@ export default function AdminReportsPage() {
 
               <div className="rounded border p-3 dark:border-slate-700">
                 <div className="mb-1 text-sm font-medium">Access control (required)</div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Select at least one user. Until a user is assigned, this report will be <strong className="font-semibold">hidden</strong> in the portal.
-                  Facility selection above only controls where the report appears.
-                </p>
                 <label className="mt-3 block text-xs font-medium text-slate-600 dark:text-slate-400">Search users</label>
                 <input
                   className="mt-1 w-full rounded border p-2 text-sm dark:bg-slate-700"
@@ -347,9 +337,6 @@ export default function AdminReportsPage() {
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div>
                 <h2 className="text-lg font-semibold">Existing reports</h2>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                  These show up under <strong className="font-semibold">Reports</strong> in the left nav.
-                </p>
               </div>
               <button type="button" className="btn-outline" onClick={load} disabled={loading}>
                 Refresh
@@ -416,14 +403,13 @@ export default function AdminReportsPage() {
               <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 pb-4 pt-5 dark:border-slate-700">
                 <div>
                   <h3 className="text-lg font-semibold">Edit report</h3>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">ID: {editing.id}</p>
                 </div>
                 <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>
                   Close
                 </button>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              <div className="agc-form min-h-0 flex-1 overflow-y-auto px-5 py-4">
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="space-y-3">
                     <div>
@@ -488,10 +474,6 @@ export default function AdminReportsPage() {
 
                     <div className="rounded border p-3 dark:border-slate-700">
                       <div className="mb-1 text-sm font-medium">Access control (required)</div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Select at least one user. Until a user is assigned, this report will be <strong className="font-semibold">hidden</strong> in the portal.
-                        Facility selection only controls where the report appears.
-                      </p>
                       <label className="mt-3 block text-xs font-medium text-slate-600 dark:text-slate-400">Search users</label>
                       <input
                         className="mt-1 w-full rounded border p-2 text-sm dark:bg-slate-700"
@@ -568,9 +550,6 @@ export default function AdminReportsPage() {
                         )}
                       </div>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      If preview is blank, Power BI embed may require permissions or a different link type.
-                    </p>
                   </div>
                 </div>
               </div>

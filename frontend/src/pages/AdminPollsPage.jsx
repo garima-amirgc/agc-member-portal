@@ -267,7 +267,7 @@ export default function AdminPollsPage() {
 
   return (
     <main className={PAGE_SHELL}>
-      <PageHeader title="Feedback & polls" subtitle="Create a popup survey that shows once per user until submitted." />
+      <PageHeader title="Feedback & polls" />
         <div className="card">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-semibold text-slate-900 dark:text-white">Polls</div>
@@ -339,7 +339,7 @@ export default function AdminPollsPage() {
         </div>
 
         {editing ? (
-          <div className="card mt-4">
+          <div className="agc-form card mt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm font-semibold text-slate-900 dark:text-white">
                 {isEditingExisting ? "Edit poll" : "New poll"}
@@ -407,9 +407,6 @@ export default function AdminPollsPage() {
                       value={editing.start_at || ""}
                       onChange={(e) => setEditing({ ...editing, start_at: e.target.value })}
                     />
-                    <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      Leave blank to show immediately.
-                    </div>
                   </div>
                   <div>
                     <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
@@ -421,9 +418,6 @@ export default function AdminPollsPage() {
                       value={editing.end_at || ""}
                       onChange={(e) => setEditing({ ...editing, end_at: e.target.value })}
                     />
-                    <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      After this time the popup stops appearing. The user will see this deadline in the popup.
-                    </div>
                   </div>
                 </div>
               </div>
@@ -452,9 +446,6 @@ export default function AdminPollsPage() {
                         disabled={bannerUploading}
                         className="w-full rounded border p-2 text-sm dark:bg-slate-700"
                       />
-                      <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                        Uploads to DigitalOcean Spaces when enabled (otherwise local `/uploads/polls/...`).
-                      </div>
                     </div>
                     <button
                       type="button"
@@ -476,9 +467,6 @@ export default function AdminPollsPage() {
                       />
                     </div>
                   ) : null}
-                  <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                    If set, it will display at the top of the popup.
-                  </div>
                 </div>
               </div>
 

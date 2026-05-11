@@ -17,7 +17,9 @@ function clampLen(s, max) {
 
 function normalizeKind(k) {
   const v = String(k || "").trim().toLowerCase();
-  return v === "activity" ? "activity" : "holiday";
+  if (v === "activity") return "activity";
+  if (v === "other" || v === "others") return "other";
+  return "holiday";
 }
 
 function normalizeColor(c) {

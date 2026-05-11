@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { PAGE_SHELL } from "../constants/pageLayout";
@@ -7,7 +7,6 @@ import UpcomingEventCards from "../components/UpcomingEventCards";
 import api from "../services/api";
 import BirthdayPopupModal from "../components/BirthdayPopupModal";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
-import { getEventTimeIso } from "../utils/eventDate";
 import { splitUpcomingForHome } from "../utils/upcomingFeedSplit";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { hasAdminGrant } from "../utils/adminAccess";
@@ -63,6 +62,7 @@ function BirthdayMiniCard({ item, onClick }) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const canLearningAdmin = hasAdminGrant(user, ADMIN_GRANT_KEYS.LEARNING_ADMIN);
   const canReports = user?.role === "Admin" || hasAdminGrant(user, ADMIN_GRANT_KEYS.REPORTS);
   const [upcoming, setUpcoming] = useState([]);
@@ -70,8 +70,6 @@ export default function DashboardPage() {
   const [birthdays, setBirthdays] = useState({ today: [], upcoming: [], range_days: 14 });
   const [birthdaysLoading, setBirthdaysLoading] = useState(true);
   const [birthdayPopup, setBirthdayPopup] = useState(null);
-  /** Same detail modal for Today’s event and Upcoming cards */
-  const [eventModal, setEventModal] = useState(null);
   const [topVisitors, setTopVisitors] = useState([]);
   const [topVisitorsLoading, setTopVisitorsLoading] = useState(false);
 
@@ -147,21 +145,17 @@ export default function DashboardPage() {
       .finally(() => setTopVisitorsLoading(false));
   }, [canReports]);
 
-  useEffect(() => {
-    if (!eventModal) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") setEventModal(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [eventModal]);
-
   const { todayEvents, upcomingFutureOnly } = useMemo(() => splitUpcomingForHome(upcoming), [upcoming]);
   const birthdayCards = useMemo(() => {
     const today = Array.isArray(birthdays?.today) ? birthdays.today : [];
     const up = Array.isArray(birthdays?.upcoming) ? birthdays.upcoming : [];
     return [...today, ...up].slice(0, 4);
   }, [birthdays]);
+
+  const openUpcomingEvent = (event) => {
+    const id = event?.id;
+    navigate(id != null ? `/upcoming/${encodeURIComponent(String(id))}` : "/upcoming");
+  };
 
   return (
     <>
@@ -277,7 +271,7 @@ export default function DashboardPage() {
                     loading={false}
                     compact
                     showFacility
-                    onItemClick={(ev) => setEventModal({ event: ev, kind: "today" })}
+                    onItemClick={openUpcomingEvent}
                   />
                 </div>
               ) : null}
@@ -301,18 +295,28 @@ export default function DashboardPage() {
                 </div>
               ) : null}
 
-              <div className="card upcoming-rail p-3 sm:p-4">
-                <h3 className="mb-2 text-sm font-semibold text-[#0B3EAF] dark:text-[#A7D344]">Upcoming</h3>
-                <UpcomingEventCards
-                  items={upcomingFutureOnly}
-                  loading={upcomingLoading}
-                  compact
-                  showFacility
-                  onItemClick={(ev) => setEventModal({ event: ev, kind: "upcoming" })}
-                />
-                {!upcomingLoading && upcomingFutureOnly.length === 0 ? (
-                  <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">No upcoming events yet.</p>
-                ) : null}
+              <div className="card upcoming-rail flex max-h-[calc(100svh-18rem)] flex-col p-3 sm:p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-[#0B3EAF] dark:text-[#A7D344]">Upcoming</h3>
+                  <Link
+                    to="/upcoming"
+                    className="text-[11px] font-bold text-[#0B3EAF] underline underline-offset-2 dark:text-[#A7D344]"
+                  >
+                    View all
+                  </Link>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                  <UpcomingEventCards
+                    items={upcomingFutureOnly}
+                    loading={upcomingLoading}
+                    compact
+                    showFacility
+                    onItemClick={openUpcomingEvent}
+                  />
+                  {!upcomingLoading && upcomingFutureOnly.length === 0 ? (
+                    <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">No upcoming events yet.</p>
+                  ) : null}
+                </div>
               </div>
             </div>
           </aside>
@@ -324,82 +328,6 @@ export default function DashboardPage() {
         onClose={() => setBirthdayPopup(null)}
         person={birthdayPopup}
       />
-
-      {eventModal ? (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="event-detail-popup-title"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setEventModal(null);
-          }}
-        >
-          <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-[#0B3EAF]/18 bg-gradient-to-br from-[#f5f7fb] via-[#eef3fb] to-[#e6eef8] shadow-2xl ring-1 ring-white/70 dark:border-white/12 dark:from-[#151c28] dark:via-[#131a26] dark:to-[#0f141d] dark:ring-white/10">
-            <button
-              type="button"
-              onClick={() => setEventModal(null)}
-              className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full text-slate-600/90 transition hover:bg-white/60 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B3EAF] dark:text-white/75 dark:hover:bg-white/12 dark:hover:text-white"
-              aria-label="Close"
-            >
-              <span className="text-3xl leading-none font-black tracking-tight" aria-hidden>
-                ×
-              </span>
-            </button>
-
-            <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.55] dark:opacity-[0.45]">
-              <div className="absolute -left-16 -top-20 h-44 w-44 rounded-full bg-[#0B3EAF]/18 blur-3xl dark:bg-[#0B3EAF]/25" />
-              <div className="absolute -right-8 top-1/4 h-48 w-48 rounded-full bg-sky-300/30 blur-3xl dark:bg-sky-500/15" />
-              <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-indigo-200/35 blur-3xl dark:bg-indigo-950/40" />
-              <div className="absolute -right-14 bottom-8 h-36 w-36 rounded-full bg-[#c5d9f5]/50 blur-2xl dark:bg-white/5" />
-            </div>
-
-            <div className="relative z-10 space-y-4 p-5 pt-12 sm:p-6 sm:pt-14">
-              <div className="pr-10">
-                <p
-                  id="event-detail-popup-title"
-                  className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0B3EAF] dark:text-[#A7D344]"
-                >
-                  {eventModal.kind === "today" ? "Today’s event" : "Upcoming event"}
-                </p>
-                <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                  {(() => {
-                    const iso = getEventTimeIso(eventModal.event);
-                    return iso ? new Date(iso).toLocaleString() : "Schedule TBD";
-                  })()}
-                </p>
-              </div>
-
-              {(() => {
-                const img = resolvePublicMediaUrl(eventModal.event?.image_url);
-                if (!img) return null;
-                return (
-                  <div className="overflow-hidden rounded-xl border border-white/70 bg-white/50 shadow-inner ring-1 ring-[#0B3EAF]/10 dark:border-white/10 dark:bg-white/[0.06] dark:ring-white/10">
-                    <div className="flex max-h-64 w-full items-center justify-center p-3">
-                      <img src={img} alt="" className="max-h-56 w-full object-contain" />
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div className="flex flex-wrap items-start gap-2">
-                {eventModal.event?.business_unit ? (
-                  <span className="rounded-md bg-[#0B3EAF]/12 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
-                    {eventModal.event.business_unit}
-                  </span>
-                ) : null}
-                <h2 className="min-w-0 flex-1 text-lg font-semibold leading-snug text-slate-900 dark:text-white">
-                  {eventModal.event?.title}
-                </h2>
-              </div>
-
-              {eventModal.event?.detail ? (
-                <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">{eventModal.event.detail}</p>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </>
   );
 }

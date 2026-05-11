@@ -39,9 +39,6 @@ export default function FacilitiesPage() {
     <main className={PAGE_SHELL}>
       <section>
         <h1 className="mb-3 text-2xl font-bold text-[#000000] dark:text-white">Facilities</h1>
-        <p className="text-sm text-[#0B3EAF] dark:text-[#A7D344]">
-          Training assignments and progress by facility.
-        </p>
       </section>
 
       <section className="min-w-0">

@@ -31,6 +31,7 @@ export default function AdminCalendarPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => ({ ...EMPTY, start_date: ymd(now.getFullYear(), now.getMonth() + 1, now.getDate()) }));
+  const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -81,23 +82,51 @@ export default function AdminCalendarPage() {
     setSaving(true);
     setError("");
     setMessage("");
+    const payload = {
+      title: form.title,
+      kind: form.kind,
+      start_date: String(form.start_date || "").trim(),
+      end_date: String(form.end_date || "").trim() || null,
+      color: String(form.color || "").trim() || null,
+      notes: String(form.notes || "").trim(),
+    };
     try {
-      await api.post("/api/calendar/events", {
-        title: form.title,
-        kind: form.kind,
-        start_date: String(form.start_date || "").trim(),
-        end_date: String(form.end_date || "").trim() || null,
-        color: String(form.color || "").trim() || null,
-        notes: String(form.notes || "").trim(),
-      });
-      setMessage("Event added.");
+      if (editingId != null) {
+        await api.put(`/api/calendar/events/${editingId}`, payload);
+        setMessage("Event updated.");
+      } else {
+        await api.post("/api/calendar/events", payload);
+        setMessage("Event added.");
+      }
+      setEditingId(null);
       setForm((f) => ({ ...EMPTY, start_date: f.start_date || win.from }));
       load();
     } catch (err) {
-      setError(friendlyErrorMessage(err, "Could not add event."));
+      setError(friendlyErrorMessage(err, editingId != null ? "Could not update event." : "Could not add event."));
     } finally {
       setSaving(false);
     }
+  };
+
+  const startEdit = (ev) => {
+    setEditingId(ev.id);
+    setError("");
+    setMessage("");
+    setForm({
+      title: ev.title || "",
+      kind: ev.kind || "holiday",
+      start_date: ev.start_date || "",
+      end_date: ev.end_date || "",
+      color: ev.color || "",
+      notes: ev.notes || "",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setError("");
+    setMessage("");
+    setForm((f) => ({ ...EMPTY, start_date: f.start_date || win.from }));
   };
 
   const remove = async (id) => {
@@ -108,6 +137,7 @@ export default function AdminCalendarPage() {
     try {
       await api.delete(`/api/calendar/events/${id}`);
       setMessage("Event deleted.");
+      if (editingId === id) cancelEdit();
       load();
     } catch (err) {
       setError(friendlyErrorMessage(err, "Could not delete event."));
@@ -118,7 +148,7 @@ export default function AdminCalendarPage() {
 
   return (
     <main className={PAGE_SHELL}>
-      <PageHeader title="Calendar (admin)" subtitle="Add statutory holidays and activities shown in the portal calendar." />
+      <PageHeader title="Calendar (admin)" />
 
       <section className="card space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -146,7 +176,12 @@ export default function AdminCalendarPage() {
           </div>
         ) : null}
 
-        <form onSubmit={submit} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#101010] sm:grid-cols-2">
+        <form onSubmit={submit} className="agc-form grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#101010] sm:grid-cols-2">
+          {editingId != null ? (
+            <div className="sm:col-span-2 rounded-lg border border-[#0B3EAF]/20 bg-[#0B3EAF]/5 px-3 py-2 text-sm font-semibold text-[#0B3EAF] dark:border-[#A7D344]/30 dark:bg-[#A7D344]/10 dark:text-[#A7D344]">
+              Editing event #{editingId}
+            </div>
+          ) : null}
           <div className="sm:col-span-2">
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Title</label>
             <input
@@ -168,6 +203,7 @@ export default function AdminCalendarPage() {
             >
               <option value="holiday">Holiday</option>
               <option value="activity">Activity</option>
+              <option value="other">Others</option>
             </select>
           </div>
           <div>
@@ -211,9 +247,14 @@ export default function AdminCalendarPage() {
               disabled={saving}
             />
           </div>
-          <div className="sm:col-span-2 flex justify-end">
+          <div className="sm:col-span-2 flex flex-wrap justify-end gap-2">
+            {editingId != null ? (
+              <button type="button" className="btn-outline" onClick={cancelEdit} disabled={saving}>
+                Cancel edit
+              </button>
+            ) : null}
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? "Saving…" : "Add event"}
+              {saving ? "Saving…" : editingId != null ? "Save changes" : "Add event"}
             </button>
           </div>
         </form>
@@ -234,13 +275,18 @@ export default function AdminCalendarPage() {
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{ev.title}</div>
                     <div className="text-xs text-slate-600 dark:text-slate-300">
-                      {ev.kind} · {ev.start_date}
+                      {(ev.kind === "other" ? "others" : ev.kind)} · {ev.start_date}
                       {ev.end_date ? ` → ${ev.end_date}` : ""}
                     </div>
                   </div>
-                  <button type="button" className="btn-danger px-3 py-2 text-xs" onClick={() => remove(ev.id)} disabled={saving}>
-                    Delete
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button type="button" className="btn-outline px-3 py-2 text-xs" onClick={() => startEdit(ev)} disabled={saving}>
+                      Edit
+                    </button>
+                    <button type="button" className="btn-danger px-3 py-2 text-xs" onClick={() => remove(ev.id)} disabled={saving}>
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

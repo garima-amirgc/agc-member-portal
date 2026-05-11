@@ -31,9 +31,9 @@ function spansDay(ev, dayYmd) {
 }
 
 function chipClass(kind) {
-  return kind === "activity"
-    ? "bg-[#0B3EAF] text-white"
-    : "bg-[#E02B20] text-white";
+  if (kind === "activity") return "bg-[#0B3EAF] text-white";
+  if (kind === "other") return "bg-[#6B7280] text-white";
+  return "bg-[#E02B20] text-white";
 }
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -43,7 +43,7 @@ export default function CalendarPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month0, setMonth0] = useState(now.getMonth());
   const [events, setEvents] = useState([]);
-  const [filter, setFilter] = useState("all"); // all | holiday | activity
+  const [filter, setFilter] = useState("all"); // all | holiday | activity | other
   const [loading, setLoading] = useState(true);
 
   const win = useMemo(() => monthWindow(year, month0), [year, month0]);
@@ -72,6 +72,7 @@ export default function CalendarPage() {
   const shown = useMemo(() => {
     if (filter === "holiday") return events.filter((e) => e.kind === "holiday");
     if (filter === "activity") return events.filter((e) => e.kind === "activity");
+    if (filter === "other") return events.filter((e) => e.kind === "other");
     return events;
   }, [events, filter]);
 
@@ -121,6 +122,7 @@ export default function CalendarPage() {
               <option value="all">All Events</option>
               <option value="holiday">Holidays</option>
               <option value="activity">Activities</option>
+              <option value="other">Others</option>
             </select>
             <button type="button" className="btn-outline px-3 py-2" onClick={prev} aria-label="Previous month">
               ‹

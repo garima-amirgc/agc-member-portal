@@ -69,6 +69,11 @@ export function usePortalNavItems(user) {
         label: "Calendar",
       },
       {
+        to: "/upcoming",
+        icon: IconCalendar,
+        label: "Upcoming",
+      },
+      {
         to: "/it-tickets",
         icon: IconTicket,
         label: "IT Ticket",
@@ -91,9 +96,9 @@ export function usePortalNavItems(user) {
           grantKey: ADMIN_GRANT_KEYS.ENGAGEMENT_CALENDAR,
         },
         {
-          to: "/upcoming",
+          to: "/admin/upcoming",
           icon: IconCalendar,
-          label: "Upcoming events",
+          label: "Manage upcoming",
           grantKey: ADMIN_GRANT_KEYS.UPCOMING,
         },
         {

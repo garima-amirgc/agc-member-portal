@@ -5,9 +5,31 @@ import { PAGE_SHELL } from "../constants/pageLayout";
 import api from "../services/api";
 
 const FACILITIES = ["AGC", "AQM", "SCF", "ASP"];
+const REPORT_SIZE_OPTIONS = [
+  { label: "Normal", value: 1 },
+  { label: "Fit", value: 1.35 },
+  { label: "Smaller", value: 1.7 },
+  { label: "Smallest", value: 2.1 },
+];
 
 function safeTitle(s) {
   return String(s || "").trim() || "Untitled report";
+}
+
+function reportEmbedSrc(src) {
+  const raw = String(src || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    if (/powerbi\.com$/i.test(url.hostname) || /\.powerbi\.com$/i.test(url.hostname)) {
+      url.searchParams.set("pageView", "fitToWidth");
+      url.searchParams.set("filterPaneEnabled", "false");
+      url.searchParams.set("navContentPaneEnabled", "true");
+    }
+    return url.toString();
+  } catch {
+    return raw;
+  }
 }
 
 function normalizeFacilities(arr) {
@@ -29,6 +51,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState(null);
   const [activeFacility, setActiveFacility] = useState(null);
+  const [reportScale, setReportScale] = useState(1.7);
 
   useEffect(() => {
     let stale = false;
@@ -107,7 +130,7 @@ export default function ReportsPage() {
 
   return (
     <main className={PAGE_SHELL}>
-      <PageHeader title="Reports" subtitle="Power BI dashboards embedded in AGC Member Portal" />
+      <PageHeader title="Reports" />
         {loading ? (
           <div className="card">
             <div className="text-sm text-slate-600 dark:text-slate-300">Loading reports…</div>
@@ -182,24 +205,50 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <section className="card min-h-[60vh]">
+            <section className="card -mx-4 min-h-[70vh] rounded-none p-2 sm:mx-0 sm:rounded-portal sm:p-4">
               {active ? (
                 <>
                   <div className="mb-3">
-                    <div className="text-lg font-semibold">{safeTitle(active.title)}</div>
-                    {active.description ? (
-                      <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                        {String(active.description)}
+                    <div className="flex justify-end">
+                      <div className="shrink-0">
+                        <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Report size
+                        </div>
+                        <div className="inline-flex rounded-portal border border-slate-200 bg-white/70 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/25">
+                          {REPORT_SIZE_OPTIONS.map((opt) => {
+                            const selected = opt.value === reportScale;
+                            return (
+                              <button
+                                key={opt.label}
+                                type="button"
+                                onClick={() => setReportScale(opt.value)}
+                                className={[
+                                  "rounded-[10px] px-2.5 py-1 text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:focus-visible:ring-brand-green/30",
+                                  selected
+                                    ? "bg-[#0B3EAF] text-white shadow-sm dark:bg-[#A7D344] dark:text-[#0a0a0a]"
+                                    : "text-slate-700 hover:bg-white/80 dark:text-white/85 dark:hover:bg-white/5",
+                                ].join(" ")}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    ) : null}
+                    </div>
                   </div>
 
                   <div className="relative overflow-hidden rounded-portal border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
-                    <div className="aspect-[16/9] w-full">
+                    <div className="h-[calc(100svh-13rem)] min-h-[30rem] w-full sm:h-[calc(100vh-17rem)] sm:min-h-[36rem]">
                       <iframe
                         title={safeTitle(active.title)}
-                        src={String(active.embed_src)}
-                        className="h-full w-full"
+                        src={reportEmbedSrc(active.embed_src)}
+                        className="origin-top-left border-0"
+                        style={{
+                          width: `${reportScale * 100}%`,
+                          height: `${reportScale * 100}%`,
+                          transform: `scale(${1 / reportScale})`,
+                        }}
                         loading="lazy"
                         referrerPolicy="no-referrer"
                         allowFullScreen
@@ -207,9 +256,6 @@ export default function ReportsPage() {
                     </div>
                   </div>
 
-                  <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                    If you see a blank frame, the report may require Power BI permissions or the embed link is not a public/embed-capable URL.
-                  </p>
                 </>
               ) : (
                 <div className="text-sm text-slate-600 dark:text-slate-300">Choose a report.</div>

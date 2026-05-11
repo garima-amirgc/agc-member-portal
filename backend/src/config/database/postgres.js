@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS engagement_calendar (
 CREATE TABLE IF NOT EXISTS calendar_events (
   id SERIAL PRIMARY KEY,
   title TEXT NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'holiday' CHECK(kind IN ('holiday','activity')),
+  kind TEXT NOT NULL DEFAULT 'holiday',
   start_date TEXT NOT NULL, -- YYYY-MM-DD
   end_date TEXT, -- YYYY-MM-DD inclusive
   color TEXT,
@@ -299,6 +299,28 @@ async function migrateColumns(client) {
     } catch (e) {
       if (!String(e.message || "").includes("already exists")) console.warn("[pg migrate]", q.slice(0, 60), e.message);
     }
+  }
+  try {
+    await client.query(`
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        SELECT conname INTO constraint_name
+        FROM pg_constraint
+        WHERE conrelid = 'calendar_events'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%kind%'
+          AND pg_get_constraintdef(oid) LIKE '%activity%'
+          AND pg_get_constraintdef(oid) LIKE '%holiday%'
+        LIMIT 1;
+
+        IF constraint_name IS NOT NULL THEN
+          EXECUTE format('ALTER TABLE calendar_events DROP CONSTRAINT %I', constraint_name);
+        END IF;
+      END $$;
+    `);
+  } catch (e) {
+    console.warn("[pg migrate] calendar_events kind constraint:", e.message);
   }
   try {
     await client.query(`

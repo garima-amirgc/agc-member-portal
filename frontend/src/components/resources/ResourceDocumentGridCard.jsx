@@ -15,6 +15,7 @@ export default function ResourceDocumentGridCard({
   rightSlot,
   tailHint,
   openButtonLabel = "Open document",
+  compactPreview = false,
 }) {
   const descText = description || metaLine;
   return (
@@ -51,10 +52,10 @@ export default function ResourceDocumentGridCard({
       <div className="overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
         {linkTo ? (
           <Link to={linkTo} className="block">
-            <ResourceDocumentPreview url={url} />
+            <ResourceDocumentPreview url={url} compact={compactPreview} />
           </Link>
         ) : (
-          <ResourceDocumentPreview url={url} />
+          <ResourceDocumentPreview url={url} compact={compactPreview} />
         )}
       </div>
 

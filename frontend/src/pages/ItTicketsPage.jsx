@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import api, { postItTicketAttachment } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { PAGE_SHELL } from "../constants/pageLayout";
-import { formatDepartments, userHasDepartment } from "../utils/userDepts";
+import { userHasDepartment } from "../utils/userDepts";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
 const STATUS_OPTIONS = [
@@ -20,7 +20,8 @@ function statusBadgeLabel(status) {
 const ISSUE_TYPES = [
   { value: "hardware", label: "Hardware" },
   { value: "software", label: "Software" },
-  { value: "access", label: "Access" },
+  { value: "report_access", label: "Report Access" },
+  { value: "report", label: "Report" },
   { value: "other", label: "Other" },
 ];
 
@@ -199,18 +200,13 @@ export default function ItTicketsPage() {
     <main className={PAGE_SHELL}>
       <section>
         <h1 className="mb-3 text-2xl font-bold text-[#000000] dark:text-white">IT Ticket</h1>
-        <p className="text-sm text-[#0B3EAF] dark:text-[#A7D344]">
-          Submit hardware, software, or access issues and track them until IT marks them completed.
-        </p>
       </section>
 
-      <section className="card">
-          <h2 className="text-lg font-semibold">Raise a ticket</h2>
-          <p className="mt-1 text-sm text-[#0B3EAF] dark:text-[#A7D344]">
-            IT staff are emailed when SMTP is configured on the server. Your departments:{" "}
-            <strong className="text-[#000000] dark:text-white">{user ? formatDepartments(user) : "—"}</strong>
-          </p>
-          <form className="agc-form mt-4 space-y-3" onSubmit={onSubmit}>
+      <section className="card overflow-hidden p-0">
+          <div className="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-white/10 dark:bg-white/5">
+            <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Raise a ticket</h2>
+          </div>
+          <form className="agc-form space-y-5 p-5" onSubmit={onSubmit}>
             {submittedTicketId != null ? (
               <div
                 className="rounded-portal border border-[rgba(167,211,68,0.5)] bg-[rgba(167,211,68,0.12)] px-3 py-3 text-sm text-[#000000] dark:bg-[rgba(167,211,68,0.08)] dark:text-white"
@@ -238,7 +234,7 @@ export default function ItTicketsPage() {
             <div>
               <label className="mb-1 block text-xs font-bold text-[#000000] dark:text-white">Issue type</label>
               <select
-                className="w-full rounded-portal border border-[rgba(11,62,175,0.2)] bg-white px-3 py-2 text-sm dark:border-[rgba(167,211,68,0.3)] dark:bg-[#141414]"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-[#0B3EAF] focus:ring-2 focus:ring-[#0B3EAF]/15 dark:border-white/10 dark:bg-[#141414]"
                 value={issueType}
                 onChange={(e) => setIssueType(e.target.value)}
               >
@@ -248,16 +244,13 @@ export default function ItTicketsPage() {
                   </option>
                 ))}
               </select>
-              <p className="mt-2 text-sm leading-relaxed text-[#000000]/75 dark:text-white/70">
-                Report hardware, software, or access issues for the IT team.
-              </p>
             </div>
 
             {issueType === "other" ? (
               <div>
                 <label className="mb-1 block text-xs font-bold text-[#000000] dark:text-white">Describe your issue</label>
                 <textarea
-                  className="min-h-[120px] w-full rounded-portal border border-[rgba(11,62,175,0.2)] bg-white px-3 py-2 text-sm dark:border-[rgba(167,211,68,0.3)] dark:bg-[#141414]"
+                  className="min-h-[120px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-[#0B3EAF] focus:ring-2 focus:ring-[#0B3EAF]/15 dark:border-white/10 dark:bg-[#141414]"
                   value={otherIssue}
                   onChange={(e) => setOtherIssue(e.target.value)}
                   placeholder="Type what you need help with…"
@@ -269,7 +262,7 @@ export default function ItTicketsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-bold text-[#000000] dark:text-white">Title</label>
                   <input
-                    className="w-full rounded-portal border border-[rgba(11,62,175,0.2)] bg-white px-3 py-2 text-sm dark:border-[rgba(167,211,68,0.3)] dark:bg-[#141414]"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-[#0B3EAF] focus:ring-2 focus:ring-[#0B3EAF]/15 dark:border-white/10 dark:bg-[#141414]"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="e.g. VPN disconnects from home office"
@@ -279,7 +272,7 @@ export default function ItTicketsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-bold text-[#000000] dark:text-white">Details (optional)</label>
                   <textarea
-                    className="min-h-[100px] w-full rounded-portal border border-[rgba(11,62,175,0.2)] bg-white px-3 py-2 text-sm dark:border-[rgba(167,211,68,0.3)] dark:bg-[#141414]"
+                    className="min-h-[100px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-[#0B3EAF] focus:ring-2 focus:ring-[#0B3EAF]/15 dark:border-white/10 dark:bg-[#141414]"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Steps to reproduce, error messages, device name…"
@@ -292,10 +285,6 @@ export default function ItTicketsPage() {
               <label className="mb-1 block text-xs font-bold text-[#000000] dark:text-white">
                 Attachments (optional)
               </label>
-              <p className="mb-2 text-sm leading-relaxed text-[#000000]/75 dark:text-white/70">
-                Add screenshots or documents (PDF, Office, images). Up to {MAX_TICKET_ATTACHMENTS} files (15 MB each by
-                default; server may vary).
-              </p>
               {uploadError ? (
                 <p className="mb-2 text-sm text-[#E02B20] dark:text-red-300">{uploadError}</p>
               ) : null}
@@ -344,7 +333,7 @@ export default function ItTicketsPage() {
             <div>
               <label className="mb-1 block text-xs font-bold text-[#000000] dark:text-white">Assign to (IT)</label>
               <select
-                className="w-full rounded-portal border border-[rgba(11,62,175,0.2)] bg-white px-3 py-2 text-sm dark:border-[rgba(167,211,68,0.3)] dark:bg-[#141414]"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-[#0B3EAF] focus:ring-2 focus:ring-[#0B3EAF]/15 dark:border-white/10 dark:bg-[#141414]"
                 value={assigneeId}
                 onChange={(e) => setAssigneeId(e.target.value)}
                 required
@@ -361,11 +350,7 @@ export default function ItTicketsPage() {
                 <p className="mt-2 text-sm text-[#000000]/70 dark:text-white/60">
                   There are no users with IT in their departments yet. An admin can add IT under user departments.
                 </p>
-              ) : (
-                <p className="mt-2 text-sm leading-relaxed text-[#000000]/75 dark:text-white/70">
-                  The ticket is routed to this person; other IT staff are notified as well.
-                </p>
-              )}
+              ) : null}
             </div>
             <button
               type="submit"

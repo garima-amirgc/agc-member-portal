@@ -62,15 +62,7 @@ export default function LeaveRequestPanel({ className = "", embedded = false }) 
       {!embedded && (
         <>
           <h2 className="mb-2 text-lg font-semibold">Leave requests</h2>
-          <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
-            Submit a request so your manager can see it on their Manager dashboard.
-          </p>
         </>
-      )}
-      {embedded && (
-        <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
-          Your manager sees requests on the Manager dashboard.
-        </p>
       )}
 
       {!hasManager && (

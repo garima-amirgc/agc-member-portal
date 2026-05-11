@@ -6,21 +6,17 @@ import ResourceDocumentGridCard from "../components/resources/ResourceDocumentGr
 import { CATEGORIES } from "../utils/resourcesContent";
 
 const EMPTY_COURSE = { title: "", description: "", business_unit: "AGC", resource_category: "" };
-const EMPTY_ASSIGN = { user_id: "", course_id: "" };
 const EMPTY_DOC = { business_unit: "AGC", category: "finance", title: "" };
 
 /** Large video uploads exceed the default axios 15s timeout. */
 const UPLOAD_TIMEOUT_MS = 45 * 60 * 1000;
 
-/** Videos, documents & assignments. Users → /users. Upcoming → /upcoming. */
+/** Videos and documents. Upcoming → /admin/upcoming. */
 export default function AdminDashboardPage() {
-  const [active, setActive] = useState("videos"); // videos | documents | assignments
-  const [users, setUsers] = useState([]);
+  const [active, setActive] = useState("videos"); // videos | documents
   const [courses, setCourses] = useState([]);
-  const [assignments, setAssignments] = useState([]);
   const [resourceDocuments, setResourceDocuments] = useState([]);
   const [courseForm, setCourseForm] = useState(EMPTY_COURSE);
-  const [assignForm, setAssignForm] = useState(EMPTY_ASSIGN);
   const [creatingCourse, setCreatingCourse] = useState(false);
   const createCourseVideoRef = useRef(null);
   /** Inline edit: one course at a time */
@@ -32,12 +28,7 @@ export default function AdminDashboardPage() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const load = () => {
-    api
-      .get("/users")
-      .then((r) => setUsers(r.data))
-      .catch(() => setUsers([]));
     api.get("/courses").then((r) => setCourses(r.data));
-    api.get("/assignments").then((r) => setAssignments(r.data));
   };
 
   const loadResourceDocuments = useCallback(() => {
@@ -84,28 +75,6 @@ export default function AdminDashboardPage() {
       setCreatingCourse(false);
     }
   };
-  const assignCourse = async (e) => {
-    e.preventDefault();
-    const user_id = Number.parseInt(String(assignForm.user_id || "").trim(), 10);
-    const course_id = Number.parseInt(String(assignForm.course_id || "").trim(), 10);
-    if (!Number.isFinite(user_id) || user_id < 1 || !Number.isFinite(course_id) || course_id < 1) {
-      window.alert("Choose both a user and a course.");
-      return;
-    }
-    try {
-      await api.post("/assignments", { user_id, course_id });
-      setAssignForm(EMPTY_ASSIGN);
-      load();
-    } catch (err) {
-      const msg =
-        err.response?.data?.message ||
-        err.response?.data ||
-        err.message ||
-        "Could not assign course.";
-      window.alert(typeof msg === "string" ? msg : JSON.stringify(msg));
-    }
-  };
-
   const startEditCourse = (c) => {
     setCourseEdit({
       id: c.id,
@@ -185,7 +154,7 @@ export default function AdminDashboardPage() {
   const deleteCourse = async (c) => {
     if (
       !window.confirm(
-        `Delete "${c.title}"? This removes its video files (where stored), lessons, and assignments.`
+        `Delete "${c.title}"? This removes its video files (where stored) and lessons.`
       )
     ) {
       return;
@@ -264,21 +233,12 @@ export default function AdminDashboardPage() {
   const nav = [
     { id: "videos", label: "Videos" },
     { id: "documents", label: "Documents" },
-    { id: "assignments", label: "Assignments" },
   ];
 
   return (
     <main className={PAGE_SHELL}>
-      <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-[#000000] dark:text-white">Learning admin</h1>
-        </div>
-        <Link
-          className="text-sm font-bold text-brand-blue underline underline-offset-2 hover:text-brand-blue-hover dark:text-brand-green"
-          to="/upcoming"
-        >
-          Back to Upcoming
-        </Link>
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold text-[#000000] dark:text-white">Learning admin</h1>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[260px,1fr]">
@@ -316,11 +276,6 @@ export default function AdminDashboardPage() {
             <div className="grid gap-6 lg:grid-cols-2">
               <section className="card">
                 <h2 className="mb-3 text-lg font-semibold">Add video</h2>
-                <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
-                  Videos are stored on DigitalOcean and listed under{" "}
-                  <strong className="font-semibold">AGC Member Portal → (facility) → Resources → (category) → Videos</strong> when
-                  you set “List under Resources” below. Assignments still use the same entry in the Assignments tab.
-                </p>
                 <form className="agc-form space-y-2" onSubmit={createCourse}>
                   <input
                     className="w-full rounded border p-2 dark:bg-slate-700"
@@ -348,11 +303,6 @@ export default function AdminDashboardPage() {
                       <option value="SCF">SCF</option>
                       <option value="ASP">ASP</option>
                     </select>
-                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      Used for Resources <strong className="font-semibold">Videos</strong>, facility tiles (when assigned),
-                      and who may receive assignments — users need this facility on their profile in{" "}
-                      <strong className="font-semibold">Users</strong>.
-                    </p>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
@@ -363,16 +313,13 @@ export default function AdminDashboardPage() {
                       value={courseForm.resource_category || ""}
                       onChange={(e) => setCourseForm({ ...courseForm, resource_category: e.target.value })}
                     >
-                      <option value="">Not listed — assignments only (no Resources video list)</option>
+                      <option value="">Not listed in Resources</option>
                       {CATEGORIES.map((cat) => (
                         <option key={cat.key} value={cat.key}>
                           {cat.label} · Videos on {courseForm.business_unit} Resources page
                         </option>
                       ))}
                     </select>
-                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      Example: AGC Member Portal → {courseForm.business_unit} → Resources → Finance → <strong>Videos</strong>.
-                    </p>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
@@ -385,12 +332,6 @@ export default function AdminDashboardPage() {
                       disabled={creatingCourse}
                       className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-brand-blue-soft file:px-2 file:py-1 file:text-xs file:font-semibold dark:file:bg-white/10"
                     />
-                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      mp4, webm, mov, mkv. Large uploads are allowed several minutes to finish. If you save without a file,
-                      open the course in <strong className="font-semibold">Uploaded videos</strong> and choose a file under{" "}
-                      <strong className="font-semibold">Add another lesson (video)</strong> — that uploads to Spaces and
-                      creates the lesson.
-                    </p>
                   </div>
                   <button type="submit" className="btn-primary w-full" disabled={creatingCourse}>
                     {creatingCourse ? "Saving…" : "Save video"}
@@ -398,9 +339,9 @@ export default function AdminDashboardPage() {
                 </form>
               </section>
 
-              <section className="card">
+              <section className="card flex max-h-[calc(100svh-10rem)] flex-col">
                 <h2 className="mb-3 text-lg font-semibold">Uploaded videos</h2>
-                <div className="space-y-2">
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                   {courses.length === 0 ? (
                     <div className="text-sm text-slate-500 dark:text-slate-400">No videos yet.</div>
                   ) : (
@@ -536,8 +477,7 @@ export default function AdminDashboardPage() {
                           </ul>
                         ) : (
                           <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                            No lessons yet — choose a video file under <strong className="font-semibold">Add another lesson (video)</strong>{" "}
-                            below (saving metadata alone does not upload a file).
+                            No lessons yet.
                           </p>
                         )}
                         {Array.isArray(c.lessons) &&
@@ -545,9 +485,7 @@ export default function AdminDashboardPage() {
                         !(c.resource_category || "").trim() &&
                         courseEdit?.id !== c.id ? (
                           <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-[11px] font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                            Not listed under Resources <strong className="font-semibold">Videos</strong> yet — open{" "}
-                            <strong className="font-semibold">Edit</strong> and choose{" "}
-                            <strong className="font-semibold">List under Resources (Videos)</strong>.
+                            Not listed under Resources Videos yet.
                           </p>
                         ) : null}
                         <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-600">
@@ -556,7 +494,7 @@ export default function AdminDashboardPage() {
                           </label>
                           {uploadingCourseId === c.id ? (
                             <p className="mt-2 text-xs font-medium text-brand-blue dark:text-brand-green">
-                              Uploading… keep this page open.
+                              Uploading…
                             </p>
                           ) : null}
                           <input
@@ -583,13 +521,6 @@ export default function AdminDashboardPage() {
             <div className="grid gap-6 lg:grid-cols-2">
               <section className="card">
                 <h2 className="mb-3 text-lg font-semibold">Add document</h2>
-                <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
-                  Files are uploaded to the <strong className="font-semibold">same DigitalOcean Space</strong> as training
-                  videos (under <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">docs/</code> keys), then
-                  listed under{" "}
-                  <strong className="font-semibold">AGC Member Portal → (facility) → Resources → (category) → Documents</strong>
-                  . Use the <strong className="font-semibold">Videos</strong> tab for video files only.
-                </p>
                 <form className="agc-form space-y-3" onSubmit={uploadResourceDocument}>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Facility</label>
@@ -643,9 +574,6 @@ export default function AdminDashboardPage() {
                       disabled={uploadingDoc}
                       className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-brand-blue-soft file:px-2 file:py-1 file:text-xs file:font-semibold dark:file:bg-white/10"
                     />
-                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      pdf, doc, docx, ppt, pptx, xls, xlsx, txt. Large files may take several minutes.
-                    </p>
                   </div>
                   <button type="submit" className="btn-primary w-full" disabled={uploadingDoc}>
                     {uploadingDoc ? "Uploading…" : "Upload document"}
@@ -653,9 +581,9 @@ export default function AdminDashboardPage() {
                 </form>
               </section>
 
-              <section className="card">
+              <section className="card flex max-h-[calc(100svh-10rem)] flex-col">
                 <h2 className="mb-3 text-lg font-semibold">Uploaded documents</h2>
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1">
                   {resourceDocuments.length === 0 ? (
                     <div className="text-sm text-slate-500 dark:text-slate-400">No documents yet.</div>
                   ) : (
@@ -688,6 +616,7 @@ export default function AdminDashboardPage() {
                           addedLabel={addedLabel}
                           linkTo={docTo}
                           openButtonLabel="Open document"
+                          compactPreview
                           tailHint="Click title or preview to open. Delete removes the file from storage."
                           rightSlot={
                             <button
@@ -701,69 +630,6 @@ export default function AdminDashboardPage() {
                         />
                       );
                     })
-                  )}
-                </div>
-              </section>
-            </div>
-          )}
-
-          {active === "assignments" && (
-            <div className="grid gap-6 lg:grid-cols-2">
-              <section className="card">
-                <h2 className="mb-3 text-lg font-semibold">Assign training</h2>
-                <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
-                  Pick a video training from the <strong className="font-semibold">Videos</strong> tab. The user must
-                  have the <strong className="font-semibold">same facility</strong> (check{" "}
-                  <strong className="font-semibold">Users</strong>) or assignment will be rejected.
-                </p>
-                <form className="agc-form space-y-2" onSubmit={assignCourse}>
-                  <select
-                    className="w-full rounded border p-2 dark:bg-slate-700"
-                    value={assignForm.user_id}
-                    onChange={(e) => setAssignForm({ ...assignForm, user_id: e.target.value })}
-                  >
-                    <option value="">Select User</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="w-full rounded border p-2 dark:bg-slate-700"
-                    value={assignForm.course_id}
-                    onChange={(e) => setAssignForm({ ...assignForm, course_id: e.target.value })}
-                  >
-                    <option value="">Select video training</option>
-                    {courses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.title} · {c.business_unit}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="submit" className="btn-primary w-full">
-                    Assign
-                  </button>
-                </form>
-              </section>
-
-              <section className="card">
-                <h2 className="mb-3 text-lg font-semibold">All Assignments</h2>
-                <div className="space-y-2">
-                  {assignments.length === 0 ? (
-                    <div className="text-sm text-slate-500 dark:text-slate-400">No assignments yet.</div>
-                  ) : (
-                    assignments.map((a) => (
-                      <div key={a.id} className="rounded-xl border p-3 text-sm dark:border-slate-700">
-                        <div className="font-semibold">
-                          {a.user_name} {"\u2192"} {a.course_title}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                          {a.course_business_unit ? `${a.course_business_unit} · ` : ""}
-                          {a.status} · {a.progress}%
-                        </div>
-                      </div>
-                    ))
                   )}
                 </div>
               </section>

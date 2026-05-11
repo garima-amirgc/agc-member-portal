@@ -423,9 +423,6 @@ export default function AdminUsersSection({ className = "card" }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold">Users</h2>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Create users, assign roles, and remove users.
-          </p>
           {saveNotice ? (
             <p className="mt-2 rounded-portal border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
               {saveNotice}
@@ -498,11 +495,6 @@ export default function AdminUsersSection({ className = "card" }) {
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
-            <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-              Leave blank to send an <strong className="font-semibold">invite link</strong> — the user sets their own
-              password (10+ characters, letters and numbers). Or enter a password here to activate the account
-              immediately.
-            </p>
             <select
               className="w-full rounded border p-2 dark:bg-slate-700"
               value={form.role}
@@ -550,9 +542,6 @@ export default function AdminUsersSection({ className = "card" }) {
                   />
                   <span>
                     <span className="font-medium">Full administration access</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
-                      Can use every administration area. Uncheck to allow only selected options below.
-                    </span>
                   </span>
                 </label>
                 {!form.admin_full_access ? (
@@ -593,10 +582,6 @@ export default function AdminUsersSection({ className = "card" }) {
             {!isAdminRole(form.role) && canManageAdminGrants(me) ? (
               <div className="rounded border border-slate-200 p-3 dark:border-slate-600">
                 <p className="text-sm font-medium">Optional administration access</p>
-                <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                  Grant this user permission to manage specific areas (for example upcoming events) without changing
-                  their role to administrator.
-                </p>
                 <div className="mt-3 max-h-48 space-y-2 overflow-y-auto pr-1">
                   {ADMIN_GRANT_OPTIONS.map((opt) => {
                     const checked = (form.admin_grants || []).includes(opt.key);
@@ -627,9 +612,6 @@ export default function AdminUsersSection({ className = "card" }) {
 
             <div className="rounded border p-3 dark:border-slate-700">
               <div className="mb-2 text-sm font-medium">Departments</div>
-              <p className="mb-2 text-[11px] text-slate-500 dark:text-slate-400">
-                Select one or more. IT is used for ticket routing. At least one is required.
-              </p>
               <div className="flex flex-wrap gap-3">
                 {DEPARTMENTS.map((d) => {
                   const checked = (form.departments || []).includes(d);
@@ -709,10 +691,6 @@ export default function AdminUsersSection({ className = "card" }) {
                 />
                 <span>
                   <span className="font-medium">University page only</span>
-                  <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
-                    User only sees that facility’s AGC University (training, resources, courses). Home, reports, calendar,
-                    and other portal pages are hidden. Use with a single site.
-                  </span>
                 </span>
               </label>
             ) : null}
@@ -731,9 +709,6 @@ export default function AdminUsersSection({ className = "card" }) {
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                Assign a manager so this user can submit leave from Dashboard → Leave.
-              </p>
             </div>
 
             <button type="submit" disabled={creating} className="btn-primary w-full">
@@ -870,7 +845,6 @@ export default function AdminUsersSection({ className = "card" }) {
                 <h3 id="edit-user-title" className="text-lg font-semibold">
                   Edit user
                 </h3>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{editing.email}</p>
               </div>
               <button
                 type="button"
@@ -884,7 +858,7 @@ export default function AdminUsersSection({ className = "card" }) {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            <div className="agc-form min-h-0 flex-1 overflow-y-auto px-5 py-4">
               <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
@@ -956,9 +930,6 @@ export default function AdminUsersSection({ className = "card" }) {
                     />
                     <span>
                       <span className="font-medium">Full administration access</span>
-                      <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
-                        Uncheck to limit this account to selected areas only.
-                      </span>
                     </span>
                   </label>
                   {!editing.admin_full_access ? (
@@ -998,9 +969,6 @@ export default function AdminUsersSection({ className = "card" }) {
               {!isAdminRole(editing.role) && canManageAdminGrants(me) ? (
                 <div className="rounded border border-slate-200 p-3 dark:border-slate-600">
                   <p className="text-sm font-medium">Optional administration access</p>
-                  <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                    Selected areas can be managed from this account without administrator role.
-                  </p>
                   <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
                     {ADMIN_GRANT_OPTIONS.map((opt) => {
                       const checked = (editing.admin_grants || []).includes(opt.key);
@@ -1156,9 +1124,6 @@ export default function AdminUsersSection({ className = "card" }) {
                   />
                   <span>
                     <span className="font-medium">University page only</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
-                      Hides the rest of the member portal; user only uses this facility’s training hub.
-                    </span>
                   </span>
                 </label>
               ) : null}
@@ -1175,9 +1140,6 @@ export default function AdminUsersSection({ className = "card" }) {
                   value={editing.password}
                   onChange={(e) => setEditing({ ...editing, password: e.target.value })}
                 />
-                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                  Min. 10 characters with letters and numbers. Clears a pending invite when set.
-                </p>
               </div>
               </div>
             </div>

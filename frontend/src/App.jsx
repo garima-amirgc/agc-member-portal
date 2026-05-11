@@ -11,6 +11,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import DashboardIndex from "./pages/DashboardIndex";
 import DashboardPage from "./pages/DashboardPage";
+import UpcomingPage, { UpcomingEventDetailPage } from "./pages/UpcomingPage";
 import AdminUpcomingPage from "./pages/AdminUpcomingPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import CoursePlayerPage from "./pages/CoursePlayerPage";
@@ -94,14 +95,8 @@ export default function App() {
       <Route element={<AuthenticatedLayout darkMode={darkMode} setDarkMode={setDarkMode} />}>
         <Route index element={<DashboardIndex />} />
         <Route path="dashboard" element={<DashboardPage />} />
-        <Route
-          path="upcoming"
-          element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
-              <AdminUpcomingPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="upcoming" element={<UpcomingPage />} />
+        <Route path="upcoming/:eventId" element={<UpcomingEventDetailPage />} />
         <Route
           path="users"
           element={
@@ -155,6 +150,14 @@ export default function App() {
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.ENGAGEMENT_CALENDAR}>
               <AdminCalendarPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/upcoming"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+              <AdminUpcomingPage />
             </ProtectedRoute>
           }
         />

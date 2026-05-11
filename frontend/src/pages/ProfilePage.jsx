@@ -119,12 +119,6 @@ export default function ProfilePage() {
     <main className={PAGE_SHELL}>
       <section>
         <h1 className="mb-3 text-2xl font-bold text-[#000000] dark:text-white">Your Profile</h1>
-        <p className="text-sm text-[#0B3EAF] dark:text-[#A7D344]">
-          Update your details and track your learning progress.
-          {user?.role === "Manager" &&
-            " Employee management below lists your direct reports, their leave requests, and course progress. Use Leave requests for your own time off."}
-          {user?.role !== "Admin" && user?.role !== "Manager" && " Open Leave requests below to apply for time off."}
-        </p>
       </section>
 
       <section className="card">
@@ -174,9 +168,6 @@ export default function ProfilePage() {
                   <img src={resolvePublicMediaUrl(me.profile_image_url)} alt="Profile" className="h-full w-full object-cover" />
                 ) : null}
               </div>
-              <div className="text-sm text-slate-600 dark:text-slate-300">
-                Upload a PNG/JPG/WebP (max 5MB).
-              </div>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -219,9 +210,6 @@ export default function ProfilePage() {
           <div>
             <label className="mb-1 block text-sm font-medium">New Password (optional)</label>
             <input className="w-full rounded border p-2 dark:bg-slate-700" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Leave blank to keep current password" />
-            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              New password: at least 10 characters, with at least one letter and one number.
-            </p>
           </div>
 
           <div>
@@ -265,7 +253,6 @@ export default function ProfilePage() {
                 ))}
               </select>
             </div>
-            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">We only store month and day (not the year).</p>
           </div>
 
           <button type="submit" className="btn-primary" disabled={saving}>

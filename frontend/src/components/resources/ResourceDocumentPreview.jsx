@@ -15,7 +15,7 @@ function extLabel(url) {
   return m ? m[1].toUpperCase().slice(0, 5) : "FILE";
 }
 
-function Placeholder({ kind, url }) {
+function Placeholder({ kind, url, compact = false }) {
   const label = kind === "pdf" ? "PDF" : extLabel(url);
   const bg =
     kind === "pdf"
@@ -26,10 +26,10 @@ function Placeholder({ kind, url }) {
 
   return (
     <div
-      className={`flex aspect-video w-full flex-col items-center justify-center bg-gradient-to-br px-4 text-center ${bg}`}
+      className={`flex w-full flex-col items-center justify-center bg-gradient-to-br px-4 text-center ${compact ? "h-24" : "aspect-video"} ${bg}`}
       aria-hidden
     >
-      <svg className="mb-2 h-12 w-12 text-white/95" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <svg className={`${compact ? "mb-1.5 h-7 w-7" : "mb-2 h-12 w-12"} text-white/95`} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
       </svg>
       <span className="text-xs font-bold uppercase tracking-wide text-white/95">{label}</span>
@@ -40,7 +40,7 @@ function Placeholder({ kind, url }) {
 /**
  * Thumbnail-style preview for resource documents (category grid). Images use the public URL; other types use a styled placeholder.
  */
-export default function ResourceDocumentPreview({ url }) {
+export default function ResourceDocumentPreview({ url, compact = false }) {
   const kind = inferKind(url);
   const src = resolveResourceAssetUrl(url);
   const [imgFailed, setImgFailed] = useState(false);
@@ -50,7 +50,7 @@ export default function ResourceDocumentPreview({ url }) {
       <img
         src={src}
         alt=""
-        className="aspect-video w-full object-cover"
+        className={`${compact ? "h-24" : "aspect-video"} w-full object-cover`}
         loading="lazy"
         decoding="async"
         onError={() => setImgFailed(true)}
@@ -58,5 +58,5 @@ export default function ResourceDocumentPreview({ url }) {
     );
   }
 
-  return <Placeholder kind={imgFailed ? "generic" : kind} url={url} />;
+  return <Placeholder kind={imgFailed ? "generic" : kind} url={url} compact={compact} />;
 }

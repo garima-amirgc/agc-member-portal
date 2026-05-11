@@ -458,7 +458,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
       </h2>
       <form
         ref={addFormRef}
-        className="mb-6 space-y-5 text-sm max-xl:space-y-4 max-xl:text-xs"
+        className="agc-form mb-6 space-y-5 text-sm max-xl:space-y-4 max-xl:text-xs"
         onSubmit={onSubmitForm}
       >
         <div className={formPanelClass}>
@@ -474,9 +474,6 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
               Select all
             </button>
           </div>
-          <p className="mb-3 text-xs text-slate-500 dark:text-slate-400 max-xl:text-[0.65rem]">
-            Choose where this event appears on member facility pages.
-          </p>
           <div className="flex flex-wrap gap-x-6 gap-y-2.5">
             {FACILITIES.map((f) => (
               <label
@@ -536,9 +533,6 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
           <div className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100 max-xl:text-xs">
             Event image <span className="font-normal text-slate-500 dark:text-slate-400">(optional)</span>
           </div>
-          <p className="mb-3 text-xs text-slate-500 dark:text-slate-400 max-xl:text-[0.65rem]">
-            JPEG, PNG, GIF, or WebP · max ~8&nbsp;MB · shown on Upcoming cards
-          </p>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <div className="relative h-36 w-full overflow-hidden rounded-lg border border-slate-200/80 bg-slate-100 dark:border-slate-600 dark:bg-slate-800 sm:h-32 sm:w-48 sm:shrink-0">
               {form.image_url ? (
@@ -735,7 +729,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
           <form
             ref={editModalRef}
             key={editing.id}
-            className="max-h-[82vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-4 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700"
+            className="agc-form max-h-[82vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-4 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700"
             onSubmit={(e) => {
               e.preventDefault();
               void saveEdit();
@@ -744,27 +738,6 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <h3 className="text-base font-semibold">Edit upcoming event</h3>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">ID #{editing.id}</p>
-                <div className="mt-2 space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs leading-snug text-slate-700 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-200">
-                  <p>
-                    <span className="font-semibold text-slate-800 dark:text-slate-100">Event date &amp; time: </span>
-                    {fmtDate(editing.event_at || editing.start_at) || (
-                      <span className="text-slate-500 dark:text-slate-400">Not set</span>
-                    )}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-800 dark:text-slate-100">Show in list from: </span>
-                    {fmtDate(editing.show_from_at) || (
-                      <span className="text-slate-500 dark:text-slate-400">When published</span>
-                    )}
-                  </p>
-                  {editing.end_at ? (
-                    <p>
-                      <span className="font-semibold text-slate-800 dark:text-slate-100">Hide after: </span>
-                      {fmtDate(editing.end_at)}
-                    </p>
-                  ) : null}
-                </div>
               </div>
               <button type="button" onClick={() => setEditing(null)} className="btn-secondary shrink-0 text-sm">
                 Close
