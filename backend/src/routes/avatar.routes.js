@@ -5,7 +5,9 @@ const multer = require("multer");
 const { db } = require("../config/db");
 const { authRequired } = require("../middleware/auth");
 const {
-  isCloudStorageEnabled,
+  isUploadStorageEnabled,
+  requiresDigitalOceanSpacesForUploads,
+  uploadStorageUnavailableMessage,
   uploadAvatarImageFromDisk,
 } = require("../services/objectStorage.service");
 
@@ -35,6 +37,14 @@ const upload = multer({
   },
 });
 
+function removeTempFile(localPath) {
+  try {
+    if (localPath && fs.existsSync(localPath)) fs.unlinkSync(localPath);
+  } catch {
+    /* ignore */
+  }
+}
+
 router.post("/me", upload.single("avatar"), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No image uploaded" });
 
@@ -45,15 +55,14 @@ router.post("/me", upload.single("avatar"), async (req, res) => {
     let publicUrl = `/uploads/avatars/${filename}`;
     let storageProvider = "local";
 
-    if (isCloudStorageEnabled()) {
+    if (isUploadStorageEnabled()) {
       const uploaded = await uploadAvatarImageFromDisk(localPath, filename);
       publicUrl = uploaded.url;
       storageProvider = uploaded.provider;
-      try {
-        fs.unlinkSync(localPath);
-      } catch {
-        /* ignore */
-      }
+      removeTempFile(localPath);
+    } else if (requiresDigitalOceanSpacesForUploads()) {
+      removeTempFile(localPath);
+      return res.status(503).json({ message: uploadStorageUnavailableMessage() });
     }
 
     await db.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?").run(publicUrl, req.user.id);
@@ -61,11 +70,7 @@ router.post("/me", upload.single("avatar"), async (req, res) => {
     return res.json({ profile_image_url: publicUrl, storageProvider });
   } catch (err) {
     console.error("Avatar upload failed:", err);
-    try {
-      if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
-    } catch {
-      /* ignore */
-    }
+    removeTempFile(localPath);
     const raw = err.message || String(err) || "Upload failed";
     return res.status(502).json({ message: `Avatar upload failed: ${raw}` });
   }

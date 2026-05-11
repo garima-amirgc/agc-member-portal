@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node src/server.js",
     "start": "node src/server.js",
+    "migrate:uploads": "node scripts/migrate-local-uploads-to-spaces.js",
     "test:smtp": "node scripts/test-smtp.js"
   },
   "dependencies": {

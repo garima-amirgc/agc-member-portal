@@ -206,10 +206,12 @@ async function start() {
       const obs = require("./services/objectStorage.service");
       if (obs.isSpacesEnabled())
         console.log(
-          `Lesson video storage: DigitalOcean Spaces (bucket: ${process.env.DO_SPACES_BUCKET}, region: ${process.env.DO_SPACES_REGION})`
+          `Upload storage: DigitalOcean Spaces (bucket: ${process.env.DO_SPACES_BUCKET}, region: ${process.env.DO_SPACES_REGION})`
         );
-      else if (obs.isR2Enabled()) console.log("Lesson video storage: Cloudflare R2");
-      else console.log(`Lesson video storage: local disk (${uploadsDir})`);
+      else if (obs.requiresDigitalOceanSpacesForUploads())
+        console.warn("Upload storage: DigitalOcean Spaces is required in this environment but is not configured.");
+      else if (obs.isR2Enabled()) console.log("Upload storage: Cloudflare R2");
+      else console.log(`Upload storage: local disk (${uploadsDir})`);
     } catch {
       /* ignore */
     }

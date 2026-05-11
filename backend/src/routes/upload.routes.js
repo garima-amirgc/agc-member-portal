@@ -13,7 +13,9 @@ const {
   getPublicTicketAttachmentUrl,
 } = require("../services/storage.service");
 const {
-  isCloudStorageEnabled,
+  isUploadStorageEnabled,
+  requiresDigitalOceanSpacesForUploads,
+  uploadStorageUnavailableMessage,
   uploadLessonVideoFromDisk,
   uploadResourceDocumentFromDisk,
   uploadUpcomingImageFromDisk,
@@ -86,6 +88,19 @@ const ticketAttachmentUpload = multer({
 
 const router = express.Router();
 
+function removeTempFile(localPath) {
+  try {
+    if (localPath && fs.existsSync(localPath)) fs.unlinkSync(localPath);
+  } catch {
+    /* ignore */
+  }
+}
+
+function rejectMissingUploadStorage(res, localPath) {
+  removeTempFile(localPath);
+  return res.status(503).json({ message: uploadStorageUnavailableMessage() });
+}
+
 router.post(
   "/",
   authRequired,
@@ -100,18 +115,18 @@ router.post(
   const filename = req.file.filename;
 
   try {
-    if (isCloudStorageEnabled()) {
+    if (isUploadStorageEnabled()) {
       const { url: videoUrl, provider } = await uploadLessonVideoFromDisk(localPath, filename);
-      try {
-        fs.unlinkSync(localPath);
-      } catch {
-        /* ignore */
-      }
+      removeTempFile(localPath);
       return res.json({
         filename,
         video_url: videoUrl,
         storageProvider: provider,
       });
+    }
+
+    if (requiresDigitalOceanSpacesForUploads()) {
+      return rejectMissingUploadStorage(res, localPath);
     }
 
     return res.json({
@@ -121,11 +136,7 @@ router.post(
     });
   } catch (err) {
     console.error("Upload failed:", err);
-    try {
-      if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
-    } catch {
-      /* ignore */
-    }
+    removeTempFile(localPath);
     const raw = err.message || String(err) || "Upload failed";
     const name = err.name || err.Code || "";
     const badCreds =
@@ -133,7 +144,7 @@ router.post(
         `${raw} ${name}`
       );
     const hint = badCreds
-      ? `${raw} Regenerate Spaces access keys in DigitalOcean (API → Spaces keys, or your Space → Access keys). Update DO_SPACES_KEY and DO_SPACES_SECRET in backend/.env, restart the server. To skip cloud and use local files only, remove or empty DO_SPACES_KEY (and R2_* if set).`
+      ? `${raw} Regenerate Spaces access keys in DigitalOcean (API → Spaces keys, or your Space → Access keys). Update DO_SPACES_KEY and DO_SPACES_SECRET in backend/.env, restart the server.`
       : raw;
     return res.status(502).json({ message: `Storage upload failed: ${hint}` });
   }
@@ -153,18 +164,18 @@ router.post(
     const filename = req.file.filename;
 
     try {
-      if (isCloudStorageEnabled()) {
+      if (isUploadStorageEnabled()) {
         const { url: fileUrl, provider } = await uploadResourceDocumentFromDisk(localPath, filename);
-        try {
-          fs.unlinkSync(localPath);
-        } catch {
-          /* ignore */
-        }
+        removeTempFile(localPath);
         return res.json({
           filename,
           file_url: fileUrl,
           storageProvider: provider,
         });
+      }
+
+      if (requiresDigitalOceanSpacesForUploads()) {
+        return rejectMissingUploadStorage(res, localPath);
       }
 
       const docsDir = path.join(uploadDir, "docs");
@@ -187,11 +198,7 @@ router.post(
       });
     } catch (err) {
       console.error("Document upload failed:", err);
-      try {
-        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
-      } catch {
-        /* ignore */
-      }
+      removeTempFile(localPath);
       const raw = err.message || String(err) || "Upload failed";
       return res.status(502).json({ message: `Storage upload failed: ${raw}` });
     }
@@ -208,19 +215,19 @@ async function handleTicketAttachmentUpload(req, res) {
   const original_name = String(req.file.originalname || filename).slice(0, 240);
 
   try {
-    if (isCloudStorageEnabled()) {
+    if (isUploadStorageEnabled()) {
       const { url: fileUrl, provider } = await uploadTicketAttachmentFromDisk(localPath, filename);
-      try {
-        fs.unlinkSync(localPath);
-      } catch {
-        /* ignore */
-      }
+      removeTempFile(localPath);
       return res.json({
         filename,
         original_name,
         file_url: fileUrl,
         storageProvider: provider,
       });
+    }
+
+    if (requiresDigitalOceanSpacesForUploads()) {
+      return rejectMissingUploadStorage(res, localPath);
     }
 
     const ticketsDir = path.join(uploadDir, "tickets");
@@ -244,11 +251,7 @@ async function handleTicketAttachmentUpload(req, res) {
     });
   } catch (err) {
     console.error("Ticket attachment upload failed:", err);
-    try {
-      if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
-    } catch {
-      /* ignore */
-    }
+    removeTempFile(localPath);
     const raw = err.message || String(err) || "Upload failed";
     return res.status(502).json({ message: `Storage upload failed: ${raw}` });
   }
@@ -275,18 +278,18 @@ router.post(
     const filename = req.file.filename;
 
     try {
-      if (isCloudStorageEnabled()) {
+      if (isUploadStorageEnabled()) {
         const { url: imageUrl, provider } = await uploadUpcomingImageFromDisk(localPath, filename);
-        try {
-          fs.unlinkSync(localPath);
-        } catch {
-          /* ignore */
-        }
+        removeTempFile(localPath);
         return res.json({
           filename,
           image_url: imageUrl,
           storageProvider: provider,
         });
+      }
+
+      if (requiresDigitalOceanSpacesForUploads()) {
+        return rejectMissingUploadStorage(res, localPath);
       }
 
       const dir = path.join(uploadDir, "upcoming");
@@ -309,11 +312,7 @@ router.post(
       });
     } catch (err) {
       console.error("Upcoming image upload failed:", err);
-      try {
-        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
-      } catch {
-        /* ignore */
-      }
+      removeTempFile(localPath);
       const raw = err.message || String(err) || "Upload failed";
       return res.status(502).json({ message: `Storage upload failed: ${raw}` });
     }
@@ -334,18 +333,18 @@ router.post(
     const filename = req.file.filename;
 
     try {
-      if (isCloudStorageEnabled()) {
+      if (isUploadStorageEnabled()) {
         const { url: imageUrl, provider } = await uploadPollBannerImageFromDisk(localPath, filename);
-        try {
-          fs.unlinkSync(localPath);
-        } catch {
-          /* ignore */
-        }
+        removeTempFile(localPath);
         return res.json({
           filename,
           image_url: imageUrl,
           storageProvider: provider,
         });
+      }
+
+      if (requiresDigitalOceanSpacesForUploads()) {
+        return rejectMissingUploadStorage(res, localPath);
       }
 
       const dir = path.join(uploadDir, "polls");
@@ -368,11 +367,7 @@ router.post(
       });
     } catch (err) {
       console.error("Poll banner upload failed:", err);
-      try {
-        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
-      } catch {
-        /* ignore */
-      }
+      removeTempFile(localPath);
       const raw = err.message || String(err) || "Upload failed";
       return res.status(502).json({ message: `Storage upload failed: ${raw}` });
     }

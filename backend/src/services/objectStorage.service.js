@@ -67,6 +67,34 @@ function isCloudStorageEnabled() {
   return isR2Enabled() || isSpacesEnabled();
 }
 
+function isProductionRuntime() {
+  const nodeEnv = String(process.env.NODE_ENV || "").trim().toLowerCase();
+  return nodeEnv === "production" || Boolean(process.env.RENDER);
+}
+
+function requiresDigitalOceanSpacesForUploads() {
+  const raw =
+    envCred("REQUIRE_DIGITALOCEAN_SPACES") ||
+    envCred("FORCE_DIGITALOCEAN_UPLOADS");
+  const normalized = String(raw || "").trim().toLowerCase();
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  return isProductionRuntime();
+}
+
+function isUploadStorageEnabled() {
+  if (isSpacesEnabled()) return true;
+  if (requiresDigitalOceanSpacesForUploads()) return false;
+  return isR2Enabled();
+}
+
+function uploadStorageUnavailableMessage() {
+  if (requiresDigitalOceanSpacesForUploads()) {
+    return "DigitalOcean Spaces is required for uploads in production. Configure DO_SPACES_BUCKET, DO_SPACES_REGION or DO_SPACES_ENDPOINT, DO_SPACES_KEY, DO_SPACES_SECRET, and DO_SPACES_PUBLIC_URL.";
+  }
+  return "No object storage (DigitalOcean Spaces or R2) is configured.";
+}
+
 function trimSlashes(s) {
   return String(s || "").replace(/\/+$/, "").replace(/^\/+/, "");
 }
@@ -514,6 +542,9 @@ module.exports = {
   isR2Enabled,
   isSpacesEnabled,
   isCloudStorageEnabled,
+  isUploadStorageEnabled,
+  requiresDigitalOceanSpacesForUploads,
+  uploadStorageUnavailableMessage,
   uploadLessonVideoFromDisk,
   uploadResourceDocumentFromDisk,
   uploadUpcomingImageFromDisk,
