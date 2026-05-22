@@ -20,7 +20,7 @@ function microsoftConfig() {
     tenantId,
     clientId,
     clientSecret,
-    authority: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+    authority: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0`,
     scopes: (envCred("MICROSOFT_SCOPES") || "openid profile email User.Read").split(/\s+/).filter(Boolean),
   };
 }
