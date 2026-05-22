@@ -8,6 +8,8 @@ const { mergeFacilityAccess } = require("../utils/businessUnitCodes");
 const leaveSvc = require("../services/leaveRequests.service");
 const managerTeamSvc = require("../services/managerTeam.service");
 const { buildReportingHierarchy } = require("../services/reportingHierarchy.service");
+const { hasDirectReports, resolveReportsToId } = require("../services/supervisor.service");
+const { supervisorRequired } = require("../middleware/supervisorRequired");
 const { managerLeaveInboxWithTeam } = require("../handlers/managerInbox.handler");
 const userDeptSvc = require("../services/userDepartments.service");
 const inviteSvc = require("../services/invite.service");
@@ -110,6 +112,7 @@ router.get("/me", async (req, res) => {
 
   const reporting_hierarchy = await buildReportingHierarchy(req.user.id);
   const departments = await userDeptSvc.listForUser(req.user.id);
+  const has_direct_reports = await hasDirectReports(req.user.id);
 
   const { admin_grants: rawAg, ...rest } = user;
   const adminGrantsOut = parseAdminGrantsColumn(rawAg);
@@ -122,6 +125,7 @@ router.get("/me", async (req, res) => {
     facilities,
     departments,
     reporting_hierarchy,
+    has_direct_reports,
   });
 });
 
@@ -282,8 +286,7 @@ router.get("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
 // Manager leave inbox (under /users so routing matches profile API).
 router.get("/manager/leave-inbox", managerLeaveInboxWithTeam);
 
-router.patch("/manager/leave-requests/:id", async (req, res) => {
-  if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+router.patch("/manager/leave-requests/:id", supervisorRequired, async (req, res) => {
   try {
     const out = await leaveSvc.decideLeaveRequest(req.user.id, req.params.id, req.body?.status);
     return res.json(out);
@@ -293,9 +296,8 @@ router.patch("/manager/leave-requests/:id", async (req, res) => {
   }
 });
 
-// Manager: direct reports with leave history and course assignment progress
-router.get("/manager/team-overview", async (req, res) => {
-  if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+// Direct reports: leave history and course assignment progress (any user with people under them).
+router.get("/manager/team-overview", supervisorRequired, async (req, res) => {
   try {
     return res.json(await managerTeamSvc.getTeamOverview(req.user.id));
   } catch (e) {
@@ -444,6 +446,10 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
   const designationTrim =
     designation !== undefined && designation !== null ? String(designation).trim().slice(0, 120) : "";
 
+  const reportsResolved = await resolveReportsToId(null, manager_id);
+  if (!reportsResolved.ok) return res.status(400).json({ message: reportsResolved.message });
+  const insertManagerId = reportsResolved.managerId ?? null;
+
   let pwHash;
   let inviteHash = null;
   let inviteExpires = null;
@@ -468,7 +474,7 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
         pwHash,
         roleNorm,
         businessUnits[0],
-        manager_id,
+        insertManagerId,
         primaryDept,
         designationTrim,
         inviteHash,
@@ -618,21 +624,10 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
 
   let nextManagerId = existing.manager_id;
   if (manager_id !== undefined) {
-    if (manager_id === null || manager_id === "") {
-      nextManagerId = null;
-    } else {
-      const mid = Number(manager_id);
-      if (!Number.isFinite(mid) || mid < 1) {
-        nextManagerId = null;
-      } else if (mid === userId) {
-        return res.status(400).json({ message: "User cannot be their own manager" });
-      } else {
-        const mgr = await db.prepare("SELECT id FROM users WHERE id = ?").get(mid);
-        if (!mgr) {
-          return res.status(400).json({ message: "Invalid manager" });
-        }
-        nextManagerId = mid;
-      }
+    const reportsResolved = await resolveReportsToId(userId, manager_id);
+    if (!reportsResolved.ok) return res.status(400).json({ message: reportsResolved.message });
+    if (reportsResolved.managerId !== undefined) {
+      nextManagerId = reportsResolved.managerId;
     }
   }
 

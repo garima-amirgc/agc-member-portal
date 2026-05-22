@@ -70,7 +70,7 @@ export default function ManagerEmployeeManagement() {
           to="/manager"
           className="shrink-0 text-sm font-bold text-brand-blue underline underline-offset-2 hover:text-brand-blue-hover dark:text-brand-green"
         >
-          Manager dashboard (alerts)
+          Team dashboard (alerts)
         </Link>
       </div>
 

@@ -10,6 +10,7 @@ import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 import { splitUpcomingForHome } from "../utils/upcomingFeedSplit";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { hasAdminGrant } from "../utils/adminAccess";
+import { isSupervisor } from "../utils/supervisorAccess";
 
 function BirthdayMiniCard({ item, onClick }) {
   const fullName = String(item?.name || "").trim();
@@ -203,12 +204,12 @@ export default function DashboardPage() {
                       Learning admin
                     </Link>
                   )}
-                  {user?.role === "Manager" && (
+                  {isSupervisor(user) && (
                     <Link
                       className="block rounded-portal border border-transparent px-2 py-1.5 font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:bg-[rgba(167,211,68,0.12)] hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF] dark:hover:bg-[rgba(11,62,175,0.2)]"
                       to="/manager"
                     >
-                      Manager hub
+                      My team
                     </Link>
                   )}
                 </div>

@@ -113,6 +113,10 @@ const RESOURCE_CARDS = [
   },
 ];
 
+function facilityTabStorageKey(facilityCode) {
+  return `agc_portal_facility_tab_${facilityCode}`;
+}
+
 export default function FacilityCoursesPage() {
   const { facility } = useParams();
   const facilityNorm = (facility || "").toUpperCase();
@@ -120,12 +124,38 @@ export default function FacilityCoursesPage() {
   const [me, setMe] = useState(null);
   const [activeTab, setActiveTab] = useState("resources"); // resources | org
 
+  const setFacilityTab = useMemo(() => {
+    return (tab) => {
+      setActiveTab(tab);
+      try {
+        sessionStorage.setItem(facilityTabStorageKey(facilityNorm), tab);
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [facilityNorm]);
+
   useEffect(() => {
     (async () => {
       const meRes = await api.get("/users/me");
       setMe(meRes.data);
     })();
   }, []);
+
+  /** Restore tab per facility, or default AGC to Organization (detailed org chart lives there). */
+  useEffect(() => {
+    const key = facilityTabStorageKey(facilityNorm);
+    try {
+      const saved = sessionStorage.getItem(key);
+      if (saved === "org" || saved === "resources") {
+        setActiveTab(saved);
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    setActiveTab(facilityNorm === "AGC" ? "org" : "resources");
+  }, [facilityNorm]);
 
   useEffect(() => {
     if (FACILITY_CODES.includes(facilityNorm)) {
@@ -178,7 +208,7 @@ export default function FacilityCoursesPage() {
         <div className="relative flex items-end gap-3">
           <button
             type="button"
-            onClick={() => setActiveTab("resources")}
+            onClick={() => setFacilityTab("resources")}
             className={[
               "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
               "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
@@ -194,7 +224,7 @@ export default function FacilityCoursesPage() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("org")}
+            onClick={() => setFacilityTab("org")}
             className={[
               "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
               "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
@@ -214,7 +244,7 @@ export default function FacilityCoursesPage() {
         </div>
 
         <div
-          className="rounded-b-2xl border border-t-0 border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+          className="min-w-0 overflow-x-auto rounded-b-2xl border border-t-0 border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"
           role="tabpanel"
         >
           {activeTab === "resources" ? (
@@ -252,7 +282,7 @@ export default function FacilityCoursesPage() {
 
           {activeTab === "org" ? (
             <div className="min-w-0">
-              <OrgChart />
+              <OrgChart facility={facilityNorm} />
             </div>
           ) : null}
         </div>
@@ -274,8 +304,10 @@ export default function FacilityCoursesPage() {
               </div>
               <h3 className="mt-1 text-2xl font-bold !text-white">Sherry Aziz</h3>
               <p className="mt-3 text-sm leading-relaxed text-[#ffffff]/90">
-                Welcome to AGC. Please complete your assigned courses on time and keep your training status up to date.
-                Your progress helps us maintain compliance, safety, and operational excellence across the facility.
+                Welcome to AGC. As part of our commitment to compliance, safety, and operational excellence, please
+                complete your assigned training on time and keep your training status up to date. Your continued
+                progress plays an important role in supporting a safe, efficient, and successful workplace across our
+                facility.
               </p>
             </div>
           </div>

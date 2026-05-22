@@ -1,6 +1,6 @@
 const express = require("express");
 const { authRequired } = require("../middleware/auth");
-const { ROLES } = require("../config/constants");
+const { supervisorRequired } = require("../middleware/supervisorRequired");
 const leaveSvc = require("../services/leaveRequests.service");
 
 const router = express.Router();
@@ -24,8 +24,7 @@ router.get("/me", async (req, res) => {
   }
 });
 
-router.get("/inbox", async (req, res) => {
-  if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+router.get("/inbox", supervisorRequired, async (req, res) => {
   try {
     return res.json(await leaveSvc.listLeaveInboxForManager(req.user.id));
   } catch (e) {
@@ -33,8 +32,7 @@ router.get("/inbox", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
-  if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+router.patch("/:id", supervisorRequired, async (req, res) => {
   try {
     const out = await leaveSvc.decideLeaveRequest(req.user.id, req.params.id, req.body?.status);
     return res.json(out);

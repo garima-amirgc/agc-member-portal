@@ -1,5 +1,4 @@
 const { db } = require("../config/db");
-const { ROLES } = require("../config/constants");
 
 function parseDateOnly(s) {
   if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
@@ -24,12 +23,12 @@ async function submitLeaveRequest(userId, body) {
 
   const employee = await db.prepare("SELECT id, manager_id FROM users WHERE id = ?").get(userId);
   if (!employee?.manager_id) {
-    throw httpError(400, "No manager assigned. Ask an admin to assign a manager.");
+    throw httpError(400, "No supervisor assigned. Ask an admin to set who you report to.");
   }
 
-  const manager = await db.prepare("SELECT id, role FROM users WHERE id = ?").get(employee.manager_id);
-  if (!manager || manager.role !== ROLES.MANAGER) {
-    throw httpError(400, "Assigned manager is invalid. Ask an admin to update your manager.");
+  const supervisor = await db.prepare("SELECT id FROM users WHERE id = ?").get(employee.manager_id);
+  if (!supervisor) {
+    throw httpError(400, "Assigned supervisor is invalid. Ask an admin to update your reporting line.");
   }
 
   const result = await db
@@ -39,7 +38,7 @@ async function submitLeaveRequest(userId, body) {
     )
     .run(userId, employee.manager_id, start, end, String(reason).trim() || null);
 
-  return { id: result.lastInsertRowid, message: "Leave request sent to your manager" };
+  return { id: result.lastInsertRowid, message: "Leave request sent to your supervisor" };
 }
 
 async function listLeaveRequestsForEmployee(userId) {

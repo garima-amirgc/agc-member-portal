@@ -435,7 +435,59 @@ async function uploadPollBannerImageFromDisk(localPath, filename) {
 }
 
 /**
- * Upload a profile/avatar image (key: avatars/<filename>).
+ * Org chart headshots (key: org-chart/&lt;filename&gt;) — public read, long cache.
+ * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
+ */
+async function uploadOrgChartImageFromDisk(localPath, filename) {
+  const key = `org-chart/${filename}`;
+  const ext = path.extname(filename).toLowerCase();
+  const ContentType = IMAGE_EXT_TO_MIME[ext] || "application/octet-stream";
+  const { size: ContentLength } = fs.statSync(localPath);
+  const stream = fs.createReadStream(localPath);
+  try {
+    if (isSpacesEnabled()) {
+      logSpacesCredentialHintOnce();
+      const bucket = envCred("DO_SPACES_BUCKET") || String(process.env.DO_SPACES_BUCKET || "").trim();
+      await getSpacesClient().send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: stream,
+          ContentLength,
+          ContentType,
+          ACL: "public-read",
+          ContentDisposition: "inline",
+          CacheControl: "public, max-age=31536000",
+        })
+      );
+      const base = String(process.env.DO_SPACES_PUBLIC_URL).replace(/\/+$/, "");
+      return { url: `${base}/${key}`, provider: "spaces" };
+    }
+
+    if (isR2Enabled()) {
+      await getR2Client().send(
+        new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Key: key,
+          Body: stream,
+          ContentLength,
+          ContentType,
+          ContentDisposition: "inline",
+          CacheControl: "public, max-age=31536000",
+        })
+      );
+      const base = String(process.env.R2_PUBLIC_URL).replace(/\/+$/, "");
+      return { url: `${base}/${key}`, provider: "r2" };
+    }
+  } finally {
+    stream.destroy();
+  }
+
+  throw new Error("No object storage (R2 or Spaces) is configured");
+}
+
+/**
+ * Upload a profile/avatar image (key: avatars/&lt;filename&gt;).
  * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
  */
 async function uploadAvatarImageFromDisk(localPath, filename) {
@@ -549,6 +601,7 @@ module.exports = {
   uploadResourceDocumentFromDisk,
   uploadUpcomingImageFromDisk,
   uploadPollBannerImageFromDisk,
+  uploadOrgChartImageFromDisk,
   uploadAvatarImageFromDisk,
   uploadTicketAttachmentFromDisk,
   deleteLessonVideoByUrl,

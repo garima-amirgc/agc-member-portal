@@ -98,8 +98,10 @@ async function start() {
       }
     })().catch((e) => res.status(500).json({ message: e.message || "Server error" }));
   }
-  function leaveManagerDecideHandler(req, res) {
-    if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+  const { hasDirectReports } = require("./services/supervisor.service");
+
+  async function leaveManagerDecideHandler(req, res) {
+    if (!(await hasDirectReports(req.user.id))) return res.status(403).json({ message: "Forbidden" });
     (async () => {
       try {
         const out = await leaveSvc.decideLeaveRequest(req.user.id, req.params.id, req.body?.status);
@@ -110,8 +112,8 @@ async function start() {
       }
     })().catch((e) => res.status(500).json({ message: e.message || "Server error" }));
   }
-  function managerTeamOverviewHandler(req, res) {
-    if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+  async function managerTeamOverviewHandler(req, res) {
+    if (!(await hasDirectReports(req.user.id))) return res.status(403).json({ message: "Forbidden" });
     (async () => {
       try {
         return res.json(await managerTeamSvc.getTeamOverview(req.user.id));

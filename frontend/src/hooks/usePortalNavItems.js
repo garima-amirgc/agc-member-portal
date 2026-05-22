@@ -13,6 +13,7 @@ import {
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { hasAdminGrant } from "../utils/adminAccess";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../utils/facilityUniversityOnly";
+import { isSupervisor } from "../utils/supervisorAccess";
 
 /**
  * Same main/admin nav items and home link target as the sidebar (role-aware).
@@ -30,7 +31,6 @@ export function usePortalNavItems(user) {
       };
     }
 
-    const isManager = role === "Manager";
     const hasScopedGrants = Array.isArray(user?.admin_grants) && user.admin_grants.length > 0;
     const showAdministrationNav = role === "Admin" || hasScopedGrants;
 
@@ -43,11 +43,11 @@ export function usePortalNavItems(user) {
       label: "Home",
     });
 
-    if (isManager) {
+    if (isSupervisor(user)) {
       main.push({
         to: "/manager",
         icon: IconTeam,
-        label: "Manager hub",
+        label: "My team",
       });
     }
 

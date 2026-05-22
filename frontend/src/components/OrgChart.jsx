@@ -1,3 +1,5 @@
+import AgcFacilityOrgChart from "./AgcFacilityOrgChart";
+
 function initials(name = "") {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
@@ -24,7 +26,15 @@ function Node({ name, title, subtitle }) {
   );
 }
 
-export default function OrgChart() {
+/**
+ * @param {{ facility?: string }} props
+ */
+export default function OrgChart({ facility }) {
+  const fac = String(facility || "").toUpperCase();
+  if (fac === "AGC") {
+    return <AgcFacilityOrgChart />;
+  }
+
   return (
     <div className="w-full min-w-0 overflow-hidden">
       <div className="relative w-full max-w-full rounded-2xl border bg-slate-50 p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-900/30">
@@ -66,8 +76,8 @@ export default function OrgChart() {
 
               <div className="flex min-w-0 flex-col items-center gap-2">
                 <div className="h-3 w-px shrink-0 bg-slate-300 dark:bg-slate-600" />
+                <Node name="Tom Heliotis" title="Chief Commercial Officer" />
                 <Node name="Adam Aziz" title="Director of Operations" />
-                <Node name="Tom Helliotis" title="Chief Commercial Officer" />
                 <Node name="Gene Massa" title="Director of Human Resources" subtitle="AGC" />
               </div>
             </div>

@@ -1,6 +1,7 @@
 const express = require("express");
 const { db } = require("../config/db");
 const { ROLES } = require("../config/constants");
+const { hasDirectReports } = require("../services/supervisor.service");
 const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS, hasAdminGrant } = require("../config/adminGrants");
@@ -138,7 +139,8 @@ router.post("/:id/progress", async (req, res) => {
 
 router.get("/", async (req, res) => {
   const canListAll = hasAdminGrant(req.user, ADMIN_GRANT_KEYS.LEARNING_ADMIN);
-  if (req.user.role !== ROLES.MANAGER && !canListAll) {
+  const isSupervisor = await hasDirectReports(req.user.id);
+  if (!canListAll && !isSupervisor) {
     return res.status(403).json({ message: "You do not have access to this administration area." });
   }
   let rows = await db
@@ -150,7 +152,11 @@ router.get("/", async (req, res) => {
       ORDER BY a.id DESC`
     )
     .all();
-  if (req.user.role === ROLES.MANAGER) rows = rows.filter((r) => r.user_id !== req.user.id);
+  if (!canListAll && isSupervisor) {
+    const team = await db.prepare("SELECT id FROM users WHERE manager_id = ?").all(req.user.id);
+    const teamIds = new Set(team.map((r) => r.id));
+    rows = rows.filter((r) => teamIds.has(r.user_id));
+  }
   res.json(rows);
 });
 

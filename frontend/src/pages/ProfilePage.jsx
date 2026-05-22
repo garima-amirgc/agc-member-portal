@@ -4,11 +4,43 @@ import { PAGE_PADDING, PAGE_SHELL } from "../constants/pageLayout";
 import ProgressBar from "../components/ProgressBar";
 import LeaveRequestPanel from "../components/LeaveRequestPanel";
 import ManagerEmployeeManagement from "../components/ManagerEmployeeManagement";
+import { isSupervisor } from "../utils/supervisorAccess";
 import ReportingHierarchyTree from "../components/ReportingHierarchyTree";
 import { useAuth } from "../context/AuthContext";
 import { formatDepartments } from "../utils/userDepts";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+function profileInitials(name, email) {
+  const source = String(name || email || "U").trim();
+  return source
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
+}
+
+function birthDateLabel(month, day) {
+  const m = Number(month);
+  const d = Number(day);
+  if (!Number.isFinite(m) || !Number.isFinite(d) || m < 1 || m > 12 || d < 1 || d > 31) return "Not added";
+  return `${MONTHS[m - 1]} ${d}`;
+}
 
 export default function ProfilePage() {
   const { user, refreshMe } = useAuth();
@@ -28,6 +60,18 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState("");
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  const syncFormFromProfile = (profile) => {
+    setForm({
+      name: profile?.name ?? "",
+      email: profile?.email ?? "",
+      designation: profile?.designation ?? "",
+      password: "",
+      birth_month: profile?.birth_month != null ? String(profile.birth_month) : "",
+      birth_day: profile?.birth_day != null ? String(profile.birth_day) : "",
+    });
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -35,14 +79,7 @@ export default function ProfilePage() {
       const [meRes, assignmentsRes] = await Promise.all([api.get("/users/me"), api.get("/assignments/me")]);
       setMe(meRes.data);
       setAssignments(assignmentsRes.data);
-      setForm({
-        name: meRes.data?.name ?? "",
-        email: meRes.data?.email ?? "",
-        designation: meRes.data?.designation ?? "",
-        password: "",
-        birth_month: meRes.data?.birth_month != null ? String(meRes.data.birth_month) : "",
-        birth_day: meRes.data?.birth_day != null ? String(meRes.data.birth_day) : "",
-      });
+      syncFormFromProfile(meRes.data);
     })().catch((e) => setError(friendlyErrorMessage(e, "Failed to load profile")));
   }, [user]);
 
@@ -78,14 +115,17 @@ export default function ProfilePage() {
         ...(form.password ? { password: form.password } : {}),
       });
 
-      const updated = await refreshMe();
-      setMe(updated);
+      await refreshMe();
+      const updatedRes = await api.get("/users/me");
+      setMe(updatedRes.data);
+      syncFormFromProfile(updatedRes.data);
 
       const assignmentsRes = await api.get("/assignments/me");
       setAssignments(assignmentsRes.data);
 
       setSuccess("Profile updated");
-      setForm((f) => ({ ...f, password: "" }));
+      setEditing(false);
+      setAvatarFile(null);
     } catch (e2) {
       setError(friendlyErrorMessage(e2, "Failed to update profile"));
     } finally {
@@ -102,8 +142,9 @@ export default function ProfilePage() {
       const fd = new FormData();
       fd.append("avatar", avatarFile);
       await api.post("/avatar/me", fd);
-      const updated = await refreshMe();
-      setMe(updated);
+      await refreshMe();
+      const updatedRes = await api.get("/users/me");
+      setMe(updatedRes.data);
       setSuccess("Profile image updated");
       setAvatarFile(null);
     } catch (e2) {
@@ -113,7 +154,25 @@ export default function ProfilePage() {
     }
   };
 
+  const startEditing = () => {
+    syncFormFromProfile(me);
+    setAvatarFile(null);
+    setError("");
+    setSuccess("");
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    syncFormFromProfile(me);
+    setAvatarFile(null);
+    setError("");
+    setEditing(false);
+  };
+
   if (!me) return <div className={PAGE_PADDING}>Loading profile…</div>;
+
+  const avatarUrl = resolvePublicMediaUrl(me.profile_image_url);
+  const facilities = Array.isArray(me.facilities) && me.facilities.length > 0 ? me.facilities : [me.business_unit].filter(Boolean);
 
   return (
     <main className={PAGE_SHELL}>
@@ -122,28 +181,58 @@ export default function ProfilePage() {
       </section>
 
       <section className="card">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="font-semibold">Overall Progress</div>
-            <div className="text-sm">{overallProgress}%</div>
+        {error && <div className="mb-4 rounded bg-rose-100 p-2 text-sm text-rose-700">{error}</div>}
+        {success && <div className="mb-4 rounded bg-emerald-100 p-2 text-sm text-emerald-700">{success}</div>}
+
+        <div className="flex flex-col items-center text-center">
+          <div className="h-24 w-24 overflow-hidden rounded-full bg-brand-blue-soft text-brand-blue ring-4 ring-white shadow-md dark:bg-white/10 dark:text-brand-green dark:ring-white/10">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-2xl font-bold">
+                {profileInitials(me.name, me.email)}
+              </div>
+            )}
           </div>
-          <ProgressBar value={overallProgress} />
+          <h2 className="mt-4 text-xl font-bold text-slate-950 dark:text-white">{me.name}</h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{me.email}</p>
+          {String(me.designation || "").trim() ? (
+            <p className="mt-1 text-sm font-medium text-[#0B3EAF] dark:text-[#A7D344]">{me.designation}</p>
+          ) : null}
+          {!editing ? (
+            <button type="button" className="btn-primary mt-4" onClick={startEditing}>
+              Edit Profile
+            </button>
+          ) : null}
         </div>
 
-        <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-          <span className="font-semibold">Role:</span> {me.role}
-          {" "}
-          · <span className="font-semibold">Departments:</span> {formatDepartments(me)}
-        </p>
-        {String(me.designation || "").trim() ? (
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-            <span className="font-semibold">Designation:</span> {me.designation}
-          </p>
-        ) : null}
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Role</div>
+            <div className="mt-1 font-semibold text-slate-900 dark:text-white">{me.role || "Not added"}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Departments</div>
+            <div className="mt-1 font-semibold text-slate-900 dark:text-white">{formatDepartments(me)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Date of birth</div>
+            <div className="mt-1 font-semibold text-slate-900 dark:text-white">{birthDateLabel(me.birth_month, me.birth_day)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Overall Progress</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-white">{overallProgress}%</div>
+            </div>
+            <div className="mt-2">
+              <ProgressBar value={overallProgress} />
+            </div>
+          </div>
+        </div>
 
-        {me.facilities?.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {me.facilities.map((f) => (
+        {facilities.length > 0 && (
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {facilities.map((f) => (
               <span key={f} className="rounded-sm bg-brand-blue-soft px-2 py-1 text-xs font-bold text-brand-blue dark:bg-white/10 dark:text-brand-green">
                 {f}
               </span>
@@ -154,19 +243,20 @@ export default function ProfilePage() {
 
       <ReportingHierarchyTree hierarchy={me.reporting_hierarchy} currentUserId={me.id} />
 
+      {editing ? (
       <section className="card">
         <h2 className="mb-4 text-lg font-semibold">Edit Profile</h2>
-        {error && <div className="mb-3 rounded bg-rose-100 p-2 text-rose-700">{error}</div>}
-        {success && <div className="mb-3 rounded bg-emerald-100 p-2 text-emerald-700">{success}</div>}
 
         <div className="mb-6 rounded-2xl border p-4 dark:border-slate-700">
           <div className="mb-3 text-sm font-semibold">Profile image</div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-14 w-14 overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-300 dark:bg-slate-700 dark:ring-slate-600">
-                {me.profile_image_url ? (
-                  <img src={resolvePublicMediaUrl(me.profile_image_url)} alt="Profile" className="h-full w-full object-cover" />
-                ) : null}
+              <div className="h-14 w-14 overflow-hidden rounded-full bg-slate-200 text-sm font-bold text-brand-blue ring-1 ring-slate-300 dark:bg-slate-700 dark:text-brand-green dark:ring-slate-600">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">{profileInitials(me.name, me.email)}</div>
+                )}
               </div>
             </div>
 
@@ -255,13 +345,19 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+            <button type="button" className="btn-secondary" onClick={cancelEditing} disabled={saving || avatarUploading}>
+              Cancel
+            </button>
+          </div>
         </form>
       </section>
+      ) : null}
 
-      {user?.role === "Manager" && <ManagerEmployeeManagement />}
+      {isSupervisor(user) && <ManagerEmployeeManagement />}
 
       {user?.role !== "Admin" && (
         <details className="group card rounded-portal border border-stone-200/90 p-4 open:ring-1 open:ring-brand-blue/20 dark:border-stone-700 dark:open:ring-brand-blue/30">

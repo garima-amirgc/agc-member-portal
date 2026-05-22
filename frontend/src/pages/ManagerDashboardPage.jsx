@@ -89,7 +89,7 @@ export default function ManagerDashboardPage() {
   return (
     <main className={PAGE_SHELL}>
       <section>
-        <h1 className="mb-1 text-2xl font-bold">Manager dashboard</h1>
+        <h1 className="mb-1 text-2xl font-bold">My team</h1>
       </section>
 
       {teamLoading && <div className="card p-4 text-sm text-slate-500">Loading team…</div>}

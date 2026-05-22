@@ -1,11 +1,11 @@
 import axios from "axios";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import AuthBirdsCorner from "../components/layout/AuthBirdsCorner";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../constants/branding";
 import { useAuth } from "../context/AuthContext";
 import { postAuthLandingPath } from "../utils/facilityUniversityOnly";
-import { getApiBaseURL } from "../services/api";
+import api, { getApiBaseURL } from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
 const isDev = import.meta.env.DEV;
@@ -16,6 +16,7 @@ const inputWrapFocus = "focus-within:ring-2 focus-within:ring-brand-blue/25 dark
 export default function LoginPage() {
   const { login, refreshMe } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [form, setForm] = useState({
     email: isDev ? "admin@company.com" : "",
     password: isDev ? "admin123" : "",
@@ -23,6 +24,32 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
+
+  useEffect(() => {
+    const ssoError = searchParams.get("sso_error");
+    const ssoCode = searchParams.get("sso_code");
+    if (!ssoError) return;
+    let msg = decodeURIComponent(ssoError.replace(/\+/g, " "));
+    if (ssoCode === "INVITE_PENDING") {
+      msg =
+        "This account still needs a password. Check your email for the invite, or use Forgot password below to resend the setup link.";
+    } else if (ssoCode === "INVITE_EXPIRED") {
+      msg = "Your setup link has expired. Ask an administrator to send a new invite.";
+    } else if (ssoCode === "NO_PORTAL_USER") {
+      msg =
+        "No portal account exists for this Microsoft email. Ask an administrator to add you to the AGC Member Portal.";
+    }
+    setError(msg);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    api
+      .get("/auth/microsoft/status")
+      .then(({ data }) => setMicrosoftEnabled(Boolean(data?.enabled)))
+      .catch(() => setMicrosoftEnabled(false));
+  }, []);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -75,6 +102,12 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const startMicrosoftLogin = () => {
+    const base = getApiBaseURL().replace(/\/+$/, "");
+    const remember = rememberMe ? "1" : "0";
+    window.location.href = `${base}/api/auth/microsoft?remember=${remember}`;
   };
 
   return (
@@ -165,8 +198,8 @@ export default function LoginPage() {
                 Welcome back
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-[#5c5f66] dark:text-stone-400">
-                Sign in with your work email and password. If you haven’t set a password yet, use “Forgot password” to
-                resend your setup link.
+                Sign in with your work Microsoft account or use your email and password. If you haven’t set a password
+                yet, use “Forgot password” to resend your setup link.
                 <span className="ml-1">This portal is restricted to authorized personnel.</span>
               </p>
             </div>
@@ -191,6 +224,31 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
+
+            {microsoftEnabled ? (
+              <div className="mb-5 sm:mb-6">
+                <button
+                  type="button"
+                  onClick={startMicrosoftLogin}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#8C8C8C]/40 bg-white text-[15px] font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 21 21" aria-hidden>
+                    <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                    <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                    <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                    <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                  </svg>
+                  Sign in with Microsoft
+                </button>
+                <div className="relative my-4 flex items-center">
+                  <div className="h-px flex-1 bg-slate-200 dark:bg-stone-700" />
+                  <span className="px-3 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-stone-500">
+                    or
+                  </span>
+                  <div className="h-px flex-1 bg-slate-200 dark:bg-stone-700" />
+                </div>
+              </div>
+            ) : null}
 
             <div className="mb-4 sm:mb-5">
               <label

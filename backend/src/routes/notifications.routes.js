@@ -1,13 +1,13 @@
 const express = require("express");
 const { db } = require("../config/db");
-const { ROLES } = require("../config/constants");
+const { hasDirectReports } = require("../services/supervisor.service");
 const { authRequired } = require("../middleware/auth");
 
 const router = express.Router();
 router.use(authRequired);
 
 router.get("/me", async (req, res) => {
-  if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+  if (!(await hasDirectReports(req.user.id))) return res.status(403).json({ message: "Forbidden" });
 
   const rows = await db
     .prepare(
@@ -27,7 +27,7 @@ router.get("/me", async (req, res) => {
 });
 
 router.post("/:id/dismiss", async (req, res) => {
-  if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+  if (!(await hasDirectReports(req.user.id))) return res.status(403).json({ message: "Forbidden" });
 
   const notif = await db
     .prepare("SELECT id, status FROM manager_notifications WHERE id = ? AND manager_id = ?")

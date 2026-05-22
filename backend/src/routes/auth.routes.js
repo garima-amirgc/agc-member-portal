@@ -8,10 +8,11 @@ const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS, isFullAdminUser, parseAdminGrantsColumn } = require("../config/adminGrants");
 
-function authResponseUser(userRow, departments, dept) {
+async function authResponseUser(userRow, departments, dept) {
   const { password: _pw, invite_token_hash: _i, invite_expires_at: _ie, admin_grants: rawAg, ...safe } = userRow;
   const adminGrants = parseAdminGrantsColumn(rawAg);
   const role = canonicalRole(userRow.role);
+  const has_direct_reports = await hasDirectReports(userRow.id);
   return {
     ...safe,
     role,
@@ -20,14 +21,19 @@ function authResponseUser(userRow, departments, dept) {
     is_full_admin: isFullAdminUser({ role, adminGrants }),
     departments,
     department: dept,
+    has_direct_reports,
   };
 }
 const leaveSvc = require("../services/leaveRequests.service");
 const managerTeamSvc = require("../services/managerTeam.service");
 const { managerLeaveInboxWithTeam } = require("../handlers/managerInbox.handler");
+const { supervisorRequired } = require("../middleware/supervisorRequired");
+const { hasDirectReports } = require("../services/supervisor.service");
 const inviteSvc = require("../services/invite.service");
 const emailSvc = require("../services/email.service");
 const { issueInviteAndEmail } = require("../services/inviteResend.service");
+const { issuePortalSession, resolveUserForLogin } = require("../services/authSession.service");
+const msAuth = require("../services/microsoftAuth.service");
 
 const router = express.Router();
 
@@ -77,18 +83,13 @@ router.post("/login", async (req, res) => {
   if (!user) {
     return res.status(401).json({ message: "Invalid credentials" });
   }
-  if (user.invite_token_hash) {
-    if (inviteSvc.hasActiveInvite(user)) {
-      return res.status(403).json({
-        code: "INVITE_PENDING",
-        message:
-          "This account is waiting for you to set a password. Use the invite link from your email, or use “Forgot password” on the login page to resend it.",
-      });
+  const gate = await resolveUserForLogin(user.email);
+  if (!gate.user) {
+    const code = gate.code || "FORBIDDEN";
+    if (code === "INVITE_PENDING" || code === "INVITE_EXPIRED") {
+      return res.status(403).json({ code, message: gate.error });
     }
-    return res.status(403).json({
-      code: "INVITE_EXPIRED",
-      message: "Your setup link has expired. Ask an administrator to send a new invite.",
-    });
+    return res.status(401).json({ message: "Invalid credentials" });
   }
   if (!bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ message: "Invalid credentials" });
@@ -98,28 +99,94 @@ router.post("/login", async (req, res) => {
     .prepare("UPDATE users SET password_reset_token_hash = NULL, password_reset_expires_at = NULL WHERE id = ?")
     .run(user.id);
 
-  const departments = await userDeptSvc.listForUser(user.id);
-  const dept = departments[0] || "Production";
-  const token = jwt.sign(
-    {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      business_unit: user.business_unit,
-      manager_id: user.manager_id,
-      designation: user.designation != null ? String(user.designation) : "",
-      department: dept,
-      departments,
-    },
-    process.env.JWT_SECRET || "dev_secret",
-    { expiresIn: jwtExpiresForSession(rememberMe) }
-  );
+  const session = await issuePortalSession(user, rememberMe);
+  return res.json(session);
+});
 
-  return res.json({
-    token,
-    user: authResponseUser(user, departments, dept),
+/** Whether Microsoft SSO is configured on the API (for login UI). */
+router.get("/microsoft/status", (_req, res) => {
+  res.json({
+    enabled: msAuth.isEnabled(),
+    loginPath: "/api/auth/microsoft",
   });
+});
+
+/** Start Microsoft Entra ID sign-in (redirects to Microsoft). */
+router.get("/microsoft", (req, res) => {
+  if (!msAuth.isEnabled()) {
+    return res.redirect(msAuth.frontendLoginUrl("sso_error=Microsoft+SSO+is+not+configured+on+the+server."));
+  }
+  const remember = req.query.remember === "1" || req.query.remember === "true";
+  const state = msAuth.createOAuthState(remember);
+  res.setHeader("Set-Cookie", `ms_sso_state=${state}; ${msAuth.cookieOpts(req, 600)}`);
+  return res.redirect(msAuth.buildAuthorizeUrl(req, { state, remember }));
+});
+
+/** OAuth callback — exchange code, match portal user, issue JWT, redirect to SPA. */
+router.get("/microsoft/callback", async (req, res) => {
+  const clearStateCookie = `ms_sso_state=; ${msAuth.cookieOpts(req, 0)}`;
+  try {
+    if (!msAuth.isEnabled()) {
+      res.setHeader("Set-Cookie", clearStateCookie);
+      return res.redirect(msAuth.frontendLoginUrl("sso_error=Microsoft+SSO+is+not+configured."));
+    }
+
+    const errParam = req.query.error_description || req.query.error;
+    if (errParam) {
+      res.setHeader("Set-Cookie", clearStateCookie);
+      return res.redirect(
+        msAuth.frontendLoginUrl(`sso_error=${encodeURIComponent(String(errParam))}`)
+      );
+    }
+
+    const cookies = msAuth.parseCookies(req.headers.cookie);
+    const returnedState = String(req.query.state || "");
+    if (!returnedState || returnedState !== cookies.ms_sso_state) {
+      res.setHeader("Set-Cookie", clearStateCookie);
+      return res.redirect(msAuth.frontendLoginUrl("sso_error=Invalid+sign-in+session.+Try+again."));
+    }
+
+    const parsedState = msAuth.parseOAuthState(returnedState);
+    if (!parsedState) {
+      res.setHeader("Set-Cookie", clearStateCookie);
+      return res.redirect(msAuth.frontendLoginUrl("sso_error=Sign-in+session+expired.+Try+again."));
+    }
+
+    const code = req.query.code;
+    if (!code) {
+      res.setHeader("Set-Cookie", clearStateCookie);
+      return res.redirect(msAuth.frontendLoginUrl("sso_error=Missing+authorization+code."));
+    }
+
+    const tokens = await msAuth.exchangeCodeForTokens(req, code);
+    const profile = await msAuth.fetchGraphProfile(tokens.access_token);
+    const gate = await resolveUserForLogin(profile.email);
+    if (!gate.user) {
+      res.setHeader("Set-Cookie", clearStateCookie);
+      const codeKey = gate.code ? `&sso_code=${encodeURIComponent(gate.code)}` : "";
+      return res.redirect(
+        msAuth.frontendLoginUrl(`sso_error=${encodeURIComponent(gate.error || "Access denied.")}${codeKey}`)
+      );
+    }
+
+    await db
+      .prepare("UPDATE users SET password_reset_token_hash = NULL, password_reset_expires_at = NULL WHERE id = ?")
+      .run(gate.user.id);
+
+    const session = await issuePortalSession(gate.user, parsedState.remember);
+    res.setHeader("Set-Cookie", clearStateCookie);
+    const q = new URLSearchParams({
+      token: session.token,
+      remember: parsedState.remember ? "1" : "0",
+    });
+    return res.redirect(`${inviteSvc.publicAppBaseUrl().replace(/\/+$/, "")}/login/sso?${q.toString()}`);
+  } catch (e) {
+    console.error("[auth] microsoft/callback:", e);
+    res.setHeader("Set-Cookie", clearStateCookie);
+    return res.redirect(
+      msAuth.frontendLoginUrl(`sso_error=${encodeURIComponent(e.message || "Microsoft sign-in failed.")}`)
+    );
+  }
 });
 
 /**
@@ -223,7 +290,7 @@ router.post("/reset-password", async (req, res) => {
     );
     return res.json({
       token,
-      user: authResponseUser(user, departments, dept),
+      user: await authResponseUser(user, departments, dept),
     });
   } catch (e) {
     const code = e.statusCode || 500;
@@ -287,7 +354,7 @@ router.post("/complete-invite", async (req, res) => {
     );
     return res.json({
       token,
-      user: authResponseUser(user, departments, dept),
+      user: await authResponseUser(user, departments, dept),
     });
   } catch (e) {
     const code = e.statusCode || 500;
@@ -315,8 +382,7 @@ router.get("/my-leave-requests", authRequired, async (req, res) => {
 
 router.get("/manager-leave-inbox", authRequired, managerLeaveInboxWithTeam);
 
-router.patch("/manager-leave-requests/:id", authRequired, async (req, res) => {
-  if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+router.patch("/manager-leave-requests/:id", authRequired, supervisorRequired, async (req, res) => {
   try {
     const out = await leaveSvc.decideLeaveRequest(req.user.id, req.params.id, req.body?.status);
     return res.json(out);
@@ -326,8 +392,7 @@ router.patch("/manager-leave-requests/:id", authRequired, async (req, res) => {
   }
 });
 
-router.get("/manager-team-overview", authRequired, async (req, res) => {
-  if (req.user.role !== ROLES.MANAGER) return res.status(403).json({ message: "Forbidden" });
+router.get("/manager-team-overview", authRequired, supervisorRequired, async (req, res) => {
   try {
     return res.json(await managerTeamSvc.getTeamOverview(req.user.id));
   } catch (e) {

@@ -61,27 +61,13 @@ export default function AdminUsersSection({ className = "card" }) {
     load();
   }, []);
 
-  const managers = useMemo(
-    () =>
-      users.filter((u) => {
-        const r = String(u.role || "").trim().toLowerCase();
-        return r === "manager" || isAdminRole(u.role);
-      }),
-    [users]
-  );
+  /** Anyone in the directory can be selected as “reports to” (role does not matter). */
+  const reportsToOptionsForCreate = useMemo(() => users, [users]);
 
-  /** Edit modal: include current manager even if their role isn't Manager/Admin (legacy data). */
-  const editManagerOptions = useMemo(() => {
-    const picks = managers;
-    if (!editing) return picks;
-    const mid =
-      editing.manager_id === "" || editing.manager_id == null ? null : Number(editing.manager_id);
-    if (mid != null && Number.isFinite(mid) && mid > 0 && !picks.some((p) => p.id === mid)) {
-      const extra = users.find((u) => u.id === mid);
-      if (extra) return [...picks, extra];
-    }
-    return picks;
-  }, [managers, users, editing]);
+  const reportsToOptionsForEdit = useMemo(() => {
+    if (!editing) return users;
+    return users.filter((u) => u.id !== editing.id);
+  }, [users, editing]);
 
   const createUser = async (e) => {
     e.preventDefault();
@@ -696,16 +682,19 @@ export default function AdminUsersSection({ className = "card" }) {
             ) : null}
 
             <div>
-              <div className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">Manager (for leave requests)</div>
+              <div className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                Reports to (leave &amp; team hierarchy)
+              </div>
               <select
                 className="w-full rounded border p-2 dark:bg-slate-700"
                 value={form.manager_id}
                 onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
               >
-                <option value="">No manager</option>
-                {managers.map((m) => (
+                <option value="">No supervisor</option>
+                {reportsToOptionsForCreate.map((m) => (
                   <option key={m.id} value={String(m.id)}>
                     {m.name}
+                    {m.role ? ` (${m.role})` : ""}
                   </option>
                 ))}
               </select>
@@ -743,7 +732,7 @@ export default function AdminUsersSection({ className = "card" }) {
                         </span>
                       ) : null}
                       <span>
-                        Manager: {u.manager_name || "—"} · Dept: {formatDepartments(u)}
+                        Reports to: {u.manager_name || "—"} · Dept: {formatDepartments(u)}
                       </span>
                       {u.invite_status === "active" ? (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-900 dark:bg-amber-900/50 dark:text-amber-100">
@@ -1054,17 +1043,18 @@ export default function AdminUsersSection({ className = "card" }) {
 
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
-                  Manager
+                  Reports to
                 </div>
                 <select
                   className="w-full rounded border p-2 dark:bg-slate-700"
                   value={editing.manager_id === "" || editing.manager_id == null ? "" : String(editing.manager_id)}
                   onChange={(e) => setEditing({ ...editing, manager_id: e.target.value })}
                 >
-                  <option value="">No Manager</option>
-                  {editManagerOptions.map((m) => (
+                  <option value="">No supervisor</option>
+                  {reportsToOptionsForEdit.map((m) => (
                     <option key={m.id} value={String(m.id)}>
                       {m.name}
+                      {m.role ? ` (${m.role})` : ""}
                     </option>
                   ))}
                 </select>

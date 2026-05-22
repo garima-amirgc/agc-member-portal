@@ -6,6 +6,7 @@ import { FACILITY_CODES } from "./constants/facilities";
 import AuthenticatedLayout from "./components/layout/AuthenticatedLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
+import SsoCallbackPage from "./pages/SsoCallbackPage";
 import InviteSetupPage from "./pages/InviteSetupPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -89,6 +90,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/login/sso" element={<SsoCallbackPage />} />
       <Route path="/invite" element={<InviteSetupPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -172,7 +174,7 @@ export default function App() {
         <Route
           path="manager"
           element={
-            <ProtectedRoute roles={["Manager"]}>
+            <ProtectedRoute supervisor>
               <ManagerDashboardPage />
             </ProtectedRoute>
           }

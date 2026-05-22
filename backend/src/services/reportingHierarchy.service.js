@@ -36,15 +36,29 @@ async function buildReportingHierarchy(userId) {
 
   const ancestorIds = new Set(chain.slice(0, -1).map((n) => n.id));
 
-  const direct_reports = directRows
-    .filter((r) => r.id !== userId && !ancestorIds.has(r.id))
-    .map((r) => ({
+  const directFiltered = directRows.filter((r) => r.id !== userId && !ancestorIds.has(r.id));
+
+  const subStmt = db.prepare(
+    `SELECT id, name, email, role, business_unit FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
+  );
+  const direct_reports = [];
+  for (const r of directFiltered) {
+    const subs = await subStmt.all(r.id);
+    direct_reports.push({
       id: r.id,
       name: r.name,
       email: r.email,
       role: r.role,
       business_unit: r.business_unit,
-    }));
+      direct_reports: subs.map((s) => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        role: s.role,
+        business_unit: s.business_unit,
+      })),
+    });
+  }
 
   const me = await db.prepare(USER_ROW).get(userId);
   let team_under_manager = null;
