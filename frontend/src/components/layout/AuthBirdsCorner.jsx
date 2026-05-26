@@ -4,12 +4,15 @@
  */
 export default function AuthBirdsCorner() {
   return (
-    <div className="absolute bottom-0 right-0 z-0 select-none" aria-hidden>
+    <div
+      className="pointer-events-none absolute bottom-0 right-0 z-0 h-[100px] w-[min(92vw,340px)] overflow-hidden select-none sm:h-[120px] sm:w-[min(92vw,420px)] lg:h-[135px] lg:w-[480px]"
+      aria-hidden
+    >
       <img
-        src="/agc-birds-accent-transparent.png"
+        src="/mp-birds.png"
         alt=""
         aria-hidden
-        className="pointer-events-auto h-auto w-[520px] max-w-[85vw] opacity-95 drop-shadow-[0_8px_24px_rgba(11,62,175,0.10)] sm:w-[640px] lg:w-[760px]"
+        className="absolute bottom-0 right-0 h-full w-auto max-w-none opacity-95 drop-shadow-[0_8px_24px_rgba(11,62,175,0.10)]"
       />
     </div>
   );
