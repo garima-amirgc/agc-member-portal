@@ -1,47 +1,85 @@
-const { db } = require("../config/db");
+const { db, isPostgres } = require("../config/db");
+
+/** Rolling window for the home dashboard “top visitors” leaderboard. */
+const PORTAL_VISIT_WINDOW_DAYS = 7;
 
 async function recordPortalVisit(userId) {
   const uid = Number(userId);
   if (!Number.isFinite(uid) || uid < 1) return { ok: false };
 
-  // Ensure row exists, then increment.
-  try {
-    await db.prepare("INSERT OR IGNORE INTO portal_visits(user_id, visit_count, last_visit_at) VALUES (?, 0, ?)").run(uid, new Date().toISOString());
-  } catch {
-    // Postgres: "INSERT OR IGNORE" isn't valid; fall back to UPSERT.
+  const visitedAt = new Date().toISOString();
+
+  if (isPostgres) {
+    await db.prepare("INSERT INTO portal_visit_log (user_id, visited_at) VALUES (?, NOW())").run(uid);
+  } else {
+    await db.prepare("INSERT INTO portal_visit_log (user_id, visited_at) VALUES (?, ?)").run(uid, visitedAt);
   }
 
+  // Keep legacy aggregate row in sync (optional; leaderboard uses portal_visit_log).
   try {
-    // Works in SQLite. (Postgres path: sqlDialect rewrites, but not INSERT OR IGNORE.)
-    await db.prepare("UPDATE portal_visits SET visit_count = COALESCE(visit_count, 0) + 1, last_visit_at = ? WHERE user_id = ?").run(new Date().toISOString(), uid);
-    return { ok: true };
+    if (isPostgres) {
+      await db
+        .prepare(
+          `INSERT INTO portal_visits (user_id, visit_count, last_visit_at)
+           VALUES (?, 1, NOW())
+           ON CONFLICT (user_id)
+           DO UPDATE SET
+             visit_count = portal_visits.visit_count + 1,
+             last_visit_at = NOW()`
+        )
+        .run(uid);
+    } else {
+      await db
+        .prepare("INSERT OR IGNORE INTO portal_visits(user_id, visit_count, last_visit_at) VALUES (?, 0, ?)")
+        .run(uid, visitedAt);
+      await db
+        .prepare(
+          "UPDATE portal_visits SET visit_count = COALESCE(visit_count, 0) + 1, last_visit_at = ? WHERE user_id = ?"
+        )
+        .run(visitedAt, uid);
+    }
   } catch {
-    // Postgres UPSERT.
-    await db
-      .prepare(
-        `INSERT INTO portal_visits(user_id, visit_count, last_visit_at)
-         VALUES (?, 1, NOW())
-         ON CONFLICT (user_id)
-         DO UPDATE SET visit_count = portal_visits.visit_count + 1, last_visit_at = NOW()`
-      )
-      .run(uid);
-    return { ok: true };
+    /* portal_visits table may be missing on very old DBs */
   }
+
+  return { ok: true };
 }
 
-async function topPortalVisitors(limit = 5) {
+async function topPortalVisitors(limit = 5, windowDays = PORTAL_VISIT_WINDOW_DAYS) {
   const lim = Math.max(1, Math.min(50, Number(limit) || 5));
-  const rows = await db
-    .prepare(
-      `SELECT
-         u.id, u.name, u.email, u.role,
-         pv.visit_count, pv.last_visit_at
-       FROM portal_visits pv
-       JOIN users u ON u.id = pv.user_id
-       ORDER BY pv.visit_count DESC, pv.last_visit_at DESC
-       LIMIT ?`
-    )
-    .all(lim);
+  const days = Math.max(1, Math.min(90, Number(windowDays) || PORTAL_VISIT_WINDOW_DAYS));
+
+  const rows = isPostgres
+    ? await db
+        .prepare(
+          `SELECT
+             u.id, u.name, u.email, u.role,
+             COUNT(*)::int AS visit_count,
+             MAX(pvl.visited_at) AS last_visit_at
+           FROM portal_visit_log pvl
+           JOIN users u ON u.id = pvl.user_id
+           WHERE pvl.visited_at >= NOW() - make_interval(days => ?)
+           GROUP BY u.id, u.name, u.email, u.role
+           HAVING COUNT(*) > 0
+           ORDER BY visit_count DESC, last_visit_at DESC
+           LIMIT ?`
+        )
+        .all(days, lim)
+    : await db
+        .prepare(
+          `SELECT
+             u.id, u.name, u.email, u.role,
+             COUNT(*) AS visit_count,
+             MAX(pvl.visited_at) AS last_visit_at
+           FROM portal_visit_log pvl
+           JOIN users u ON u.id = pvl.user_id
+           WHERE datetime(pvl.visited_at) >= datetime('now', ?)
+           GROUP BY u.id, u.name, u.email, u.role
+           HAVING COUNT(*) > 0
+           ORDER BY visit_count DESC, last_visit_at DESC
+           LIMIT ?`
+        )
+        .all(`-${days} days`, lim);
 
   return (rows || []).map((r) => ({
     id: Number(r.id),
@@ -54,7 +92,7 @@ async function topPortalVisitors(limit = 5) {
 }
 
 module.exports = {
+  PORTAL_VISIT_WINDOW_DAYS,
   recordPortalVisit,
   topPortalVisitors,
 };
-

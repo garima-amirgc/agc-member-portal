@@ -99,7 +99,7 @@ function adminUsersListSql() {
 router.get("/me", async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, phone, address, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
     )
     .get(req.user.id);
 
@@ -145,12 +145,16 @@ router.put("/me", async (req, res) => {
   const existing = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
   if (!existing) return res.status(404).json({ message: "User not found" });
 
-  const { name, email, password, designation } = req.body;
+  const { name, email, password, designation, phone, address } = req.body;
 
   const nextName = name ?? existing.name;
   const nextEmail = email ?? existing.email;
   const nextDesignation =
     designation !== undefined && designation !== null ? String(designation).trim().slice(0, 120) : existing.designation;
+  const nextPhone =
+    phone !== undefined && phone !== null ? String(phone).trim().slice(0, 40) : existing.phone ?? "";
+  const nextAddress =
+    address !== undefined && address !== null ? String(address).trim().slice(0, 500) : existing.address ?? "";
 
   if (!nextName || !nextEmail) return res.status(400).json({ message: "Missing name/email" });
 
@@ -221,6 +225,8 @@ router.put("/me", async (req, res) => {
       }
     }
   }
+
+  await db.prepare("UPDATE users SET phone = ?, address = ? WHERE id = ?").run(nextPhone, nextAddress, req.user.id);
 
   return res.json({ message: "Profile updated" });
 });

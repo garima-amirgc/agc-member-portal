@@ -21,6 +21,8 @@ const {
   uploadUpcomingImageFromDisk,
   uploadPollBannerImageFromDisk,
   uploadTicketAttachmentFromDisk,
+  createPresignedVideoUpload,
+  createPresignedDocumentUpload,
 } = require("../services/objectStorage.service");
 
 const backendRoot = path.join(__dirname, "..", "..");
@@ -100,6 +102,71 @@ function rejectMissingUploadStorage(res, localPath) {
   removeTempFile(localPath);
   return res.status(503).json({ message: uploadStorageUnavailableMessage() });
 }
+
+function presignErrorResponse(res, err) {
+  const raw = err?.message || String(err) || "Presign failed";
+  if (raw === "INVALID_UPLOAD_EXT") {
+    return res.status(400).json({ message: "Unsupported file type." });
+  }
+  if (/contentLength|File exceeds/i.test(raw)) {
+    return res.status(400).json({ message: raw });
+  }
+  if (!isUploadStorageEnabled()) {
+    return res.json({ direct: false });
+  }
+  console.error("Presign failed:", err);
+  return res.status(502).json({ message: raw });
+}
+
+router.post(
+  "/presign/video",
+  authRequired,
+  requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN),
+  async (req, res) => {
+    if (!isUploadStorageEnabled()) {
+      return res.json({ direct: false });
+    }
+    const { filename, contentType, contentLength } = req.body || {};
+    if (!filename || !String(filename).trim()) {
+      return res.status(400).json({ message: "filename is required" });
+    }
+    try {
+      const result = await createPresignedVideoUpload({
+        originalFilename: filename,
+        contentType: contentType ? String(contentType) : undefined,
+        contentLength,
+      });
+      return res.json(result);
+    } catch (err) {
+      return presignErrorResponse(res, err);
+    }
+  }
+);
+
+router.post(
+  "/presign/document",
+  authRequired,
+  requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN),
+  async (req, res) => {
+    if (!isUploadStorageEnabled()) {
+      return res.json({ direct: false });
+    }
+    const { filename, contentType, contentLength } = req.body || {};
+    if (!filename || !String(filename).trim()) {
+      return res.status(400).json({ message: "filename is required" });
+    }
+    try {
+      const result = await createPresignedDocumentUpload({
+        originalFilename: filename,
+        contentType: contentType ? String(contentType) : undefined,
+        contentLength,
+      });
+      return res.json(result);
+    } catch (err) {
+      return presignErrorResponse(res, err);
+    }
+  }
+);
 
 router.post(
   "/",

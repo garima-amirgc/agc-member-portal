@@ -243,9 +243,6 @@ router.post("/polls", async (req, res) => {
     )
     .run(title, description, json, active ? 1 : 0, startAt, endAt, bannerImageUrl || null, req.user.id, ts, ts);
   const id = Number(result.lastInsertRowid) || null;
-  if (active) {
-    await db.prepare("UPDATE polls SET active = 0 WHERE id <> ?").run(id);
-  }
   return res.status(201).json({ id });
 });
 
@@ -272,9 +269,6 @@ router.put("/polls/:id", async (req, res) => {
       "UPDATE polls SET title=?, description=?, poll_json=?, active=?, start_at=?, end_at=?, banner_image_url=?, updated_at=? WHERE id=?"
     )
     .run(title, description, json, active ? 1 : 0, startAt, endAt, bannerImageUrl || null, ts, id);
-  if (active) {
-    await db.prepare("UPDATE polls SET active = 0 WHERE id <> ?").run(id);
-  }
   return res.json({ ok: true });
 });
 
@@ -284,7 +278,6 @@ router.post("/polls/:id/activate", async (req, res) => {
   const existing = await db.prepare("SELECT id FROM polls WHERE id = ?").get(id);
   if (!existing) return res.status(404).json({ message: "Not found" });
   const ts = nowIso();
-  await db.prepare("UPDATE polls SET active = 0").run();
   await db.prepare("UPDATE polls SET active = 1, updated_at = ? WHERE id = ?").run(ts, id);
   return res.json({ ok: true });
 });

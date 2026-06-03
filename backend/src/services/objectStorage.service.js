@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 /** Trim and strip a single pair of surrounding quotes from .env values. */
 function envCred(key) {
@@ -590,6 +591,119 @@ async function uploadTicketAttachmentFromDisk(localPath, filename) {
   throw new Error("No object storage (R2 or Spaces) is configured");
 }
 
+const VIDEO_UPLOAD_EXTS = new Set([".mp4", ".webm", ".mov", ".mkv"]);
+const DOC_UPLOAD_EXTS = new Set([".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".txt"]);
+const PRESIGN_EXPIRES_SEC = 3600;
+
+function buildStoredFilename(originalName) {
+  return `${Date.now()}-${String(originalName || "file").replace(/\s/g, "_")}`;
+}
+
+function validateUploadContentLength(contentLength) {
+  const maxBytes = (Number(process.env.UPLOAD_MAX_MB) || 500) * 1024 * 1024;
+  const size = Number(contentLength);
+  if (!Number.isFinite(size) || size <= 0) {
+    throw new Error("contentLength must be a positive number");
+  }
+  if (size > maxBytes) {
+    throw new Error(`File exceeds ${Number(process.env.UPLOAD_MAX_MB) || 500} MB limit`);
+  }
+  return size;
+}
+
+async function presignPutObjectUpload({ key, contentType, contentLength, usePublicAcl }) {
+  if (isSpacesEnabled()) {
+    logSpacesCredentialHintOnce();
+    const bucket = envCred("DO_SPACES_BUCKET") || String(process.env.DO_SPACES_BUCKET || "").trim();
+    const params = {
+      Bucket: bucket,
+      Key: key,
+      ContentType: contentType,
+      ContentLength: contentLength,
+      ContentDisposition: "inline",
+    };
+    if (usePublicAcl) params.ACL = "public-read";
+    const uploadUrl = await getSignedUrl(getSpacesClient(), new PutObjectCommand(params), {
+      expiresIn: PRESIGN_EXPIRES_SEC,
+    });
+    const base = String(process.env.DO_SPACES_PUBLIC_URL).replace(/\/+$/, "");
+    return { uploadUrl, publicUrl: `${base}/${key}`, provider: "spaces" };
+  }
+
+  if (isR2Enabled()) {
+    const uploadUrl = await getSignedUrl(
+      getR2Client(),
+      new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: key,
+        ContentType: contentType,
+        ContentLength: contentLength,
+        ContentDisposition: "inline",
+      }),
+      { expiresIn: PRESIGN_EXPIRES_SEC }
+    );
+    const base = String(process.env.R2_PUBLIC_URL).replace(/\/+$/, "");
+    return { uploadUrl, publicUrl: `${base}/${key}`, provider: "r2" };
+  }
+
+  throw new Error("No object storage (R2 or Spaces) is configured");
+}
+
+/**
+ * Presigned PUT so the browser uploads straight to object storage (skips backend disk hop).
+ */
+async function createPresignedVideoUpload({ originalFilename, contentType, contentLength }) {
+  const ext = path.extname(String(originalFilename || "")).toLowerCase();
+  if (!VIDEO_UPLOAD_EXTS.has(ext)) throw new Error("INVALID_UPLOAD_EXT");
+
+  const size = validateUploadContentLength(contentLength);
+  const filename = buildStoredFilename(originalFilename);
+  const key = `videos/${filename}`;
+  const resolvedType = contentType || VIDEO_EXT_TO_MIME[ext] || "application/octet-stream";
+  const { uploadUrl, publicUrl, provider } = await presignPutObjectUpload({
+    key,
+    contentType: resolvedType,
+    contentLength: size,
+    usePublicAcl: isSpacesEnabled(),
+  });
+
+  return {
+    direct: true,
+    method: "PUT",
+    uploadUrl,
+    video_url: publicUrl,
+    filename,
+    contentType: resolvedType,
+    storageProvider: provider,
+  };
+}
+
+async function createPresignedDocumentUpload({ originalFilename, contentType, contentLength }) {
+  const ext = path.extname(String(originalFilename || "")).toLowerCase();
+  if (!DOC_UPLOAD_EXTS.has(ext)) throw new Error("INVALID_UPLOAD_EXT");
+
+  const size = validateUploadContentLength(contentLength);
+  const filename = buildStoredFilename(originalFilename);
+  const key = `docs/${filename}`;
+  const resolvedType = contentType || DOC_EXT_TO_MIME[ext] || "application/octet-stream";
+  const { uploadUrl, publicUrl, provider } = await presignPutObjectUpload({
+    key,
+    contentType: resolvedType,
+    contentLength: size,
+    usePublicAcl: isSpacesEnabled(),
+  });
+
+  return {
+    direct: true,
+    method: "PUT",
+    uploadUrl,
+    file_url: publicUrl,
+    filename,
+    contentType: resolvedType,
+    storageProvider: provider,
+  };
+}
+
 module.exports = {
   isR2Enabled,
   isSpacesEnabled,
@@ -604,6 +718,8 @@ module.exports = {
   uploadOrgChartImageFromDisk,
   uploadAvatarImageFromDisk,
   uploadTicketAttachmentFromDisk,
+  createPresignedVideoUpload,
+  createPresignedDocumentUpload,
   deleteLessonVideoByUrl,
   DOC_EXT_TO_MIME,
   IMAGE_EXT_TO_MIME,

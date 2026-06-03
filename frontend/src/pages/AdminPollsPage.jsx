@@ -391,7 +391,7 @@ export default function AdminPollsPage() {
                   checked={Boolean(editing.active)}
                   onChange={(e) => setEditing({ ...editing, active: e.target.checked })}
                 />
-                Set active after save (only one active poll at a time)
+                Set active after save (multiple polls can be active at once)
               </label>
 
               <div className="rounded-portal border border-slate-200 p-3 dark:border-slate-700">

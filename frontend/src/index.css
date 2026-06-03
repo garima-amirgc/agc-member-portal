@@ -61,6 +61,15 @@ h6 {
   color: #ffffff;
 }
 
+/* IT ticket board header on blue gradient */
+.app-dashboard .it-ticket-board-header h2 {
+  color: #ffffff;
+}
+
+.dark .app-dashboard .it-ticket-board-header h2 {
+  color: #ffffff;
+}
+
 @layer components {
   .card {
     @apply p-5 transition duration-200;

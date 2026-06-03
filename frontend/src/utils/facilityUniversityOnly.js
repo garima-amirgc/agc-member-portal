@@ -34,5 +34,7 @@ export function isPathAllowedForFacilityUniversityOnly(pathname) {
   if (p === "/facilities" || p === "/facilities/") return false;
   if (p.startsWith("/facilities/")) return true;
   if (p.startsWith("/course/")) return true;
+  if (p === "/it-tickets" || p.startsWith("/it-tickets/")) return true;
+  if (p === "/help" || p.startsWith("/help/")) return true;
   return false;
 }

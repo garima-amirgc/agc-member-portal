@@ -21,44 +21,41 @@ function safeJsonParse(raw) {
   }
 }
 
+function mapPollRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    definition: safeJsonParse(row.poll_json),
+    start_at: row.start_at,
+    end_at: row.end_at,
+    banner_image_url: row.banner_image_url,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
 /**
- * Get the currently active poll for this user.
- * Returns { poll: null } if no active poll exists or the user already submitted it.
+ * Get all active polls this user has not submitted yet.
+ * Returns { polls: [] } when none are available.
  */
 router.get("/active", async (req, res) => {
   const now = nowIso();
-  const poll = await db
+  const rows = await db
     .prepare(
-      `SELECT id, title, description, poll_json, active, start_at, end_at, banner_image_url, created_at, updated_at
-       FROM polls
-       WHERE active = 1
-         AND (start_at IS NULL OR TRIM(COALESCE(start_at, '')) = '' OR start_at <= ?)
-         AND (end_at IS NULL OR TRIM(COALESCE(end_at, '')) = '' OR end_at >= ?)
-       ORDER BY updated_at DESC, id DESC
-       LIMIT 1`
+      `SELECT p.id, p.title, p.description, p.poll_json, p.active, p.start_at, p.end_at, p.banner_image_url, p.created_at, p.updated_at
+       FROM polls p
+       LEFT JOIN poll_submissions ps ON ps.poll_id = p.id AND ps.user_id = ?
+       WHERE p.active = 1
+         AND ps.id IS NULL
+         AND (p.start_at IS NULL OR TRIM(COALESCE(p.start_at, '')) = '' OR p.start_at <= ?)
+         AND (p.end_at IS NULL OR TRIM(COALESCE(p.end_at, '')) = '' OR p.end_at >= ?)
+       ORDER BY p.updated_at DESC, p.id DESC`
     )
-    .get(now, now);
-  if (!poll) return res.json({ poll: null });
+    .all(req.user.id, now, now);
 
-  const prior = await db
-    .prepare("SELECT id FROM poll_submissions WHERE poll_id = ? AND user_id = ? LIMIT 1")
-    .get(poll.id, req.user.id);
-  if (prior) return res.json({ poll: null });
-
-  const def = safeJsonParse(poll.poll_json);
-  return res.json({
-    poll: {
-      id: poll.id,
-      title: poll.title,
-      description: poll.description,
-      definition: def,
-      start_at: poll.start_at,
-      end_at: poll.end_at,
-      banner_image_url: poll.banner_image_url,
-      created_at: poll.created_at,
-      updated_at: poll.updated_at,
-    },
-  });
+  const polls = (Array.isArray(rows) ? rows : []).map(mapPollRow);
+  return res.json({ polls });
 });
 
 router.post("/:id/submit", async (req, res) => {

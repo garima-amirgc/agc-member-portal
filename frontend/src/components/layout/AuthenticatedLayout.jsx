@@ -53,10 +53,16 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
     }
   }
 
-  const [poll, setPoll] = useState(null);
+  const [polls, setPolls] = useState([]);
   const [pollOpen, setPollOpen] = useState(false);
+  const [pollStartIndex, setPollStartIndex] = useState(0);
 
   const pollKey = useMemo(() => `${user?.id || ""}:${location.pathname}`, [user?.id, location.pathname]);
+
+  const firstUndismissedIndex = (items) => {
+    const idx = items.findIndex((p) => !isDismissed(user?.id, p.id));
+    return idx >= 0 ? idx : 0;
+  };
 
   useEffect(() => {
     let stale = false;
@@ -66,11 +72,22 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
         .get("/polls/active")
         .then(({ data }) => {
           if (stale) return;
-          const p = data?.poll || null;
-          setPoll(p);
-          // Auto-open only once per poll per user (until submitted); "Later" dismisses auto-open.
-          const dismissed = p ? isDismissed(user?.id, p.id) : false;
-          setPollOpen((open) => (open ? open : Boolean(p && !dismissed)));
+          const items = Array.isArray(data?.polls)
+            ? data.polls
+            : data?.poll
+              ? [data.poll]
+              : [];
+          setPolls(items);
+          // Auto-open when at least one poll has not been dismissed with "Later".
+          setPollOpen((open) => {
+            if (open) return open;
+            const anyUndismissed = items.some((p) => !isDismissed(user?.id, p.id));
+            if (anyUndismissed) {
+              setPollStartIndex(firstUndismissedIndex(items));
+              return true;
+            }
+            return false;
+          });
         })
         .catch(() => {});
     };
@@ -102,19 +119,26 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
 
   useEffect(() => {
     const onWhatsNew = () => {
-      // If we already have an active (unsubmitted) poll in state, open it even if previously dismissed.
-      if (poll) {
+      if (polls.length > 0) {
+        setPollStartIndex(0);
         setPollOpen(true);
         return;
       }
-      // Otherwise, fetch; if there's something active, open it.
       api
         .get("/polls/active")
         .then(({ data }) => {
-          const p = data?.poll || null;
-          setPoll(p);
-          if (p) setPollOpen(true);
-          else window.alert("Nothing new right now.");
+          const items = Array.isArray(data?.polls)
+            ? data.polls
+            : data?.poll
+              ? [data.poll]
+              : [];
+          setPolls(items);
+          if (items.length) {
+            setPollStartIndex(0);
+            setPollOpen(true);
+          } else {
+            window.alert("Nothing new right now.");
+          }
         })
         .catch(() => {
           window.alert("Could not load What's New.");
@@ -122,7 +146,7 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
     };
     window.addEventListener("agc:whats-new", onWhatsNew);
     return () => window.removeEventListener("agc:whats-new", onWhatsNew);
-  }, [poll, user?.id]);
+  }, [polls]);
 
   return (
     <div className="agc-app-shell app-dashboard flex min-h-dvh w-full flex-col lg:flex-row">
@@ -137,16 +161,23 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
       </div>
 
       <PollPopupModal
-        poll={poll}
+        polls={polls}
+        startIndex={pollStartIndex}
         open={pollOpen}
-        onClose={() => {
-          if (poll) dismiss(user?.id, poll.id);
+        onDismiss={(pollId) => {
+          if (pollId) dismiss(user?.id, pollId);
+        }}
+        onClose={(pollId) => {
+          if (pollId) dismiss(user?.id, pollId);
           setPollOpen(false);
         }}
-        onSubmitted={() => {
-          if (poll) clearDismiss(user?.id, poll.id);
-          setPoll(null);
-          setPollOpen(false);
+        onSubmitted={(pollId) => {
+          if (pollId) clearDismiss(user?.id, pollId);
+          setPolls((prev) => {
+            const next = prev.filter((p) => p.id !== pollId);
+            if (next.length === 0) setPollOpen(false);
+            return next;
+          });
         }}
       />
     </div>

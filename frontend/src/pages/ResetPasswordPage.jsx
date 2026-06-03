@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import AuthBirdsCorner from "../components/layout/AuthBirdsCorner";
+import AuthSplitLayout, { AUTH_FORM_CARD, AuthHeroAccentBars } from "../components/layout/AuthSplitLayout";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../constants/branding";
 import { useAuth } from "../context/AuthContext";
 import { postAuthLandingPath } from "../utils/facilityUniversityOnly";
@@ -104,65 +104,35 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-gradient-to-br from-[#eef2fb] via-[#f4f6fb] to-[#e2e8f3] dark:from-[#0a0a0a] dark:via-[#0c0c0c] dark:to-[#111111]">
-      <AuthBirdsCorner />
-      <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-1 flex-col justify-center gap-5 px-4 py-8 sm:gap-6 sm:px-6 sm:py-10 md:px-8 lg:flex-row lg:items-center lg:justify-center lg:gap-0 lg:px-8 lg:py-12 xl:px-10">
-        {/* Brand panel */}
-        <section className="agc-login-hero relative isolate z-0 order-1 flex w-full min-w-0 flex-col gap-6 overflow-hidden rounded-2xl px-6 py-8 shadow-[0_20px_60px_rgba(11,62,175,0.35)] sm:gap-7 sm:rounded-3xl sm:px-8 sm:py-10 md:px-10 md:py-11 lg:order-none lg:min-h-[min(520px,85vh)] lg:w-[min(100%,520px)] lg:flex-shrink-0 lg:rounded-3xl">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#0B3EAF] via-[#0a3494] to-[#061f5c]" aria-hidden />
-          <div className="pointer-events-none absolute -right-20 -top-28 h-64 w-64 rounded-full bg-[#4a7eef]/20 blur-3xl sm:h-72 sm:w-72" aria-hidden />
-          <div className="pointer-events-none absolute -bottom-32 -left-24 h-72 w-72 rounded-full bg-white/10 blur-3xl sm:h-80 sm:w-80" aria-hidden />
-          <div className="pointer-events-none absolute bottom-[18%] right-[12%] h-40 w-40 rounded-full bg-brand-green/12 blur-2xl sm:h-48 sm:w-48" aria-hidden />
-
-          <div
-            className="pointer-events-none absolute inset-0 opacity-[0.07]"
-            style={{
-              backgroundImage: `repeating-linear-gradient(
-                -45deg,
-                transparent,
-                transparent 14px,
-                rgba(255,255,255,0.06) 14px,
-                rgba(255,255,255,0.06) 28px
-              )`,
-            }}
-            aria-hidden
-          />
-
-          <div className="relative z-10 flex w-full min-w-0 flex-col gap-5 sm:gap-6">
-            <Link to="/" aria-label="Home" className="inline-flex w-fit max-w-full shrink-0">
-              <img
-                src={AMIR_GROUP_LOGO_SRC}
-                alt="AMIR Group of Companies"
-                className="h-auto w-[220px] max-w-full object-contain object-left drop-shadow-[0_2px_10px_rgba(0,0,0,0.28)]"
-              />
-            </Link>
-
-            <div className="min-w-0 space-y-3 sm:space-y-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/80 sm:text-[11px] sm:tracking-[0.26em]">
-                Official access
-              </p>
-              <h1 className="break-words font-sans text-[clamp(1.35rem,4.2vw,1.875rem)] font-bold leading-tight tracking-[0.06em] text-white sm:tracking-[0.1em]">
-                NEW PASSWORD
-              </h1>
-              <p className="max-w-prose text-pretty text-sm leading-relaxed text-white/88 sm:text-[15px]">
-                Choose a new password to secure your account and sign in again.
-              </p>
-            </div>
+    <AuthSplitLayout heroHeadingId="reset-brand-heading" hero={
+      <>
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-4 sm:gap-5">
+          <Link to="/" aria-label="Home" className="inline-flex w-fit max-w-full shrink-0">
+            <img
+              src={AMIR_GROUP_LOGO_SRC}
+              alt="AMIR Group of Companies"
+              className="h-auto w-[220px] max-w-full object-contain object-left drop-shadow-[0_2px_10px_rgba(0,0,0,0.28)]"
+            />
+          </Link>
+          <div className="min-w-0 space-y-3 sm:space-y-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/80 sm:text-[11px] sm:tracking-[0.26em]">
+              Official access
+            </p>
+            <h1
+              id="reset-brand-heading"
+              className="break-words font-sans text-[clamp(1.35rem,4.2vw,1.875rem)] font-bold leading-tight tracking-[0.06em] text-white sm:tracking-[0.1em]"
+            >
+              NEW PASSWORD
+            </h1>
+            <p className="max-w-prose text-pretty text-sm leading-relaxed text-white/88 sm:text-[15px]">
+              Choose a new password to secure your account and sign in again.
+            </p>
           </div>
-
-          <div className="relative z-10 mt-1 flex shrink-0 flex-wrap items-center gap-2 sm:gap-2.5">
-            <span className="h-2 w-8 rounded-full bg-brand-green shadow-sm shadow-black/20 sm:w-9" />
-            <span className="h-2 w-8 rounded-full bg-white/90 shadow-sm shadow-black/10 sm:w-9" />
-            <span className="h-2 w-8 rounded-full bg-brand-red shadow-sm shadow-black/20 sm:w-9" />
-          </div>
-        </section>
-
-        {/* Card */}
-        <div className="relative z-10 order-2 w-full min-w-0 max-w-full lg:order-none lg:-ml-10 lg:max-w-[min(100%,440px)] lg:flex-shrink-0 xl:-ml-16 xl:max-w-[460px]">
-          <form
-            className="w-full min-w-0 rounded-2xl border border-black/[0.07] bg-white px-5 py-7 shadow-[0_8px_40px_rgba(11,62,175,0.12),0_2px_12px_rgba(0,0,0,0.06)] dark:border-stone-800 dark:bg-[#141414] sm:rounded-3xl sm:px-8 sm:py-9 md:px-9 md:py-10 lg:rounded-3xl lg:px-10 lg:py-11"
-            onSubmit={onSubmit}
-          >
+        </div>
+        <AuthHeroAccentBars />
+      </>
+    }>
+      <form className={AUTH_FORM_CARD} onSubmit={onSubmit}>
             <h2 className="font-sans text-2xl font-bold tracking-tight text-brand-blue dark:text-brand-green">
               Choose a new password
             </h2>
@@ -238,9 +208,7 @@ export default function ResetPasswordPage() {
             <Link className="mt-4 block text-center text-sm font-semibold text-brand-blue dark:text-brand-green" to="/login">
               Back to sign in
             </Link>
-          </form>
-        </div>
-      </div>
-    </div>
+      </form>
+    </AuthSplitLayout>
   );
 }

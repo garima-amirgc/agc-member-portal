@@ -302,11 +302,19 @@ const SCHEMA = `
     UNIQUE(poll_id, user_id)
   );
 
-  -- Per-user member portal visits (for home dashboard analytics).
+  -- Per-user member portal visits (legacy aggregate).
   CREATE TABLE IF NOT EXISTS portal_visits (
     user_id INTEGER PRIMARY KEY,
     visit_count INTEGER NOT NULL DEFAULT 0,
     last_visit_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  -- One row per home/dashboard open (used for weekly top-visitors leaderboard).
+  CREATE TABLE IF NOT EXISTS portal_visit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    visited_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `;
@@ -387,6 +395,20 @@ async function initDb() {
     `);
   } catch (e) {
     console.error("[db] portal_visits table:", e.message || e);
+  }
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS portal_visit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        visited_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_portal_visit_log_visited_at ON portal_visit_log (visited_at);
+      CREATE INDEX IF NOT EXISTS idx_portal_visit_log_user_id ON portal_visit_log (user_id);
+    `);
+  } catch (e) {
+    console.error("[db] portal_visit_log table:", e.message || e);
   }
   try {
     const info2 = rawDb.exec("PRAGMA table_info(facility_upcoming)");
@@ -485,6 +507,16 @@ async function initDb() {
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN birth_day INTEGER");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN phone TEXT");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN address TEXT");
   } catch {
     /* exists */
   }

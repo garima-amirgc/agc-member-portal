@@ -95,8 +95,8 @@ export default function AppSidebar() {
   if (!user) return null;
 
   return (
-    <aside className="agc-sidebar-shell z-20 hidden w-[288px] shrink-0 flex-col border-r border-black/10 lg:sticky lg:top-0 lg:flex lg:h-dvh">
-      <div className="border-b border-black/10 px-4 py-5 dark:border-white/15">
+    <aside className="agc-sidebar-shell z-20 hidden w-[248px] shrink-0 flex-col border-r border-black/10 lg:sticky lg:top-0 lg:flex lg:h-dvh">
+      <div className="border-b border-black/10 px-3 py-4 dark:border-white/15">
         <NavLink
           to={homeTo}
           className="flex flex-col items-center gap-2.5 text-center text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B3EAF] rounded-portal"
@@ -104,9 +104,9 @@ export default function AppSidebar() {
           <img
             src={AMIR_GROUP_LOGO_SRC}
             alt="AMIR Group of Companies"
-            className="h-auto w-[190px] max-w-full shrink-0 object-contain object-center drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]"
+            className="h-auto w-[168px] max-w-full shrink-0 object-contain object-center drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]"
           />
-          <div className="text-lg font-bold leading-tight tracking-tight text-white">{APP_DISPLAY_NAME}</div>
+          <div className="text-base font-bold leading-tight tracking-tight text-white">{APP_DISPLAY_NAME}</div>
         </NavLink>
 
         <label className="relative mt-4 block">
@@ -122,7 +122,7 @@ export default function AppSidebar() {
         </label>
       </div>
 
-      <nav className="agc-sidebar-nav-scroll flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden p-3">
+      <nav className="agc-sidebar-nav-scroll flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden p-2.5">
         <div className="space-y-0.5">
           {filteredMain.map((item) => (
             <NavItem key={item.to + (item.end ? "-e" : "")} {...item} />
@@ -174,7 +174,7 @@ export default function AppSidebar() {
               </span>
             </button>
             <NavLink
-              to="/profile"
+              to="/help"
               className="flex items-center gap-3 rounded-portal px-3 py-2 text-sm font-medium text-white hover:bg-black/10 dark:hover:bg-white/10"
             >
               <IconHelp className="h-5 w-5 text-white" />

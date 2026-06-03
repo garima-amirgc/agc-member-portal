@@ -26,6 +26,10 @@ export default function ResourcesCategoryPage() {
   const key = (category || "").toLowerCase();
   const { user } = useAuth();
   const [contentTab, setContentTab] = useState("videos"); // videos | documentation
+  const [videosLoading, setVideosLoading] = useState(false);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [categoryCounts, setCategoryCounts] = useState({});
+  const [categoryCountsLoading, setCategoryCountsLoading] = useState(true);
 
   const current = useMemo(() => CATEGORIES.find((c) => c.key === key), [key]);
   const seedBlock = useMemo(() => seedItems(key), [key]);
@@ -46,9 +50,48 @@ export default function ResourcesCategoryPage() {
   const resourcesBase = facilityNorm ? `/facilities/${facilityNorm}/resources` : "";
 
   useEffect(() => {
+    if (!facilityNorm) return;
+    let cancelled = false;
+    setCategoryCountsLoading(true);
+    (async () => {
+      const out = {};
+      await Promise.all(
+        CATEGORIES.map(async (c) => {
+          const catKey = c.key;
+          const [videosRes, docsRes] = await Promise.allSettled([
+            api.get(`/resources/facility/${facilityNorm}/category/${catKey}`),
+            api.get(`/resources/facility/${facilityNorm}/category/${catKey}/documents`),
+          ]);
+          const videos =
+            videosRes.status === "fulfilled" && Array.isArray(videosRes.value?.data?.videos)
+              ? videosRes.value.data.videos
+              : [];
+          const docs =
+            docsRes.status === "fulfilled" && Array.isArray(docsRes.value?.data?.documents)
+              ? docsRes.value.data.documents
+              : [];
+          out[catKey] = { videos: videos.length, docs: docs.length, total: videos.length + docs.length };
+        })
+      );
+      if (cancelled) return;
+      setCategoryCounts(out);
+      setCategoryCountsLoading(false);
+    })().catch(() => {
+      if (!cancelled) {
+        setCategoryCounts({});
+        setCategoryCountsLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityNorm]);
+
+  useEffect(() => {
     if (!facilityNorm || !current) return undefined;
     let cancelled = false;
     setLmsLoadError(null);
+    setVideosLoading(true);
     api
       .get(`/resources/facility/${facilityNorm}/category/${key}`)
       .then((videosRes) => {
@@ -69,6 +112,9 @@ export default function ResourcesCategoryPage() {
         } else {
           setLmsLoadError(null);
         }
+      })
+      .finally(() => {
+        if (!cancelled) setVideosLoading(false);
       });
     return () => {
       cancelled = true;
@@ -78,6 +124,7 @@ export default function ResourcesCategoryPage() {
   useEffect(() => {
     if (!facilityNorm || !current) return undefined;
     let cancelled = false;
+    setDocsLoading(true);
     api
       .get(`/resources/facility/${facilityNorm}/category/${key}/documents`)
       .then((docsRes) => {
@@ -86,6 +133,9 @@ export default function ResourcesCategoryPage() {
       })
       .catch(() => {
         if (!cancelled) setLmsDocs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setDocsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -105,6 +155,20 @@ export default function ResourcesCategoryPage() {
   }
 
   const { totalCount, completedCount, progress } = computeProgress({ items, completedSet: completed });
+  const hasVideos = (items?.videos || []).length > 0;
+  const hasDocs = (items?.docs || []).length > 0;
+  const visibleCategories = useMemo(() => {
+    if (categoryCountsLoading) return CATEGORIES;
+    return CATEGORIES.filter((c) => (categoryCounts?.[c.key]?.total || 0) > 0);
+  }, [categoryCounts, categoryCountsLoading]);
+
+  useEffect(() => {
+    // Default to Video. Only auto-switch once we KNOW videos are empty (after loading),
+    // otherwise the docs request often wins the race and flips the UI to Documentation.
+    if (videosLoading || docsLoading) return;
+    if (contentTab === "videos" && !hasVideos && hasDocs) setContentTab("documentation");
+    if (contentTab === "documentation" && !hasDocs && hasVideos) setContentTab("videos");
+  }, [contentTab, hasVideos, hasDocs, videosLoading, docsLoading]);
 
   return (
     <main className={PAGE_SHELL}>
@@ -146,53 +210,60 @@ export default function ResourcesCategoryPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr,176px]">
         <section className="min-w-0">
-          <div className="relative flex items-end gap-3">
-            <button
-              type="button"
-              onClick={() => setContentTab("videos")}
-              className={[
-                "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
-                "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
-                "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
-                contentTab === "videos"
-                  ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
-                  : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
-              ].join(" ")}
-              role="tab"
-              aria-selected={contentTab === "videos"}
-            >
-              Video
-            </button>
-            <button
-              type="button"
-              onClick={() => setContentTab("documentation")}
-              className={[
-                "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
-                "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
-                "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
-                contentTab === "documentation"
-                  ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
-                  : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
-              ].join(" ")}
-              role="tab"
-              aria-selected={contentTab === "documentation"}
-            >
-              Documentation
-            </button>
-            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-px bg-slate-200 dark:bg-slate-700" />
-          </div>
+          {hasVideos || hasDocs ? (
+            <div className="relative flex items-end gap-3">
+              {hasVideos ? (
+                <button
+                  type="button"
+                  onClick={() => setContentTab("videos")}
+                  className={[
+                    "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+                    "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
+                    "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
+                    contentTab === "videos"
+                      ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
+                      : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
+                  ].join(" ")}
+                  role="tab"
+                  aria-selected={contentTab === "videos"}
+                >
+                  Video
+                </button>
+              ) : null}
+              {hasDocs ? (
+                <button
+                  type="button"
+                  onClick={() => setContentTab("documentation")}
+                  className={[
+                    "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+                    "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
+                    "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
+                    contentTab === "documentation"
+                      ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
+                      : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
+                  ].join(" ")}
+                  role="tab"
+                  aria-selected={contentTab === "documentation"}
+                >
+                  Documentation
+                </button>
+              ) : null}
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-px bg-slate-200 dark:bg-slate-700" />
+            </div>
+          ) : null}
 
           <div
             className="rounded-b-2xl border border-t-0 border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"
             role="tabpanel"
           >
-            {contentTab === "videos" ? (
+            {!hasVideos && !hasDocs ? (
+              <div className="text-sm text-slate-500 dark:text-slate-400">No videos or documents yet.</div>
+            ) : null}
+
+            {contentTab === "videos" && hasVideos ? (
               <div>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {items.videos.length === 0 ? (
-                    <div className="text-sm text-slate-500 dark:text-slate-400">No videos yet.</div>
-                  ) : (
-                    items.videos.map((v) => {
+                  {items.videos.map((v) => {
                       const done = completed.has(v.id);
                       const courseTitle =
                         (v.course_title != null && String(v.course_title).trim()
@@ -251,19 +322,15 @@ export default function ResourcesCategoryPage() {
                           </div>
                         </div>
                       );
-                    })
-                  )}
+                    })}
                 </div>
               </div>
             ) : null}
 
-            {contentTab === "documentation" ? (
+            {contentTab === "documentation" && hasDocs ? (
               <div>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {items.docs.length === 0 ? (
-                    <div className="text-sm text-slate-500 dark:text-slate-400">No documents yet.</div>
-                  ) : (
-                    items.docs.map((d) => {
+                  {items.docs.map((d) => {
                       const done = completed.has(d.id);
                       const docPath =
                         d.docId != null && resourcesBase
@@ -322,8 +389,7 @@ export default function ResourcesCategoryPage() {
                           </div>
                         </div>
                       );
-                    })
-                  )}
+                    })}
                 </div>
               </div>
             ) : null}
@@ -333,15 +399,21 @@ export default function ResourcesCategoryPage() {
         <aside className="card p-3">
           <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Categories</h2>
           <div className="flex flex-col gap-2">
-            {CATEGORIES.map((c) => (
-              <Link
-                key={c.key}
-                to={`${resourcesBase}/${c.key}`}
-                className={`w-full no-underline ${c.key === current.key ? "btn-primary" : "btn-outline"}`}
-              >
-                {c.label}
-              </Link>
-            ))}
+            {categoryCountsLoading ? (
+              <div className="text-sm text-slate-500 dark:text-slate-400">Loading…</div>
+            ) : visibleCategories.length === 0 ? (
+              <div className="text-sm text-slate-500 dark:text-slate-400">No categories yet.</div>
+            ) : (
+              visibleCategories.map((c) => (
+                <Link
+                  key={c.key}
+                  to={`${resourcesBase}/${c.key}`}
+                  className={`w-full no-underline ${c.key === current.key ? "btn-primary" : "btn-outline"}`}
+                >
+                  {c.label}
+                </Link>
+              ))
+            )}
           </div>
         </aside>
       </div>

@@ -18,6 +18,7 @@ import AdminUsersPage from "./pages/AdminUsersPage";
 import CoursePlayerPage from "./pages/CoursePlayerPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ProfilePage from "./pages/ProfilePage";
+import HelpPage from "./pages/HelpPage";
 import FacilitiesPage from "./pages/FacilitiesPage";
 import FacilityCoursesPage from "./pages/FacilityCoursesPage";
 import ManagerDashboardPage from "./pages/ManagerDashboardPage";
@@ -111,6 +112,7 @@ export default function App() {
         <Route path="reports" element={<ReportsPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="help" element={<HelpPage />} />
         <Route path="facilities" element={<FacilitiesPage />} />
         <Route
           path="facilities/:facility/resources/:category/video/:videoId"

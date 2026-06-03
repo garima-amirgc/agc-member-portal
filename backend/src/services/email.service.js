@@ -273,6 +273,59 @@ async function sendITTicketCreatedEmail({
 }
 
 /**
+ * Notify the ticket creator when their ticket is marked completed.
+ */
+async function sendITTicketResolvedEmail({
+  to,
+  creatorName,
+  creatorEmail,
+  itName,
+  assigneeName,
+  ticketId,
+  title,
+  description,
+}) {
+  if (!to) return { skipped: true };
+
+  const subject = `[AGC IT] Ticket #${ticketId} completed: ${title}`;
+  const text = [
+    `Hello${creatorName ? ` ${creatorName}` : ""},`,
+    "",
+    `Your IT ticket has been marked completed.`,
+    "",
+    `Ticket #${ticketId}: ${title}`,
+    assigneeName ? `Resolved by: ${assigneeName}` : itName ? `Resolved by: ${itName}` : "",
+    creatorEmail ? `From: ${creatorEmail}` : "",
+    description ? `Details:\n${description}` : "",
+    "",
+    `Completed: ${new Date().toISOString()}`,
+    "",
+    `${APP_MAIL_BRAND} — IT ticketing`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="font-family: Segoe UI, Arial, sans-serif; line-height: 1.5; color: #0a0a0a;">
+  <p>Hello${creatorName ? ` ${escapeHtml(creatorName)}` : ""},</p>
+  <p><strong>Your IT ticket was completed</strong> in ${escapeHtml(APP_MAIL_BRAND)}.</p>
+  <p style="margin: 16px 0; padding: 12px 16px; background: #eff8f2; border-left: 4px solid #22c55e;">
+    <strong>#${escapeHtml(String(ticketId))}</strong> — ${escapeHtml(title)}
+  </p>
+  ${description ? `<p style="white-space: pre-wrap;">${escapeHtml(description)}</p>` : ""}
+  ${assigneeName ? `<p><strong>Resolved by:</strong> ${escapeHtml(assigneeName)}</p>` : ""}
+  <p style="font-size: 12px; color: #5c5f66;">${escapeHtml(new Date().toLocaleString())}</p>
+  <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
+  <p style="font-size: 12px; color: #5c5f66;">${APP_MAIL_BRAND} — automated IT notification</p>
+</body>
+</html>`;
+
+  return sendMail({ to, subject, text, html });
+}
+
+/**
  * Invite link for first-time password setup (admin-created users).
  */
 async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
@@ -378,6 +431,88 @@ async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
   return out;
 }
 
+async function sendHelpReportEmail({
+  to,
+  submitterName,
+  submitterEmail,
+  submitterRole,
+  submitterDepartment,
+  category,
+  subject,
+  message,
+  attachments = [],
+}) {
+  const list = Array.isArray(to) ? to.filter(Boolean) : to ? [to] : [];
+  if (list.length === 0) return { skipped: true };
+
+  const catLabel = String(category || "").trim() || "General";
+  const mailSubject = `[${APP_MAIL_BRAND}] Help request: ${subject}`;
+
+  const attLines =
+    Array.isArray(attachments) && attachments.length > 0
+      ? [
+          "Attachments:",
+          ...attachments.map((a, i) => {
+            const label = a?.name || `File ${i + 1}`;
+            const url = a?.url || "";
+            return url ? `  - ${label}: ${url}` : "";
+          }),
+          "",
+        ].filter(Boolean)
+      : [];
+
+  const attHtml =
+    Array.isArray(attachments) && attachments.length > 0
+      ? `<p><strong>Attachments:</strong></p><ul style="margin: 8px 0; padding-left: 20px;">${attachments
+          .map((a) => {
+            const url = String(a?.url || "").trim();
+            const label = escapeHtml(String(a?.name || "File"));
+            if (!url) return "";
+            return `<li><a href="${escapeHtml(url)}">${label}</a></li>`;
+          })
+          .filter(Boolean)
+          .join("")}</ul>`
+      : "";
+
+  const text = [
+    "A member submitted a help request through the portal.",
+    "",
+    `Category: ${catLabel}`,
+    `Subject: ${subject}`,
+    "",
+    message,
+    "",
+    ...attLines,
+    "—",
+    `From: ${submitterName || "—"} (${submitterEmail || "—"})`,
+    `Role: ${submitterRole || "—"}`,
+    `Department: ${submitterDepartment || "—"}`,
+    `Submitted: ${new Date().toISOString()}`,
+    "",
+    APP_MAIL_BRAND,
+  ].join("\n");
+
+  const bodyHtml = `
+  <p style="margin:0 0 12px 0;font-size:18px;font-weight:600;color:#0f172a;">Help request</p>
+  <p style="margin:0 0 16px 0;">A member submitted this message from <strong>${escapeHtml(APP_MAIL_BRAND)}</strong>.</p>
+  <p style="margin:0 0 8px 0;"><strong>Category:</strong> ${escapeHtml(catLabel)}</p>
+  <p style="margin:0 0 8px 0;"><strong>Subject:</strong> ${escapeHtml(subject)}</p>
+  <div style="margin:16px 0;padding:14px 16px;background:#f7f9fa;border-left:4px solid #0B3EAF;white-space:pre-wrap;">${escapeHtml(message)}</div>
+  ${attHtml}
+  <p style="margin:0 0 4px 0;"><strong>From:</strong> ${escapeHtml(submitterName || "—")} (${escapeHtml(submitterEmail || "—")})</p>
+  <p style="margin:0 0 4px 0;"><strong>Role:</strong> ${escapeHtml(submitterRole || "—")}</p>
+  <p style="margin:0 0 16px 0;"><strong>Department:</strong> ${escapeHtml(submitterDepartment || "—")}</p>
+  <p style="margin:0;font-size:12px;color:#5c5f66;">${escapeHtml(new Date().toLocaleString())}</p>`;
+
+  const html = emailShell({
+    title: mailSubject,
+    preheader: `${submitterName || "A member"} needs help: ${subject}`,
+    bodyHtml,
+  });
+
+  return sendMail({ to: list.join(", "), subject: mailSubject, text, html });
+}
+
 module.exports = {
   EMAIL_TEMPLATE_VERSION,
   isEmailConfigured,
@@ -385,6 +520,8 @@ module.exports = {
   resetTransporter,
   sendManagerCourseCompletionEmail,
   sendITTicketCreatedEmail,
+  sendITTicketResolvedEmail,
   sendAccountInviteEmail,
   sendPasswordResetEmail,
+  sendHelpReportEmail,
 };

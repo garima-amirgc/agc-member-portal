@@ -29,12 +29,15 @@ router.get("/:id", async (req, res) => {
 router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
   const { title, video_url } = req.body;
   const course_id = parsePositiveInt(req.body?.course_id);
-  const order_index = parsePositiveInt(req.body?.order_index);
+  let order_index = parsePositiveInt(req.body?.order_index);
   if (course_id == null) {
     return res.status(400).json({ message: "course_id must be a positive integer" });
   }
   if (order_index == null) {
-    return res.status(400).json({ message: "order_index must be a positive integer" });
+    const row = await db
+      .prepare("SELECT COALESCE(MAX(order_index), 0) AS max_order FROM lessons WHERE course_id = ?")
+      .get(course_id);
+    order_index = Number(row?.max_order || 0) + 1;
   }
   if (!title || !String(title).trim() || video_url == null || !String(video_url).trim()) {
     return res.status(400).json({ message: "title and video_url are required" });

@@ -36,15 +36,51 @@ function chipClass(kind) {
   return "bg-[#E02B20] text-white";
 }
 
+function eventDescription(ev) {
+  return String(ev?.description || ev?.notes || "").trim();
+}
+
+function eventTooltip(ev) {
+  const desc = eventDescription(ev);
+  return desc ? `${ev.title}\n${desc}` : ev.title;
+}
+
+function CalendarEventChip({ ev }) {
+  const desc = eventDescription(ev);
+  const cls = chipClass(ev.kind);
+  const style = ev.color ? { backgroundColor: ev.color } : undefined;
+  return (
+    <div className={`rounded-md px-2 py-1 shadow-sm ${cls}`} style={style} title={eventTooltip(ev)}>
+      <div className="text-[11px] font-bold leading-tight">{ev.title}</div>
+      {desc ? (
+        <p className="mt-0.5 text-[9px] font-normal leading-snug opacity-95 line-clamp-3">{desc}</p>
+      ) : null}
+    </div>
+  );
+}
+
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const VISIBLE_EVENTS_PER_DAY = 3;
+
+function formatDayLabel(dateKey) {
+  const [y, m, d] = String(dateKey).split("-").map(Number);
+  if (!y || !m || !d) return dateKey;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export default function CalendarPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month0, setMonth0] = useState(now.getMonth());
   const [events, setEvents] = useState([]);
-  const [filter, setFilter] = useState("all"); // all | holiday | activity | other
   const [loading, setLoading] = useState(true);
+  /** { dateKey, dayEvents } when user opens a day with more events than fit in the cell */
+  const [dayDetail, setDayDetail] = useState(null);
 
   const win = useMemo(() => monthWindow(year, month0), [year, month0]);
 
@@ -69,12 +105,9 @@ export default function CalendarPage() {
     };
   }, [win.from, win.to]);
 
-  const shown = useMemo(() => {
-    if (filter === "holiday") return events.filter((e) => e.kind === "holiday");
-    if (filter === "activity") return events.filter((e) => e.kind === "activity");
-    if (filter === "other") return events.filter((e) => e.kind === "other");
-    return events;
-  }, [events, filter]);
+  const monthList = useMemo(() => {
+    return [...events].sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
+  }, [events]);
 
   const title = useMemo(() => {
     const d = new Date(year, month0, 1);
@@ -100,6 +133,24 @@ export default function CalendarPage() {
     });
   };
 
+  const openDayDetail = (dateKey, dayEvents) => {
+    if (!dayEvents?.length) return;
+    setDayDetail({ dateKey, dayEvents });
+  };
+
+  useEffect(() => {
+    if (!dayDetail) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setDayDetail(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dayDetail]);
+
+  useEffect(() => {
+    setDayDetail(null);
+  }, [year, month0]);
+
   return (
     <main className={PAGE_SHELL}>
       <PageHeader
@@ -113,17 +164,6 @@ export default function CalendarPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <select
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm dark:border-white/10 dark:bg-[#141414] dark:text-slate-200"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              aria-label="Filter events"
-            >
-              <option value="all">All Events</option>
-              <option value="holiday">Holidays</option>
-              <option value="activity">Activities</option>
-              <option value="other">Others</option>
-            </select>
             <button type="button" className="btn-outline px-3 py-2" onClick={prev} aria-label="Previous month">
               ‹
             </button>
@@ -148,38 +188,39 @@ export default function CalendarPage() {
               ))}
 
               {Array.from({ length: win.firstDow }).map((_, i) => (
-                <div key={`pad-${i}`} className="min-h-[92px] bg-white/60 dark:bg-white/5 sm:min-h-[110px]" />
+                <div key={`pad-${i}`} className="min-h-[108px] bg-white/60 dark:bg-white/5 sm:min-h-[128px]" />
               ))}
 
               {Array.from({ length: win.daysInMonth }).map((_, i) => {
                 const day = i + 1;
                 const key = ymd(year, month0 + 1, day);
-                const dayEvents = shown.filter((ev) => spansDay(ev, key));
+                const dayEvents = events.filter((ev) => spansDay(ev, key));
                 return (
                   <div
                     key={key}
-                    className="min-h-[92px] bg-white px-2 py-2 align-top dark:bg-[#0f0f0f] sm:min-h-[110px]"
+                    className="min-h-[108px] bg-white px-2 py-2 align-top dark:bg-[#0f0f0f] sm:min-h-[128px]"
                   >
-                    <div className="mb-1 text-xs font-bold text-slate-700 dark:text-slate-200">{day}</div>
+                    <button
+                      type="button"
+                      className="mb-1 text-xs font-bold text-slate-700 hover:text-[#0B3EAF] dark:text-slate-200 dark:hover:text-[#A7D344]"
+                      onClick={() => dayEvents.length > 0 && openDayDetail(key, dayEvents)}
+                      disabled={dayEvents.length === 0}
+                      aria-label={dayEvents.length ? `View ${dayEvents.length} event(s) on ${formatDayLabel(key)}` : undefined}
+                    >
+                      {day}
+                    </button>
                     <div className="space-y-1">
-                      {dayEvents.slice(0, 4).map((ev) => {
-                        const cls = chipClass(ev.kind);
-                        const style = ev.color ? { backgroundColor: ev.color } : undefined;
-                        return (
-                          <div
-                            key={ev.id}
-                            className={`truncate rounded-md px-2 py-1 text-[11px] font-bold shadow-sm ${cls}`}
-                            style={style}
-                            title={ev.title}
-                          >
-                            {ev.title}
-                          </div>
-                        );
-                      })}
-                      {dayEvents.length > 4 ? (
-                        <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                          +{dayEvents.length - 4} more
-                        </div>
+                      {dayEvents.slice(0, VISIBLE_EVENTS_PER_DAY).map((ev) => (
+                        <CalendarEventChip key={ev.id} ev={ev} />
+                      ))}
+                      {dayEvents.length > VISIBLE_EVENTS_PER_DAY ? (
+                        <button
+                          type="button"
+                          className="w-full rounded-md px-1 py-0.5 text-left text-[10px] font-semibold text-[#0B3EAF] underline decoration-[#A7D344] decoration-1 underline-offset-2 hover:bg-slate-100 dark:text-[#A7D344] dark:hover:bg-white/10"
+                          onClick={() => openDayDetail(key, dayEvents)}
+                        >
+                          +{dayEvents.length - VISIBLE_EVENTS_PER_DAY} more — view all
+                        </button>
                       ) : null}
                     </div>
                   </div>
@@ -188,7 +229,97 @@ export default function CalendarPage() {
             </div>
           </div>
         )}
+
+        {!loading && monthList.length > 0 ? (
+          <div className="border-t border-slate-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-[#101010] sm:px-5">
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Events in {title}</h2>
+            <ul className="mt-3 space-y-3">
+              {monthList.map((ev) => {
+                const desc = eventDescription(ev);
+                const kindLabel = ev.kind === "other" ? "Others" : ev.kind === "activity" ? "Activity" : "Holiday";
+                return (
+                  <li
+                    key={ev.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-white/10 dark:bg-white/5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-base font-bold text-slate-900 dark:text-white">{ev.title}</div>
+                        {desc ? (
+                          <p className="mt-1 text-xs leading-snug text-slate-600 dark:text-slate-400">{desc}</p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:bg-white/10 dark:text-slate-300">
+                        {kindLabel}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-500">
+                      {ev.start_date}
+                      {ev.end_date && ev.end_date !== ev.start_date ? ` – ${ev.end_date}` : ""}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
       </section>
+
+      {dayDetail ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="calendar-day-detail-title"
+          onClick={() => setDayDetail(null)}
+        >
+          <div
+            className="max-h-[min(85vh,640px)] w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#101010]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-white/10">
+              <div>
+                <h2 id="calendar-day-detail-title" className="text-base font-bold text-slate-900 dark:text-white">
+                  {formatDayLabel(dayDetail.dateKey)}
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                  {dayDetail.dayEvents.length} event{dayDetail.dayEvents.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-outline shrink-0 px-3 py-1.5 text-sm"
+                onClick={() => setDayDetail(null)}
+                aria-label="Close"
+              >
+                Close
+              </button>
+            </div>
+            <ul className="max-h-[min(70vh,520px)] space-y-3 overflow-y-auto p-4">
+              {dayDetail.dayEvents.map((ev) => {
+                const kindLabel =
+                  ev.kind === "other" ? "Others" : ev.kind === "activity" ? "Activity" : "Holiday";
+                return (
+                  <li key={ev.id}>
+                    <CalendarEventChip ev={ev} />
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-0.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        {kindLabel}
+                      </span>
+                      {ev.start_date !== dayDetail.dateKey || (ev.end_date && ev.end_date !== ev.start_date) ? (
+                        <span className="text-[10px] text-slate-500 dark:text-slate-500">
+                          {ev.start_date}
+                          {ev.end_date && ev.end_date !== ev.start_date ? ` – ${ev.end_date}` : ""}
+                        </span>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

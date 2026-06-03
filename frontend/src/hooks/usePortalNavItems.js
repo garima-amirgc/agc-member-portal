@@ -25,7 +25,10 @@ export function usePortalNavItems(user) {
     if (isFacilityUniversityOnlyPortal(user)) {
       const home = getFacilityUniversityHomePath(user);
       return {
-        mainItems: [{ to: home, icon: IconBuilding, label: "AGC University", end: false }],
+        mainItems: [
+          { to: home, icon: IconBuilding, label: "AGC University", end: false },
+          { to: "/it-tickets", icon: IconTicket, label: "IT Ticket" },
+        ],
         adminItems: [],
         homeTo: home,
       };

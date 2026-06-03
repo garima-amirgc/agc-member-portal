@@ -21,7 +21,7 @@ function monthWindow(year, month0) {
   };
 }
 
-const EMPTY = { title: "", kind: "holiday", start_date: "", end_date: "", color: "", notes: "" };
+const EMPTY = { title: "", description: "", kind: "holiday", start_date: "", end_date: "", color: "" };
 
 export default function AdminCalendarPage() {
   const now = new Date();
@@ -82,13 +82,15 @@ export default function AdminCalendarPage() {
     setSaving(true);
     setError("");
     setMessage("");
+    const description = String(form.description || "").trim();
     const payload = {
       title: form.title,
       kind: form.kind,
       start_date: String(form.start_date || "").trim(),
       end_date: String(form.end_date || "").trim() || null,
       color: String(form.color || "").trim() || null,
-      notes: String(form.notes || "").trim(),
+      description,
+      notes: description,
     };
     try {
       if (editingId != null) {
@@ -118,7 +120,7 @@ export default function AdminCalendarPage() {
       start_date: ev.start_date || "",
       end_date: ev.end_date || "",
       color: ev.color || "",
-      notes: ev.notes || "",
+      description: ev.description || ev.notes || "",
     });
   };
 
@@ -193,6 +195,17 @@ export default function AdminCalendarPage() {
               disabled={saving}
             />
           </div>
+          <div className="sm:col-span-2">
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Description (optional)</label>
+            <textarea
+              rows={3}
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-[#141414]"
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="e.g. Office closed. Paid statutory holiday for eligible employees."
+              disabled={saving}
+            />
+          </div>
           <div>
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Type</label>
             <select
@@ -237,16 +250,6 @@ export default function AdminCalendarPage() {
               disabled={saving}
             />
           </div>
-          <div className="sm:col-span-2">
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Notes (optional)</label>
-            <textarea
-              rows={2}
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-[#141414]"
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              disabled={saving}
-            />
-          </div>
           <div className="sm:col-span-2 flex flex-wrap justify-end gap-2">
             {editingId != null ? (
               <button type="button" className="btn-outline" onClick={cancelEdit} disabled={saving}>
@@ -273,8 +276,13 @@ export default function AdminCalendarPage() {
                   className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/5"
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{ev.title}</div>
-                    <div className="text-xs text-slate-600 dark:text-slate-300">
+                    <div className="text-base font-bold text-slate-900 dark:text-white">{ev.title}</div>
+                    {ev.description || ev.notes ? (
+                      <p className="mt-1 text-xs leading-snug text-slate-600 dark:text-slate-400">
+                        {ev.description || ev.notes}
+                      </p>
+                    ) : null}
+                    <div className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-500">
                       {(ev.kind === "other" ? "others" : ev.kind)} · {ev.start_date}
                       {ev.end_date ? ` → ${ev.end_date}` : ""}
                     </div>

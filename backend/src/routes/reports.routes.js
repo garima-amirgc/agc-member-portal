@@ -6,6 +6,7 @@ const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 const portalVisitsSvc = require("../services/portalVisits.service");
 const { ROLES } = require("../config/constants");
+const { hasAdminGrant } = require("../config/adminGrants");
 
 const router = express.Router();
 router.use(authRequired);
@@ -165,11 +166,16 @@ router.get("/admin/all", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (_re
 
 /** Admin: top member portal visitors (dashboard usage). */
 router.get("/admin/top-portal-visitors", async (req, res) => {
-  // Keep this visible to Admins even if granular grants aren't configured yet.
-  if (req.user?.role !== ROLES.ADMIN) return res.status(403).json({ message: "Forbidden" });
+  const canView =
+    req.user?.role === ROLES.ADMIN || hasAdminGrant(req.user, ADMIN_GRANT_KEYS.REPORTS);
+  if (!canView) return res.status(403).json({ message: "Forbidden" });
   try {
-    const out = await portalVisitsSvc.topPortalVisitors(5);
-    return res.json(out);
+    const days = Number(req.query?.days) || portalVisitsSvc.PORTAL_VISIT_WINDOW_DAYS;
+    const out = await portalVisitsSvc.topPortalVisitors(5, days);
+    return res.json({
+      window_days: days,
+      visitors: out,
+    });
   } catch (e) {
     console.error("[reports] GET /admin/top-portal-visitors:", e);
     return res.status(500).json({ message: "Could not load portal visitors" });

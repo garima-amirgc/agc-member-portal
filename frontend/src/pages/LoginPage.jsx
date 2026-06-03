@@ -111,14 +111,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-gradient-to-br from-[#eef2fb] via-[#f4f6fb] to-[#e2e8f3] dark:from-[#0a0a0a] dark:via-[#0c0c0c] dark:to-[#111111]">
-      <AuthBirdsCorner />
-      <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-1 flex-col justify-center gap-5 px-4 py-8 sm:gap-6 sm:px-6 sm:py-10 md:px-8 lg:flex-row lg:items-center lg:justify-center lg:gap-0 lg:px-8 lg:py-12 xl:px-10">
+    <div className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-gradient-to-br from-[#eef2fb] via-[#f4f6fb] to-[#e2e8f3] dark:from-[#0a0a0a] dark:via-[#0c0c0c] dark:to-[#111111] lg:h-[100dvh] lg:overflow-x-hidden">
+      <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-1 flex-col justify-center gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-5 md:px-8 lg:min-h-0 lg:flex-row lg:items-center lg:justify-center lg:gap-0 lg:px-8 lg:py-2 xl:px-10">
         {/* Brand panel */}
         <section
-          className="agc-login-hero relative isolate z-0 order-1 flex w-full min-w-0 flex-col gap-6 overflow-hidden rounded-2xl px-6 py-8 shadow-[0_20px_60px_rgba(11,62,175,0.35)] sm:gap-7 sm:rounded-3xl sm:px-8 sm:py-10 md:px-10 md:py-11 lg:order-none lg:min-h-[min(520px,85vh)] lg:w-[min(100%,520px)] lg:flex-shrink-0 lg:rounded-3xl"
+          className="agc-login-hero relative isolate z-0 order-1 flex w-full min-w-0 flex-col gap-4 overflow-hidden rounded-2xl px-6 py-6 pb-28 shadow-[0_20px_60px_rgba(11,62,175,0.35)] sm:gap-5 sm:rounded-3xl sm:px-8 sm:py-7 sm:pb-32 md:px-10 md:py-8 lg:order-none lg:w-[min(100%,520px)] lg:flex-shrink-0 lg:rounded-3xl lg:py-8 lg:pb-8"
           aria-labelledby="login-brand-heading"
         >
+          <AuthBirdsCorner placement="hero" />
           <div
             className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#0B3EAF] via-[#0a3494] to-[#061f5c]"
             aria-hidden
@@ -150,7 +150,7 @@ export default function LoginPage() {
             aria-hidden
           />
 
-          <div className="relative z-10 flex w-full min-w-0 flex-col gap-5 sm:gap-6">
+          <div className="relative z-10 flex w-full min-w-0 flex-col gap-4 sm:gap-5">
             <Link to="/" aria-label="Home" className="inline-flex w-fit max-w-full shrink-0">
               <img
                 src={AMIR_GROUP_LOGO_SRC}
@@ -159,7 +159,7 @@ export default function LoginPage() {
               />
             </Link>
 
-            <div className="min-w-0 space-y-3 sm:space-y-4">
+            <div className="min-w-0 space-y-2 sm:space-y-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/80 sm:text-[11px] sm:tracking-[0.26em]">
                 Official access
               </p>
@@ -171,6 +171,9 @@ export default function LoginPage() {
               </h1>
               <p className="break-words font-['Marcellus',Georgia,serif] text-[clamp(1.125rem,3.5vw,1.5rem)] font-semibold leading-snug text-white/95">
                 Learn. Comply. Grow.
+              </p>
+              <p className="max-w-md pr-8 text-sm leading-relaxed text-white/85 sm:pr-10 sm:text-[15px] lg:pr-24 xl:pr-28">
+                Sign in with your work Microsoft account or use your email and password.
               </p>
             </div>
           </div>
@@ -190,22 +193,17 @@ export default function LoginPage() {
           </div>
 
           <form
-            className="w-full min-w-0 rounded-2xl border border-black/[0.07] bg-white px-5 py-7 shadow-[0_8px_40px_rgba(11,62,175,0.12),0_2px_12px_rgba(0,0,0,0.06)] dark:border-stone-800 dark:bg-[#141414] sm:rounded-3xl sm:px-8 sm:py-9 md:px-9 md:py-10 lg:rounded-3xl lg:px-10 lg:py-11"
+            className="w-full min-w-0 rounded-2xl border border-black/[0.07] bg-white px-5 py-6 shadow-[0_8px_40px_rgba(11,62,175,0.12),0_2px_12px_rgba(0,0,0,0.06)] dark:border-stone-800 dark:bg-[#141414] sm:rounded-3xl sm:px-8 sm:py-7 md:px-9 md:py-8 lg:rounded-3xl lg:px-10 lg:py-8"
             onSubmit={onSubmit}
           >
-            <div className="mb-7 hidden lg:block">
+            <div className="mb-4 hidden lg:block">
               <h2 className="font-sans text-2xl font-bold tracking-tight text-brand-blue dark:text-brand-green xl:text-3xl">
                 Welcome back
               </h2>
-              <p className="mt-3 text-sm leading-relaxed text-[#5c5f66] dark:text-stone-400">
-                Sign in with your work Microsoft account or use your email and password. If you haven’t set a password
-                yet, use “Forgot password” to resend your setup link.
-                <span className="ml-1">This portal is restricted to authorized personnel.</span>
-              </p>
             </div>
 
             {isDev ? (
-              <p className="mb-5 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue-soft/60 px-3 py-2.5 text-xs leading-relaxed text-brand-muted dark:border-white/20 dark:bg-stone-900/90 dark:text-stone-400 sm:mb-6">
+              <p className="mb-3 rounded-xl border border-dashed border-brand-blue/30 bg-brand-blue-soft/60 px-3 py-2 text-xs leading-relaxed text-brand-muted dark:border-white/20 dark:bg-stone-900/90 dark:text-stone-400 sm:mb-4">
                 <span className="font-semibold text-brand-blue dark:text-brand-green">Development:</span> API{" "}
                 <code className="break-all font-mono text-[11px] text-slate-700 dark:text-stone-300">
                   {getApiBaseURL()}
@@ -214,7 +212,7 @@ export default function LoginPage() {
                 <code className="font-mono text-[11px]">frontend/.env</code> if required.
               </p>
             ) : (
-              <p className="mb-5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#9DA3A6] dark:text-stone-500 sm:mb-6 sm:text-xs sm:tracking-[0.14em]">
+              <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.12em] text-[#9DA3A6] dark:text-stone-500 sm:mb-4 sm:text-xs sm:tracking-[0.14em]">
                 Secure session · authorized use only
               </p>
             )}
@@ -226,7 +224,7 @@ export default function LoginPage() {
             )}
 
             {microsoftEnabled ? (
-              <div className="mb-5 sm:mb-6">
+              <div className="mb-4 sm:mb-5">
                 <button
                   type="button"
                   onClick={startMicrosoftLogin}
@@ -240,7 +238,7 @@ export default function LoginPage() {
                   </svg>
                   Sign in with Microsoft
                 </button>
-                <div className="relative my-4 flex items-center">
+                <div className="relative my-3 flex items-center">
                   <div className="h-px flex-1 bg-slate-200 dark:bg-stone-700" />
                   <span className="px-3 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-stone-500">
                     or
@@ -250,7 +248,7 @@ export default function LoginPage() {
               </div>
             ) : null}
 
-            <div className="mb-4 sm:mb-5">
+            <div className="mb-3 sm:mb-4">
               <label
                 htmlFor="login-email"
                 className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9DA3A6] dark:text-stone-500 sm:text-[11px] sm:tracking-[0.14em]"
@@ -272,7 +270,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="mb-4 sm:mb-5">
+            <div className="mb-3 sm:mb-4">
               <div className="mb-2 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <label
                   htmlFor="login-password"
@@ -303,7 +301,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="mb-6 sm:mb-7">
+            <div className="mb-4 sm:mb-5">
               <label className="flex cursor-pointer items-start gap-2.5 text-sm text-brand-black dark:text-stone-200 sm:items-center">
                 <input
                   type="checkbox"
@@ -320,6 +318,9 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
+      </div>
+      <div className="absolute bottom-0 right-0 z-10 hidden lg:block">
+        <AuthBirdsCorner placement="band" />
       </div>
     </div>
   );

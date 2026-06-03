@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS users (
   department TEXT,
   designation TEXT,
   birth_month INTEGER,
-  birth_day INTEGER
+  birth_day INTEGER,
+  phone TEXT,
+  address TEXT
 );
 
 CREATE TABLE IF NOT EXISTS user_facilities (
@@ -203,6 +205,12 @@ CREATE TABLE IF NOT EXISTS portal_visits (
   last_visit_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS portal_visit_log (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  visited_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS resource_documents (
   id SERIAL PRIMARY KEY,
   business_unit TEXT NOT NULL CHECK(business_unit IN ('AGC','AQM','SCF','ASP')),
@@ -260,6 +268,8 @@ async function migrateColumns(client) {
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_month INTEGER",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_day INTEGER",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_grants TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS facility_university_only INTEGER NOT NULL DEFAULT 0",
     `CREATE TABLE IF NOT EXISTS polls (
@@ -291,6 +301,13 @@ async function migrateColumns(client) {
       visit_count INTEGER NOT NULL DEFAULT 0,
       last_visit_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS portal_visit_log (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      visited_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_portal_visit_log_visited_at ON portal_visit_log (visited_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_portal_visit_log_user_id ON portal_visit_log (user_id)",
     "CREATE TABLE IF NOT EXISTS report_access_users (report_id INTEGER NOT NULL REFERENCES embedded_reports(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, UNIQUE(report_id, user_id))",
   ];
   for (const q of alters) {

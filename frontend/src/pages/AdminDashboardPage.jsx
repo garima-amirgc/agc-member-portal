@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
+import { uploadLessonVideo, uploadResourceDocumentFile } from "../services/directUpload";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import ResourceDocumentGridCard from "../components/resources/ResourceDocumentGridCard";
 import { CATEGORIES } from "../utils/resourcesContent";
 
 const EMPTY_COURSE = { title: "", description: "", business_unit: "AGC", resource_category: "" };
 const EMPTY_DOC = { business_unit: "AGC", category: "finance", title: "" };
-
-/** Large video uploads exceed the default axios 15s timeout. */
-const UPLOAD_TIMEOUT_MS = 45 * 60 * 1000;
 
 /** Videos and documents. Upcoming → /admin/upcoming. */
 export default function AdminDashboardPage() {
@@ -117,21 +115,15 @@ export default function AdminDashboardPage() {
   const onVideoUpload = async (courseId, file, fileInputEl) => {
     setUploadingCourseId(Number(courseId));
     try {
-      const fd = new FormData();
-      fd.append("video", file);
-      // Do not set Content-Type — axios/browser must add the multipart boundary or multer sees no file.
-      const upload = await api.post("/upload", fd, { timeout: UPLOAD_TIMEOUT_MS });
-      const videoUrl = upload.data?.video_url;
+      const upload = await uploadLessonVideo(file);
+      const videoUrl = upload?.video_url;
       if (!videoUrl) {
         throw new Error("Upload finished but no video URL was returned.");
       }
-      const courseRes = await api.get(`/courses/${courseId}`, { timeout: 60000 });
-      const lessons = courseRes.data?.lessons || [];
       await api.post("/lessons", {
         course_id: Number(courseId),
         title: file.name.replace(/\.[^/.]+$/, ""),
         video_url: videoUrl,
-        order_index: lessons.length + 1,
       });
       load();
     } catch (err) {
@@ -186,10 +178,8 @@ export default function AdminDashboardPage() {
     }
     setUploadingDoc(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const upload = await api.post("/upload/document", fd, { timeout: UPLOAD_TIMEOUT_MS });
-      const fileUrl = upload.data?.file_url;
+      const upload = await uploadResourceDocumentFile(file);
+      const fileUrl = upload?.file_url;
       if (!fileUrl) throw new Error("Upload finished but no file URL was returned.");
       await api.post("/resources/documents", {
         business_unit: docForm.business_unit,

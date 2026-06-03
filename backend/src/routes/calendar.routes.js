@@ -30,8 +30,14 @@ function normalizeColor(c) {
   return v;
 }
 
+function eventDescription(body) {
+  if (body && "description" in body) return clampLen(body.description, 2000);
+  return clampLen(body?.notes, 2000);
+}
+
 function rowToDto(r) {
   if (!r) return null;
+  const description = r.notes != null && String(r.notes).trim() ? String(r.notes).trim() : "";
   return {
     id: Number(r.id),
     title: String(r.title || ""),
@@ -39,7 +45,8 @@ function rowToDto(r) {
     start_date: String(r.start_date || ""),
     end_date: r.end_date != null && String(r.end_date).trim() ? String(r.end_date).trim() : null,
     color: r.color != null && String(r.color).trim() ? String(r.color).trim() : null,
-    notes: r.notes != null && String(r.notes).trim() ? String(r.notes).trim() : "",
+    description,
+    notes: description,
     created_at: r.created_at != null ? String(r.created_at) : null,
     updated_at: r.updated_at != null ? String(r.updated_at) : null,
   };
@@ -56,7 +63,7 @@ function validateCreate(body) {
   if (end_date && !isYmd(end_date)) return { error: "end_date must be YYYY-MM-DD" };
   if (end_date && end_date < start_date) return { error: "end_date must be on/after start_date" };
   const color = normalizeColor(body?.color);
-  const notes = clampLen(body?.notes, 2000);
+  const notes = eventDescription(body);
   return { value: { title, kind, start_date, end_date, color, notes } };
 }
 
@@ -82,7 +89,7 @@ function validateUpdate(body) {
     }
   }
   if ("color" in (body || {})) patch.color = normalizeColor(body?.color);
-  if ("notes" in (body || {})) patch.notes = clampLen(body?.notes, 2000);
+  if ("description" in (body || {}) || "notes" in (body || {})) patch.notes = eventDescription(body);
   return { value: patch };
 }
 

@@ -113,27 +113,14 @@ const RESOURCE_CARDS = [
   },
 ];
 
-function facilityTabStorageKey(facilityCode) {
-  return `agc_portal_facility_tab_${facilityCode}`;
-}
-
 export default function FacilityCoursesPage() {
   const { facility } = useParams();
   const facilityNorm = (facility || "").toUpperCase();
 
   const [me, setMe] = useState(null);
   const [activeTab, setActiveTab] = useState("resources"); // resources | org
-
-  const setFacilityTab = useMemo(() => {
-    return (tab) => {
-      setActiveTab(tab);
-      try {
-        sessionStorage.setItem(facilityTabStorageKey(facilityNorm), tab);
-      } catch {
-        /* ignore */
-      }
-    };
-  }, [facilityNorm]);
+  const [resourceCounts, setResourceCounts] = useState({});
+  const [resourceCountsLoading, setResourceCountsLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -142,19 +129,50 @@ export default function FacilityCoursesPage() {
     })();
   }, []);
 
-  /** Restore tab per facility, or default AGC to Organization (detailed org chart lives there). */
+  /** Opening or switching facility always lands on Resources (AGC, AQM, SCF, ASP). */
   useEffect(() => {
-    const key = facilityTabStorageKey(facilityNorm);
-    try {
-      const saved = sessionStorage.getItem(key);
-      if (saved === "org" || saved === "resources") {
-        setActiveTab(saved);
-        return;
+    setActiveTab("resources");
+  }, [facilityNorm]);
+
+  useEffect(() => {
+    if (!FACILITY_CODES.includes(facilityNorm)) return;
+    let cancelled = false;
+    setResourceCountsLoading(true);
+    (async () => {
+      const out = {};
+      await Promise.all(
+        RESOURCE_CARDS.map(async (c) => {
+          try {
+            const [videosRes, docsRes] = await Promise.allSettled([
+              api.get(`/resources/facility/${facilityNorm}/category/${c.key}`),
+              api.get(`/resources/facility/${facilityNorm}/category/${c.key}/documents`),
+            ]);
+            const videos =
+              videosRes.status === "fulfilled" && Array.isArray(videosRes.value?.data?.videos)
+                ? videosRes.value.data.videos
+                : [];
+            const docs =
+              docsRes.status === "fulfilled" && Array.isArray(docsRes.value?.data?.documents)
+                ? docsRes.value.data.documents
+                : [];
+            out[c.key] = { videos: videos.length, docs: docs.length, total: videos.length + docs.length };
+          } catch {
+            out[c.key] = { videos: 0, docs: 0, total: 0 };
+          }
+        })
+      );
+      if (cancelled) return;
+      setResourceCounts(out);
+      setResourceCountsLoading(false);
+    })().catch(() => {
+      if (!cancelled) {
+        setResourceCounts({});
+        setResourceCountsLoading(false);
       }
-    } catch {
-      /* ignore */
-    }
-    setActiveTab(facilityNorm === "AGC" ? "org" : "resources");
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [facilityNorm]);
 
   useEffect(() => {
@@ -168,6 +186,10 @@ export default function FacilityCoursesPage() {
   }, [facilityNorm]);
 
   const hasAccess = useMemo(() => (me?.facilities ?? []).includes(facilityNorm), [me, facilityNorm]);
+  const visibleResourceCards = useMemo(() => {
+    if (resourceCountsLoading) return [];
+    return RESOURCE_CARDS.filter((c) => (resourceCounts?.[c.key]?.total || 0) > 0);
+  }, [resourceCounts, resourceCountsLoading]);
 
   if (!FACILITY_CODES.includes(facilityNorm)) {
     return <div className={PAGE_PADDING}>Unknown facility.</div>;
@@ -208,7 +230,7 @@ export default function FacilityCoursesPage() {
         <div className="relative flex items-end gap-3">
           <button
             type="button"
-            onClick={() => setFacilityTab("resources")}
+            onClick={() => setActiveTab("resources")}
             className={[
               "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
               "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
@@ -224,7 +246,7 @@ export default function FacilityCoursesPage() {
           </button>
           <button
             type="button"
-            onClick={() => setFacilityTab("org")}
+            onClick={() => setActiveTab("org")}
             className={[
               "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
               "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
@@ -249,34 +271,40 @@ export default function FacilityCoursesPage() {
         >
           {activeTab === "resources" ? (
             <div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {RESOURCE_CARDS.map((c) => (
-                  <Link
-                    key={c.key}
-                    to={`/facilities/${facilityNorm}/resources/${c.key}`}
-                    className={RESOURCE_CARD_SHELL}
-                  >
-                    <div className="relative flex min-h-0 flex-1 flex-col p-4">
-                      <div className="relative flex items-start gap-4">
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/90 text-[#0B3EAF] dark:bg-slate-900/90 dark:ring-slate-600/70 dark:text-[#A7D344]">
-                          <ResourceCategoryIcon name={c.icon} />
-                        </div>
-                        <div className="min-w-0 pt-0.5">
-                          <h3 className="text-lg font-bold leading-snug text-slate-900 dark:text-white">{c.title}</h3>
-                          <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{c.desc}</p>
+              {resourceCountsLoading ? (
+                <p className="text-sm text-slate-600 dark:text-slate-300">Loading resources…</p>
+              ) : visibleResourceCards.length === 0 ? (
+                <p className="text-sm text-slate-600 dark:text-slate-300">No resources uploaded yet.</p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {visibleResourceCards.map((c) => (
+                    <Link
+                      key={c.key}
+                      to={`/facilities/${facilityNorm}/resources/${c.key}`}
+                      className={RESOURCE_CARD_SHELL}
+                    >
+                      <div className="relative flex min-h-0 flex-1 flex-col p-4">
+                        <div className="relative flex items-start gap-4">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/90 text-[#0B3EAF] dark:bg-slate-900/90 dark:ring-slate-600/70 dark:text-[#A7D344]">
+                            <ResourceCategoryIcon name={c.icon} />
+                          </div>
+                          <div className="min-w-0 pt-0.5">
+                            <h3 className="text-lg font-bold leading-snug text-slate-900 dark:text-white">{c.title}</h3>
+                            <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{c.desc}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="relative mt-auto flex shrink-0 items-center justify-between rounded-b-2xl border-t border-white/10 bg-[#0B3EAF] px-4 py-3.5 text-sm font-semibold text-white transition group-hover:bg-[#082d82] dark:border-white/10 dark:bg-[#0B3EAF] dark:group-hover:bg-[#0a3494]">
-                      <span>See Details</span>
-                      <span aria-hidden className="text-white transition group-hover:translate-x-0.5">
-                        →
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+                      <div className="relative mt-auto flex shrink-0 items-center justify-between rounded-b-2xl border-t border-white/10 bg-[#0B3EAF] px-4 py-3.5 text-sm font-semibold text-white transition group-hover:bg-[#082d82] dark:border-white/10 dark:bg-[#0B3EAF] dark:group-hover:bg-[#0a3494]">
+                        <span>See Details</span>
+                        <span aria-hidden className="text-white transition group-hover:translate-x-0.5">
+                          →
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
 

@@ -40,6 +40,23 @@ function parseAttachmentsRow(raw) {
   }
 }
 
+/** Normalize ticket rows for API (profile image from users join). */
+function mapTicketRow(row) {
+  if (!row) return row;
+  const url =
+    row.user_profile_image_url != null && String(row.user_profile_image_url).trim()
+      ? String(row.user_profile_image_url).trim()
+      : null;
+  return {
+    ...row,
+    user_profile_image_url: url,
+  };
+}
+
+function mapTicketRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map(mapTicketRow);
+}
+
 const USER_DEPT_LABEL_SQL = isPostgres
   ? `COALESCE((SELECT string_agg(d.department, ', ' ORDER BY d.department) FROM user_departments d WHERE d.user_id = u.id), COALESCE(NULLIF(TRIM(u.department), ''), 'Production'))`
   : `COALESCE((SELECT GROUP_CONCAT(d.department, ', ') FROM (SELECT department FROM user_departments WHERE user_id = u.id ORDER BY department) AS d), COALESCE(NULLIF(TRIM(u.department), ''), 'Production'))`;
@@ -114,14 +131,15 @@ async function createTicket(userId, body) {
     .run(userId, assignee.id, title, description || null, attachmentsJson);
 
   const ticketId = result.lastInsertRowid;
-  return { ticket: await getTicketById(ticketId), assignee };
+  return { ticket: mapTicketRow(await getTicketById(ticketId)), assignee };
 }
 
 async function getTicketById(id) {
-  return db
+  const row = await db
     .prepare(
       `
       SELECT t.*, u.name AS user_name, u.email AS user_email,
+        u.profile_image_url AS user_profile_image_url,
         ${USER_DEPT_LABEL_SQL.replace(/\n/g, " ")} AS user_department,
         a.name AS assignee_name, a.email AS assignee_email
       FROM it_tickets t
@@ -131,13 +149,15 @@ async function getTicketById(id) {
       `
     )
     .get(id);
+  return mapTicketRow(row);
 }
 
 async function listTicketsForUser(userId) {
-  return db
+  const rows = await db
     .prepare(
       `
       SELECT t.*, u.name AS user_name, u.email AS user_email,
+        u.profile_image_url AS user_profile_image_url,
         ${USER_DEPT_LABEL_SQL.replace(/\n/g, " ")} AS user_department,
         a.name AS assignee_name, a.email AS assignee_email
       FROM it_tickets t
@@ -149,13 +169,15 @@ async function listTicketsForUser(userId) {
       `
     )
     .all(userId);
+  return mapTicketRows(rows);
 }
 
 async function listAllTicketsForIT() {
-  return db
+  const rows = await db
     .prepare(
       `
       SELECT t.*, u.name AS user_name, u.email AS user_email,
+        u.profile_image_url AS user_profile_image_url,
         ${USER_DEPT_LABEL_SQL.replace(/\n/g, " ")} AS user_department,
         a.name AS assignee_name, a.email AS assignee_email
       FROM it_tickets t
@@ -166,13 +188,15 @@ async function listAllTicketsForIT() {
       `
     )
     .all();
+  return mapTicketRows(rows);
 }
 
 async function listTicketsAssignedToAssignee(assigneeUserId) {
-  return db
+  const rows = await db
     .prepare(
       `
       SELECT t.*, u.name AS user_name, u.email AS user_email,
+        u.profile_image_url AS user_profile_image_url,
         ${USER_DEPT_LABEL_SQL.replace(/\n/g, " ")} AS user_department,
         a.name AS assignee_name, a.email AS assignee_email
       FROM it_tickets t
@@ -186,6 +210,7 @@ async function listTicketsAssignedToAssignee(assigneeUserId) {
       `
     )
     .all(assigneeUserId);
+  return mapTicketRows(rows);
 }
 
 async function updateTicketStatus(itUserId, ticketId, status) {
@@ -205,6 +230,9 @@ async function updateTicketStatus(itUserId, ticketId, status) {
     e.statusCode = 404;
     throw e;
   }
+
+  const before = await getTicketById(ticketId);
+
   if (status === "closed") {
     await db
       .prepare("UPDATE it_tickets SET status = ?, updated_at = datetime('now'), closed_at = datetime('now') WHERE id = ?")
@@ -214,7 +242,28 @@ async function updateTicketStatus(itUserId, ticketId, status) {
       .prepare("UPDATE it_tickets SET status = ?, updated_at = datetime('now'), closed_at = NULL WHERE id = ?")
       .run(status, ticketId);
   }
-  return getTicketById(ticketId);
+
+  const updated = await getTicketById(ticketId);
+
+  // Notify the ticket creator only once when the ticket transitions into "closed".
+  if (status === "closed" && before && before.status !== "closed") {
+    try {
+      await email.sendITTicketResolvedEmail({
+        to: before.user_email,
+        creatorName: before.user_name,
+        creatorEmail: before.user_email,
+        itName: updated?.assignee_name,
+        assigneeName: updated?.assignee_name,
+        ticketId: updated?.id || ticketId,
+        title: updated?.title,
+        description: updated?.description,
+      });
+    } catch (err) {
+      console.error("[IT_TICKET] Resolved email notify failed:", err?.message || err);
+    }
+  }
+
+  return updated;
 }
 
 async function notifyItStaffNewTicket(ticketRow, creator, assignee) {

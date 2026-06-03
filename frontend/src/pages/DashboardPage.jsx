@@ -11,6 +11,8 @@ import { splitUpcomingForHome } from "../utils/upcomingFeedSplit";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { hasAdminGrant } from "../utils/adminAccess";
 import { isSupervisor } from "../utils/supervisorAccess";
+import { userHasDepartment } from "../utils/userDepts";
+import ItTicketsAssigneeWidget from "../components/ItTicketsAssigneeWidget";
 
 function BirthdayMiniCard({ item, onClick }) {
   const fullName = String(item?.name || "").trim();
@@ -66,6 +68,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const canLearningAdmin = hasAdminGrant(user, ADMIN_GRANT_KEYS.LEARNING_ADMIN);
   const canReports = user?.role === "Admin" || hasAdminGrant(user, ADMIN_GRANT_KEYS.REPORTS);
+  const isIT = userHasDepartment(user, "IT");
   const [upcoming, setUpcoming] = useState([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
   const [birthdays, setBirthdays] = useState({ today: [], upcoming: [], range_days: 14 });
@@ -140,8 +143,16 @@ export default function DashboardPage() {
     if (!canReports) return;
     setTopVisitorsLoading(true);
     api
-      .get("/reports/admin/top-portal-visitors")
-      .then((r) => setTopVisitors(Array.isArray(r.data) ? r.data : []))
+      .get("/reports/admin/top-portal-visitors", { params: { days: 7 } })
+      .then((r) => {
+        const payload = r.data;
+        const list = Array.isArray(payload?.visitors)
+          ? payload.visitors
+          : Array.isArray(payload)
+            ? payload
+            : [];
+        setTopVisitors(list);
+      })
       .catch(() => setTopVisitors([]))
       .finally(() => setTopVisitorsLoading(false));
   }, [canReports]);
@@ -164,6 +175,8 @@ export default function DashboardPage() {
         <section className="grid gap-6 lg:grid-cols-12 lg:items-start">
           <div className="min-w-0 space-y-6 lg:col-span-9">
             <DashboardAssignmentNotice user={user} />
+
+            {isIT ? <ItTicketsAssigneeWidget /> : null}
 
             <div className="grid gap-6 md:grid-cols-2">
               <div className="card">
@@ -189,6 +202,12 @@ export default function DashboardPage() {
                     to="/employee-engagement-calendar"
                   >
                     Employee engagement calendar
+                  </Link>
+                  <Link
+                    className="block rounded-portal border border-transparent px-2 py-1.5 font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:bg-[rgba(167,211,68,0.12)] hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF] dark:hover:bg-[rgba(11,62,175,0.2)]"
+                    to="/it-tickets"
+                  >
+                    IT Ticket
                   </Link>
                   <Link
                     className="block rounded-portal border border-transparent px-2 py-1.5 font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:bg-[rgba(167,211,68,0.12)] hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF] dark:hover:bg-[rgba(11,62,175,0.2)]"
@@ -221,7 +240,6 @@ export default function DashboardPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-semibold">Top portal visitors</h2>
-                    <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">Last updated as people open the dashboard.</p>
                   </div>
                 </div>
 
@@ -230,7 +248,7 @@ export default function DashboardPage() {
                     <p className="text-sm text-slate-600 dark:text-slate-300">Loading…</p>
                   ) : topVisitors.length === 0 ? (
                     <p className="text-sm text-slate-600 dark:text-slate-300">
-                      No visits recorded yet. Open the dashboard once as a few users to populate this list.
+                      No Home visits in the last 7 days yet. Users are counted when they open the dashboard (once per browser session).
                     </p>
                   ) : (
                     topVisitors.slice(0, 5).map((u, idx) => (
@@ -244,13 +262,13 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="shrink-0">
-                          <div className="flex min-w-[3.25rem] flex-col items-center justify-center gap-1 rounded-2xl bg-[#0B3EAF]/10 px-3 py-1.5 text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
-                            <div
-                              className="grid h-5 w-5 place-items-center rounded-full bg-[#E02B20] text-[11px] font-black text-white shadow-[0_6px_18px_rgba(0,0,0,0.25)] ring-2 ring-white/80 dark:ring-white/20"
+                          <div className="flex min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-2xl bg-[#0B3EAF]/10 px-3 py-2 text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
+                            <img
+                              src="/portal-visitor-flame.png"
+                              alt=""
                               aria-hidden
-                            >
-                              🔥
-                            </div>
+                              className="h-11 w-11 object-contain drop-shadow-[0_4px_14px_rgba(224,43,32,0.4)]"
+                            />
                             <div className="text-sm font-extrabold leading-none">{Number(u.visit_count) || 0}</div>
                           </div>
                         </div>
@@ -296,29 +314,28 @@ export default function DashboardPage() {
                 </div>
               ) : null}
 
-              <div className="card upcoming-rail flex max-h-[calc(100svh-18rem)] flex-col p-3 sm:p-4">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-[#0B3EAF] dark:text-[#A7D344]">Upcoming</h3>
-                  <Link
-                    to="/upcoming"
-                    className="text-[11px] font-bold text-[#0B3EAF] underline underline-offset-2 dark:text-[#A7D344]"
-                  >
-                    View all
-                  </Link>
+              {upcomingLoading || upcomingFutureOnly.length > 0 ? (
+                <div className="card upcoming-rail flex max-h-[calc(100svh-18rem)] flex-col p-3 sm:p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-[#0B3EAF] dark:text-[#A7D344]">Upcoming</h3>
+                    <Link
+                      to="/upcoming"
+                      className="text-[11px] font-bold text-[#0B3EAF] underline underline-offset-2 dark:text-[#A7D344]"
+                    >
+                      View all
+                    </Link>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                    <UpcomingEventCards
+                      items={upcomingFutureOnly}
+                      loading={upcomingLoading}
+                      compact
+                      showFacility
+                      onItemClick={openUpcomingEvent}
+                    />
+                  </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                  <UpcomingEventCards
-                    items={upcomingFutureOnly}
-                    loading={upcomingLoading}
-                    compact
-                    showFacility
-                    onItemClick={openUpcomingEvent}
-                  />
-                  {!upcomingLoading && upcomingFutureOnly.length === 0 ? (
-                    <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">No upcoming events yet.</p>
-                  ) : null}
-                </div>
-              </div>
+              ) : null}
             </div>
           </aside>
         </section>
