@@ -99,10 +99,15 @@ export default function ManagerEmployeeManagement() {
         {team.map((emp) => {
           const assigns = emp.assignments || [];
           const leaves = emp.leave_requests || [];
+          const summary = emp.training_summary;
           const avgProgress =
-            assigns.length === 0
+            summary?.avgProgress ??
+            (assigns.length === 0
               ? 0
-              : Math.round(assigns.reduce((s, a) => s + (a.progress ?? 0), 0) / assigns.length);
+              : Math.round(assigns.reduce((s, a) => s + (a.progress ?? 0), 0) / assigns.length));
+          const allComplete = summary?.allComplete;
+          const completedCount = summary?.completed ?? assigns.filter((a) => a.status === "completed").length;
+          const totalCount = summary?.total ?? assigns.length;
 
           return (
             <details
@@ -125,9 +130,16 @@ export default function ManagerEmployeeManagement() {
                   </div>
                 </div>
                 <div className="text-right text-sm text-slate-600 dark:text-slate-300">
-                  <div>Avg. training {avgProgress}%</div>
+                  <div className="flex items-center justify-end gap-2">
+                    <span>Avg. training {avgProgress}%</span>
+                    {allComplete ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+                        All complete
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="text-xs text-slate-500">
-                    {assigns.length} course{assigns.length === 1 ? "" : "s"}
+                    {completedCount}/{totalCount} training item{totalCount === 1 ? "" : "s"} done
                   </div>
                 </div>
               </summary>

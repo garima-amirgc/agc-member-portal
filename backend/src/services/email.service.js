@@ -4,7 +4,10 @@ const nodemailer = require("nodemailer");
 const APP_MAIL_BRAND = "AGC Member Portal";
 
 /** Bump when invite/reset HTML changes (helps verify production deploy). */
-const EMAIL_TEMPLATE_VERSION = "20260427-email-v6";
+const EMAIL_TEMPLATE_VERSION = "20260605-email-v8";
+
+/** Header bar behind the logo in HTML emails. */
+const EMAIL_HEADER_BG = "#0B3EAF";
 
 /** Friendly “From” name shown in inbox lists. */
 const EMAIL_FROM_NAME = String(process.env.EMAIL_FROM_NAME || "AGC Member Portal").trim();
@@ -18,10 +21,16 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-/** Public URL to a logo image (https). Prefer EMAIL_LOGO_URL; otherwise derived from APP_BASE_URL/FRONTEND_URL. */
+/** Public URL to a logo image (https). Prefer EMAIL_LOGO_URL, then DO Spaces branding asset, then static site. */
 function getEmailLogoUrl() {
   const explicit = String(process.env.EMAIL_LOGO_URL || "").trim();
   if (explicit) return explicit;
+
+  const spacesBase = String(process.env.DO_SPACES_PUBLIC_URL || "").trim().replace(/\/+$/, "");
+  if (spacesBase) {
+    return `${spacesBase}/branding/amir-group-logo.png?v=8`;
+  }
+
   const base = String(process.env.APP_BASE_URL || process.env.FRONTEND_URL || "").trim().replace(/\/+$/, "");
   if (!base) return "";
   return `${base}/amir-group-logo.png?v=8`;
@@ -30,7 +39,7 @@ function getEmailLogoUrl() {
 function emailShell({ title, preheader, bodyHtml }) {
   const logo = getEmailLogoUrl();
   const headerCellAttrs = logo
-    ? 'align="center" style="padding:22px 24px;background:#000000;text-align:center;border-bottom:1px solid #1a1a1a;"'
+    ? `align="center" style="padding:22px 24px;background:${EMAIL_HEADER_BG};text-align:center;border-bottom:1px solid #082d82;"`
     : 'style="padding:24px 28px 8px 28px;border-bottom:1px solid #eef2f6;"';
   const logoBlock = logo
     ? `<img src="${escapeHtml(logo)}" width="220" height="auto" alt="AMIR Group of Companies" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:220px;width:100%;height:auto;" />`
@@ -184,6 +193,74 @@ async function sendManagerCourseCompletionEmail({
   <p style="font-size: 12px; color: #6a6f73;">${APP_MAIL_BRAND} — automated notification</p>
 </body>
 </html>`;
+
+  return sendMail({ to: managerEmail, subject, text, html });
+}
+
+async function sendEmployeeAllTrainingCompleteEmail({ employeeEmail, employeeName, courseCount }) {
+  if (!employeeEmail) return { skipped: true };
+
+  const subject = "Congratulations — all assigned training complete";
+  const text = [
+    `Hello${employeeName ? ` ${employeeName}` : ""},`,
+    "",
+    `You have completed all ${courseCount} assigned course${courseCount === 1 ? "" : "s"} on ${APP_MAIL_BRAND}.`,
+    "",
+    "Great work staying current with your training requirements.",
+    "",
+    `This message was sent by ${APP_MAIL_BRAND}.`,
+  ].join("\n");
+
+  const bodyHtml = `
+  <p>Hello${employeeName ? ` ${escapeHtml(employeeName)}` : ""},</p>
+  <p><strong>Congratulations!</strong> You have completed all <strong>${escapeHtml(String(courseCount))}</strong> assigned course${courseCount === 1 ? "" : "s"}.</p>
+  <p style="margin: 16px 0; padding: 12px 16px; background: #eef8e8; border-left: 4px solid #A7D344;">
+    Your training record is fully up to date. Thank you for your commitment to learning and compliance.
+  </p>
+  <p style="font-size: 12px; color: #6a6f73;">${escapeHtml(new Date().toLocaleString())}</p>`;
+
+  const html = emailShell({
+    title: subject,
+    preheader: "You finished all assigned training",
+    bodyHtml,
+  });
+
+  return sendMail({ to: employeeEmail, subject, text, html });
+}
+
+async function sendManagerAllTrainingCompleteEmail({
+  managerEmail,
+  managerName,
+  employeeName,
+  employeeEmail,
+  courseCount,
+}) {
+  if (!managerEmail) return { skipped: true };
+
+  const subject = `All training complete: ${employeeName}`;
+  const text = [
+    `Hello${managerName ? ` ${managerName}` : ""},`,
+    "",
+    `${employeeName} (${employeeEmail || "no email on file"}) has completed all ${courseCount} assigned course${courseCount === 1 ? "" : "s"}.`,
+    "",
+    "You can review their progress on the manager dashboard in the member portal.",
+    "",
+    `This message was sent by ${APP_MAIL_BRAND}.`,
+  ].join("\n");
+
+  const bodyHtml = `
+  <p>Hello${managerName ? ` ${escapeHtml(managerName)}` : ""},</p>
+  <p><strong>${escapeHtml(employeeName)}</strong> (${escapeHtml(employeeEmail || "—")}) has <strong>completed all assigned training</strong> (${escapeHtml(String(courseCount))} course${courseCount === 1 ? "" : "s"}).</p>
+  <p style="margin: 16px 0; padding: 12px 16px; background: #f7f9fa; border-left: 4px solid #0B3EAF;">
+    View their progress on the manager dashboard in ${escapeHtml(APP_MAIL_BRAND)}.
+  </p>
+  <p style="font-size: 12px; color: #6a6f73;">${escapeHtml(new Date().toLocaleString())}</p>`;
+
+  const html = emailShell({
+    title: subject,
+    preheader: `${employeeName} finished all assigned training`,
+    bodyHtml,
+  });
 
   return sendMail({ to: managerEmail, subject, text, html });
 }
@@ -519,6 +596,8 @@ module.exports = {
   sendMail,
   resetTransporter,
   sendManagerCourseCompletionEmail,
+  sendEmployeeAllTrainingCompleteEmail,
+  sendManagerAllTrainingCompleteEmail,
   sendITTicketCreatedEmail,
   sendITTicketResolvedEmail,
   sendAccountInviteEmail,

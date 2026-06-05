@@ -10,6 +10,13 @@ const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 const { deleteLessonVideoByUrl } = require("../services/objectStorage.service");
+const { syncAssignmentFromResourceLesson } = require("../services/assignmentProgress.service");
+const {
+  notifyManagerCourseCompletion,
+  maybeNotifyAllTrainingComplete,
+} = require("../services/notification.service");
+const { clearAllTrainingMilestone, getTrainingSummary } = require("../services/trainingCompletion.service");
+const { syncUserAssignmentsForFacilities } = require("../services/assignmentSync.service");
 
 const FACILITIES = new Set(["AGC", "AQM", "SCF", "ASP"]);
 const RESOURCE_CATEGORIES = new Set(["finance", "sales", "hr", "safety", "production", "it"]);
@@ -123,7 +130,46 @@ router.put("/me/progress", async (req, res) => {
       .run(uid, business_unit, category, resource_kind, resource_id);
   }
 
-  res.json({ ok: true });
+  let allTrainingComplete = false;
+  let allTrainingJustNotified = false;
+
+  if (completed) {
+    await syncUserAssignmentsForFacilities(uid);
+
+    if (resource_kind === "lesson") {
+      const syncResult = await syncAssignmentFromResourceLesson(uid, resource_id);
+      if (syncResult?.courseJustCompleted) {
+        const user = await db.prepare("SELECT manager_id FROM users WHERE id = ?").get(uid);
+        const course = await db
+          .prepare("SELECT id, title FROM courses WHERE id = ?")
+          .get(syncResult.assignment?.course_id);
+        void notifyManagerCourseCompletion({
+          managerId: user?.manager_id || null,
+          employeeId: uid,
+          courseId: course?.id,
+          courseTitle: course?.title || "Unknown course",
+        });
+      }
+    }
+
+    const allTraining = await maybeNotifyAllTrainingComplete(uid);
+    allTrainingComplete = allTraining.allComplete;
+    allTrainingJustNotified = allTraining.notified;
+  } else {
+    const summaryAfter = await getTrainingSummary(uid);
+    if (!summaryAfter.allComplete) {
+      await clearAllTrainingMilestone(uid);
+    }
+  }
+
+  res.json({
+    ok: true,
+    all_training_complete: allTrainingComplete,
+    all_training_just_notified: allTrainingJustNotified,
+    message: allTrainingJustNotified
+      ? "Congratulations! You have completed all of your assigned training."
+      : undefined,
+  });
 });
 
 router.get("/facility/:facility/category/:category", async (req, res) => {

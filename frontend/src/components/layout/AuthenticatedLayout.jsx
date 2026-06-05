@@ -12,6 +12,7 @@ import BottomBirdBand from "./BottomBirdBand";
 import Footer from "./Footer";
 import api from "../../services/api";
 import PollPopupModal from "../PollPopupModal";
+import { CelebrationProvider } from "../../context/CelebrationContext";
 
 function pollDismissKey(userId, pollId) {
   return `AGC_POLL_DISMISSED:${String(userId || "")}:${String(pollId || "")}`;
@@ -149,18 +150,19 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
   }, [polls]);
 
   return (
-    <div className="agc-app-shell app-dashboard flex min-h-dvh w-full flex-col lg:flex-row">
-      <AppSidebar />
-      <div className="agc-main-column relative flex min-w-0 flex-1 flex-col">
-        <AppTopBar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <div className="min-h-0 min-w-0 flex-1 pb-2 sm:pb-3">
-          <Outlet />
+    <CelebrationProvider userId={user?.id}>
+      <div className="agc-app-shell app-dashboard flex min-h-dvh w-full flex-col lg:flex-row">
+        <AppSidebar />
+        <div className="agc-main-column relative flex min-w-0 flex-1 flex-col">
+          <AppTopBar darkMode={darkMode} setDarkMode={setDarkMode} />
+          <div className="min-h-0 min-w-0 flex-1 pb-2 sm:pb-3">
+            <Outlet />
+          </div>
+          <BottomBirdBand />
+          <Footer />
         </div>
-        <BottomBirdBand />
-        <Footer />
-      </div>
 
-      <PollPopupModal
+        <PollPopupModal
         polls={polls}
         startIndex={pollStartIndex}
         open={pollOpen}
@@ -179,7 +181,8 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
             return next;
           });
         }}
-      />
-    </div>
+        />
+      </div>
+    </CelebrationProvider>
   );
 }

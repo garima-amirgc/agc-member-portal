@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import DashboardAssignmentNotice from "../components/DashboardAssignmentNotice";
+import TrainingCompletionNotice from "../components/TrainingCompletionNotice";
 import UpcomingEventCards from "../components/UpcomingEventCards";
 import api from "../services/api";
-import BirthdayPopupModal from "../components/BirthdayPopupModal";
+import { useCelebration } from "../context/CelebrationContext";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 import { splitUpcomingForHome } from "../utils/upcomingFeedSplit";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
@@ -14,11 +15,18 @@ import { isSupervisor } from "../utils/supervisorAccess";
 import { userHasDepartment } from "../utils/userDepts";
 import ItTicketsAssigneeWidget from "../components/ItTicketsAssigneeWidget";
 
-function BirthdayMiniCard({ item, onClick }) {
+function CelebrationMiniCard({ item, onClick, kind = "birthday" }) {
   const fullName = String(item?.name || "").trim();
   const firstName = fullName.split(/\s+/)[0] || "—";
   const facility = String(item?.facility_name || item?.company_name || "").trim();
   const img = resolvePublicMediaUrl(item?.profile_image_url);
+  const isAnniversary = kind === "anniversary";
+  const years = Number(item?.years_employed);
+  const headline = isAnniversary
+    ? Number.isFinite(years) && years >= 1
+      ? `${years} yr${years === 1 ? "" : "s"} — ${firstName}`
+      : `Anniversary — ${firstName}`
+    : `HBD ${firstName}`;
   const fallback =
     "data:image/svg+xml;utf8," +
     encodeURIComponent(`
@@ -37,7 +45,11 @@ function BirthdayMiniCard({ item, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-[#e8b6c6]/50 bg-gradient-to-br from-[#fff7fb] via-[#fff2ea] to-[#eef8ff] px-3 py-2.5 text-left shadow-sm ring-1 ring-white/60 transition hover:shadow-md dark:border-white/10 dark:from-white/5 dark:via-white/5 dark:to-white/5 dark:ring-white/5"
+      className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border px-3 py-2.5 text-left shadow-sm ring-1 ring-white/60 transition hover:shadow-md dark:ring-white/5 ${
+        isAnniversary
+          ? "border-[#0B3EAF]/25 bg-gradient-to-br from-[#eef2fb] via-[#f8fafc] to-[#fff8e8] dark:border-[#A7D344]/25 dark:from-white/5 dark:via-white/5 dark:to-white/5"
+          : "border-[#e8b6c6]/50 bg-gradient-to-br from-[#fff7fb] via-[#fff2ea] to-[#eef8ff] dark:border-white/10 dark:from-white/5 dark:via-white/5 dark:to-white/5"
+      }`}
     >
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.55]">
         <div className="absolute -left-10 -top-12 h-24 w-24 rounded-full bg-[#ffcad8]/60 blur-xl" />
@@ -50,9 +62,7 @@ function BirthdayMiniCard({ item, onClick }) {
         </div>
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-extrabold text-[#4b2a35] dark:text-white">
-          HBD {firstName}
-        </div>
+        <div className="truncate text-sm font-extrabold text-[#4b2a35] dark:text-white">{headline}</div>
         {facility ? (
           <div className="mt-0.5 truncate text-[11px] font-semibold uppercase tracking-wide text-[#6b4a55] dark:text-white/85">
             {facility}
@@ -71,9 +81,9 @@ export default function DashboardPage() {
   const isIT = userHasDepartment(user, "IT");
   const [upcoming, setUpcoming] = useState([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
-  const [birthdays, setBirthdays] = useState({ today: [], upcoming: [], range_days: 14 });
+  const [birthdays, setBirthdays] = useState({ today: [], upcoming: [], anniversaries_today: [], range_days: 14 });
   const [birthdaysLoading, setBirthdaysLoading] = useState(true);
-  const [birthdayPopup, setBirthdayPopup] = useState(null);
+  const { openCelebration } = useCelebration();
   const [topVisitors, setTopVisitors] = useState([]);
   const [topVisitorsLoading, setTopVisitorsLoading] = useState(false);
 
@@ -98,11 +108,12 @@ export default function DashboardPage() {
       setBirthdays({
         today: Array.isArray(d.today) ? d.today : [],
         upcoming: Array.isArray(d.upcoming) ? d.upcoming : [],
+        anniversaries_today: Array.isArray(d.anniversaries_today) ? d.anniversaries_today : [],
         range_days: Number(d.range_days) || 14,
       });
     } catch (err) {
       console.warn("Birthdays feed failed:", err.response?.status, err.response?.data ?? err.message);
-      setBirthdays({ today: [], upcoming: [], range_days: 14 });
+      setBirthdays({ today: [], upcoming: [], anniversaries_today: [], range_days: 14 });
     } finally {
       setBirthdaysLoading(false);
     }
@@ -164,6 +175,11 @@ export default function DashboardPage() {
     return [...today, ...up].slice(0, 4);
   }, [birthdays]);
 
+  const anniversaryCards = useMemo(() => {
+    const list = Array.isArray(birthdays?.anniversaries_today) ? birthdays.anniversaries_today : [];
+    return list.slice(0, 4);
+  }, [birthdays]);
+
   const openUpcomingEvent = (event) => {
     const id = event?.id;
     navigate(id != null ? `/upcoming/${encodeURIComponent(String(id))}` : "/upcoming");
@@ -175,6 +191,7 @@ export default function DashboardPage() {
         <section className="grid gap-6 lg:grid-cols-12 lg:items-start">
           <div className="min-w-0 space-y-6 lg:col-span-9">
             <DashboardAssignmentNotice user={user} />
+            <TrainingCompletionNotice user={user} />
 
             {isIT ? <ItTicketsAssigneeWidget /> : null}
 
@@ -303,10 +320,38 @@ export default function DashboardPage() {
                   ) : (
                     <div className="space-y-2.5">
                       {birthdayCards.map((b) => (
-                        <BirthdayMiniCard
-                          key={`${b?.id ?? "b"}-${b?.in_days ?? "u"}`}
+                        <CelebrationMiniCard
+                          key={`bday-${b?.id ?? "b"}`}
                           item={b}
-                          onClick={() => setBirthdayPopup({ ...b, in_days: Number(b?.in_days) || 0 })}
+                          kind="birthday"
+                          onClick={() =>
+                            openCelebration({ ...b, in_days: Number(b?.in_days) || 0, celebrationKind: "birthday" })
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {birthdaysLoading || anniversaryCards.length > 0 ? (
+                <div className="card no-title-underline p-3 sm:p-4">
+                  <h3 className="mb-2 text-sm font-semibold text-[#0B3EAF] dark:text-[#A7D344]">Work anniversaries</h3>
+                  {birthdaysLoading ? (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Loading anniversaries…</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {anniversaryCards.map((a) => (
+                        <CelebrationMiniCard
+                          key={`ann-${a?.id ?? "a"}`}
+                          item={a}
+                          kind="anniversary"
+                          onClick={() =>
+                            openCelebration({
+                              ...a,
+                              celebrationKind: "anniversary",
+                            })
+                          }
                         />
                       ))}
                     </div>
@@ -340,12 +385,6 @@ export default function DashboardPage() {
           </aside>
         </section>
       </main>
-
-      <BirthdayPopupModal
-        open={Boolean(birthdayPopup)}
-        onClose={() => setBirthdayPopup(null)}
-        person={birthdayPopup}
-      />
     </>
   );
 }

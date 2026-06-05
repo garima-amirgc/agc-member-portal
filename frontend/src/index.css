@@ -358,3 +358,141 @@ h6 {
     }
   }
 }
+
+/* Celebration popup — confetti, poppers, entrance */
+.celebration-modal-backdrop {
+  background: radial-gradient(ellipse at 50% 20%, rgba(167, 211, 68, 0.12), transparent 55%),
+    radial-gradient(ellipse at 80% 80%, rgba(11, 62, 175, 0.15), transparent 50%),
+    rgba(15, 23, 42, 0.55);
+  animation: celebration-backdrop-in 0.35s ease-out;
+}
+
+.celebration-modal-card {
+  animation: celebration-card-in 0.5s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.celebration-confetti-piece {
+  animation-name: celebration-confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.celebration-popper {
+  animation: celebration-popper-bounce 1.2s ease-in-out infinite;
+}
+
+.celebration-sparkle {
+  animation: celebration-sparkle-pulse 1.4s ease-in-out infinite;
+}
+
+.celebration-avatar-ring {
+  animation: celebration-ring-pulse 2s ease-in-out infinite;
+}
+
+.celebration-headline {
+  animation: celebration-headline-in 0.6s ease-out 0.15s both;
+}
+
+.celebration-badge {
+  animation: celebration-badge-in 0.45s ease-out both;
+}
+
+@keyframes celebration-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes celebration-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes celebration-confetti-fall {
+  0% {
+    transform: translate3d(0, -12%, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--drift, 0), 110vh, 0) rotate(720deg);
+    opacity: 0.15;
+  }
+}
+
+@keyframes celebration-popper-bounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-8deg) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) rotate(8deg) scale(1.08);
+  }
+}
+
+@keyframes celebration-sparkle-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes celebration-ring-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+@keyframes celebration-headline-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes celebration-badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .celebration-modal-backdrop,
+  .celebration-modal-card,
+  .celebration-confetti-piece,
+  .celebration-popper,
+  .celebration-sparkle,
+  .celebration-avatar-ring,
+  .celebration-headline,
+  .celebration-badge {
+    animation: none !important;
+  }
+}

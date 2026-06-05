@@ -24,6 +24,10 @@ export default function AdminDashboardPage() {
   const [docForm, setDocForm] = useState(EMPTY_DOC);
   const docFileRef = useRef(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
+  /** Inline edit: one document at a time */
+  const [docEdit, setDocEdit] = useState(null);
+  const docEditFileRef = useRef(null);
+  const [savingDocEdit, setSavingDocEdit] = useState(false);
 
   const load = () => {
     api.get("/courses").then((r) => setCourses(r.data));
@@ -209,6 +213,7 @@ export default function AdminDashboardPage() {
     }
     try {
       await api.delete(`/resources/documents/${doc.id}`);
+      if (docEdit?.id === doc.id) setDocEdit(null);
       loadResourceDocuments();
     } catch (err) {
       const msg =
@@ -217,6 +222,55 @@ export default function AdminDashboardPage() {
         err.message ||
         "Could not delete document.";
       window.alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+    }
+  };
+
+  const startEditDocument = (doc) => {
+    setDocEdit({
+      id: doc.id,
+      title: doc.title || "",
+      business_unit: doc.business_unit,
+      category: doc.category,
+      file_url: doc.file_url,
+    });
+    if (docEditFileRef.current) docEditFileRef.current.value = "";
+  };
+
+  const saveDocumentEdit = async (e) => {
+    e.preventDefault();
+    if (!docEdit) return;
+    if (!String(docEdit.title || "").trim()) {
+      window.alert("Please enter a document title.");
+      return;
+    }
+    setSavingDocEdit(true);
+    try {
+      let fileUrl = docEdit.file_url;
+      const replacement = docEditFileRef.current?.files?.[0];
+      if (replacement) {
+        const upload = await uploadResourceDocumentFile(replacement);
+        const nextUrl = upload?.file_url;
+        if (!nextUrl) throw new Error("Upload finished but no file URL was returned.");
+        fileUrl = nextUrl;
+      }
+      await api.put(`/resources/documents/${docEdit.id}`, {
+        business_unit: docEdit.business_unit,
+        category: docEdit.category,
+        title: docEdit.title.trim(),
+        file_url: fileUrl,
+      });
+      setDocEdit(null);
+      if (docEditFileRef.current) docEditFileRef.current.value = "";
+      loadResourceDocuments();
+    } catch (err) {
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data ||
+        err.message ||
+        "Could not update document.";
+      window.alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setSavingDocEdit(false);
     }
   };
 
@@ -598,26 +652,113 @@ export default function AdminDashboardPage() {
                         }
                       }
                       return (
-                        <ResourceDocumentGridCard
-                          key={d.id}
-                          title={d.title}
-                          url={d.file_url}
-                          metaLine={metaLine}
-                          addedLabel={addedLabel}
-                          linkTo={docTo}
-                          openButtonLabel="Open document"
-                          compactPreview
-                          tailHint="Click title or preview to open. Delete removes the file from storage."
-                          rightSlot={
-                            <button
-                              type="button"
-                              className="btn-danger px-3 py-1.5 text-xs"
-                              onClick={() => deleteResourceDocument(d)}
-                            >
-                              Delete
-                            </button>
-                          }
-                        />
+                        <div key={d.id}>
+                          {docEdit?.id === d.id ? (
+                            <div className="rounded-xl border p-3 dark:border-slate-700">
+                              <form className="agc-form space-y-2" onSubmit={saveDocumentEdit}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                    Edit document
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="text-xs font-semibold text-brand-blue underline dark:text-brand-green"
+                                    onClick={() => setDocEdit(null)}
+                                    disabled={savingDocEdit}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                    Facility
+                                  </label>
+                                  <select
+                                    className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                                    value={docEdit.business_unit}
+                                    onChange={(e) =>
+                                      setDocEdit({ ...docEdit, business_unit: e.target.value })
+                                    }
+                                    disabled={savingDocEdit}
+                                  >
+                                    <option value="AGC">AGC</option>
+                                    <option value="AQM">AQM</option>
+                                    <option value="SCF">SCF</option>
+                                    <option value="ASP">ASP</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                    Resources category (Documents)
+                                  </label>
+                                  <select
+                                    className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                                    value={docEdit.category}
+                                    onChange={(e) => setDocEdit({ ...docEdit, category: e.target.value })}
+                                    disabled={savingDocEdit}
+                                  >
+                                    {CATEGORIES.map((cat) => (
+                                      <option key={cat.key} value={cat.key}>
+                                        {cat.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <input
+                                  className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                                  placeholder="Document title"
+                                  value={docEdit.title}
+                                  onChange={(e) => setDocEdit({ ...docEdit, title: e.target.value })}
+                                  disabled={savingDocEdit}
+                                />
+                                <div>
+                                  <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                    Replace file (optional)
+                                  </label>
+                                  <input
+                                    ref={docEditFileRef}
+                                    type="file"
+                                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,application/pdf"
+                                    disabled={savingDocEdit}
+                                    className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-brand-blue-soft file:px-2 file:py-1 file:text-xs file:font-semibold dark:file:bg-white/10"
+                                  />
+                                </div>
+                                <button type="submit" className="btn-primary w-full" disabled={savingDocEdit}>
+                                  {savingDocEdit ? "Saving…" : "Save changes"}
+                                </button>
+                              </form>
+                            </div>
+                          ) : (
+                            <ResourceDocumentGridCard
+                              title={d.title}
+                              url={d.file_url}
+                              metaLine={metaLine}
+                              addedLabel={addedLabel}
+                              linkTo={docTo}
+                              openButtonLabel="Open document"
+                              compactPreview
+                              tailHint="Click title or preview to open. Delete removes the file from storage."
+                              rightSlot={
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn-outline px-3 py-1.5 text-xs"
+                                    onClick={() => startEditDocument(d)}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-danger px-3 py-1.5 text-xs"
+                                    onClick={() => deleteResourceDocument(d)}
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              }
+                            />
+                          )}
+                        </div>
                       );
                     })
                   )}

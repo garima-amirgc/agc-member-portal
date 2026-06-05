@@ -37,6 +37,23 @@ function birthDateLabel(month, day) {
   return `${MONTHS[m - 1]} ${d}`;
 }
 
+function joinDateLabel(month, day, year) {
+  const m = Number(month);
+  const d = Number(day);
+  const y = Number(year);
+  if (!Number.isFinite(m) || !Number.isFinite(d) || !Number.isFinite(y) || m < 1 || m > 12 || d < 1 || d > 31) {
+    return "Not added";
+  }
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
+}
+
+const JOIN_YEAR_OPTIONS = (() => {
+  const end = new Date().getFullYear();
+  const years = [];
+  for (let y = end; y >= 1980; y -= 1) years.push(y);
+  return years;
+})();
+
 function displayValue(value) {
   const text = String(value ?? "").trim();
   return text || "Not added";
@@ -64,6 +81,9 @@ export default function ProfilePage() {
     password: "",
     birth_month: "",
     birth_day: "",
+    join_month: "",
+    join_day: "",
+    join_year: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -82,6 +102,9 @@ export default function ProfilePage() {
       password: "",
       birth_month: profile?.birth_month != null ? String(profile.birth_month) : "",
       birth_day: profile?.birth_day != null ? String(profile.birth_day) : "",
+      join_month: profile?.join_month != null ? String(profile.join_month) : "",
+      join_day: profile?.join_day != null ? String(profile.join_day) : "",
+      join_year: profile?.join_year != null ? String(profile.join_year) : "",
     });
   };
 
@@ -109,6 +132,18 @@ export default function ProfilePage() {
       return;
     }
 
+    const joinMonthRaw = String(form.join_month ?? "").trim();
+    const joinDayRaw = String(form.join_day ?? "").trim();
+    const joinYearRaw = String(form.join_year ?? "").trim();
+    const includeJoin = joinMonthRaw !== "" && joinDayRaw !== "" && joinYearRaw !== "";
+    const join_month = includeJoin ? Number(joinMonthRaw) : undefined;
+    const join_day = includeJoin ? Number(joinDayRaw) : undefined;
+    const join_year = includeJoin ? Number(joinYearRaw) : undefined;
+    if (includeJoin && (!Number.isFinite(join_month) || !Number.isFinite(join_day) || !Number.isFinite(join_year))) {
+      setError("Invalid date of joining. Please select month, day, and year.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     setSuccess("");
@@ -121,6 +156,7 @@ export default function ProfilePage() {
         phone: form.phone,
         address: form.address,
         ...(includeDob ? { birth_month, birth_day } : {}),
+        ...(includeJoin ? { join_month, join_day, join_year } : {}),
         ...(form.password ? { password: form.password } : {}),
       });
 
@@ -219,6 +255,10 @@ export default function ProfilePage() {
           <ProfileDetail label="Designation" value={displayValue(me.designation)} />
           <ProfileDetail label="Phone" value={displayValue(me.phone)} />
           <ProfileDetail label="Date of birth" value={birthDateLabel(me.birth_month, me.birth_day)} />
+          <ProfileDetail
+            label="Date of joining"
+            value={joinDateLabel(me.join_month, me.join_day, me.join_year)}
+          />
           <ProfileDetail label="Address" value={displayValue(me.address)} className="sm:col-span-2" />
           {facilities.length > 0 ? (
             <ProfileDetail
@@ -332,6 +372,50 @@ export default function ProfilePage() {
                     {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                       <option key={d} value={String(d)}>
                         {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium">Date of joining (optional)</label>
+                <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                  Used for work anniversary celebrations on your joining date each year.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <select
+                    className="w-full rounded border p-2 dark:bg-slate-700"
+                    value={form.join_month}
+                    onChange={(e) => setForm({ ...form, join_month: e.target.value })}
+                  >
+                    <option value="">Month</option>
+                    {MONTHS.map((m, idx) => (
+                      <option key={m} value={String(idx + 1)}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full rounded border p-2 dark:bg-slate-700"
+                    value={form.join_day}
+                    onChange={(e) => setForm({ ...form, join_day: e.target.value })}
+                  >
+                    <option value="">Day</option>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={String(d)}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full rounded border p-2 dark:bg-slate-700"
+                    value={form.join_year}
+                    onChange={(e) => setForm({ ...form, join_year: e.target.value })}
+                  >
+                    <option value="">Year</option>
+                    {JOIN_YEAR_OPTIONS.map((y) => (
+                      <option key={y} value={String(y)}>
+                        {y}
                       </option>
                     ))}
                   </select>

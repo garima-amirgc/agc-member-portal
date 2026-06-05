@@ -20,7 +20,7 @@ function safeText(v) {
 }
 
 export default function BirthdayStrip() {
-  const [data, setData] = useState({ today: [], upcoming: [], range_days: 365 });
+  const [data, setData] = useState({ today: [], upcoming: [], anniversaries_today: [], range_days: 365 });
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -34,6 +34,7 @@ export default function BirthdayStrip() {
         setData({
           today: Array.isArray(d.today) ? d.today : [],
           upcoming: Array.isArray(d.upcoming) ? d.upcoming : [],
+          anniversaries_today: Array.isArray(d.anniversaries_today) ? d.anniversaries_today : [],
           range_days: Number(d.range_days) || 365,
         });
       })
@@ -49,19 +50,24 @@ export default function BirthdayStrip() {
   }, []);
 
   const today = useMemo(() => uniqById(data.today).slice(0, 6), [data.today]);
-  const todayLine = useMemo(() => {
-    if (today.length === 0) return "";
-    return today
+  const anniversaries = useMemo(() => uniqById(data.anniversaries_today).slice(0, 6), [data.anniversaries_today]);
+
+  const formatNames = (list) =>
+    list
       .map((b) => {
         const name = safeText(b.name) || "—";
         const facility = safeText(b.facility_name || b.company_name);
         return facility ? `${name} (${facility})` : name;
       })
       .join(", ");
-  }, [today]);
 
-  // Keep the UI minimal: show only the celebration line (and only when we have someone to celebrate).
-  if (!todayLine && !error) return null;
+  const todayLine = useMemo(() => (today.length === 0 ? "" : formatNames(today)), [today]);
+  const anniversaryLine = useMemo(
+    () => (anniversaries.length === 0 ? "" : formatNames(anniversaries)),
+    [anniversaries]
+  );
+
+  if (!todayLine && !anniversaryLine && !error) return null;
 
   return (
     <div className={`border-b border-slate-200/90 bg-white/80 py-3 backdrop-blur-sm dark:border-white/10 dark:bg-[#0f0f0f]/75 ${PAGE_GUTTER_X}`}>
@@ -69,30 +75,61 @@ export default function BirthdayStrip() {
         {error ? (
           <div className="text-xs font-semibold text-amber-800 dark:text-amber-200">{error}</div>
         ) : (
-          <div className="overflow-hidden">
-            <div className="flex w-max motion-reduce:translate-x-0 motion-reduce:animate-none [animation:agc-bday-marquee_14s_linear_infinite] hover:[animation-play-state:paused]">
-              <div className="flex shrink-0 items-center pr-10">
-                <p className="whitespace-nowrap text-sm font-semibold text-slate-900 dark:text-white">
-                  🎉 Everyone, let’s wish{" "}
-                  <span className="rounded-full bg-[#0B3EAF]/10 px-2 py-0.5 font-extrabold text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
-                    {todayLine}
-                  </span>{" "}
-                  a very Happy Birthday!
-                </p>
+          <div className="space-y-2">
+            {todayLine ? (
+              <div className="overflow-hidden">
+                <div className="flex w-max motion-reduce:translate-x-0 motion-reduce:animate-none [animation:agc-bday-marquee_14s_linear_infinite] hover:[animation-play-state:paused]">
+                  <div className="flex shrink-0 items-center pr-10">
+                    <p className="whitespace-nowrap text-sm font-semibold text-slate-900 dark:text-white">
+                      🎉 Everyone, let’s wish{" "}
+                      <span className="rounded-full bg-[#0B3EAF]/10 px-2 py-0.5 font-extrabold text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
+                        {todayLine}
+                      </span>{" "}
+                      a very Happy Birthday!
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center pr-10" aria-hidden>
+                    <p className="whitespace-nowrap text-sm font-semibold text-slate-900 dark:text-white">
+                      🎉 Everyone, let’s wish{" "}
+                      <span className="rounded-full bg-[#0B3EAF]/10 px-2 py-0.5 font-extrabold text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
+                        {todayLine}
+                      </span>{" "}
+                      a very Happy Birthday!
+                    </p>
+                  </div>
+                </div>
               </div>
-              {/* Duplicate immediately after the first track for a continuous loop */}
-              <div className="flex shrink-0 items-center pr-10" aria-hidden>
-                <p className="whitespace-nowrap text-sm font-semibold text-slate-900 dark:text-white">
-                  🎉 Everyone, let’s wish{" "}
-                  <span className="rounded-full bg-[#0B3EAF]/10 px-2 py-0.5 font-extrabold text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
-                    {todayLine}
-                  </span>{" "}
-                  a very Happy Birthday!
-                </p>
+            ) : null}
+            {anniversaryLine ? (
+              <div className="overflow-hidden">
+                <div className="flex w-max motion-reduce:translate-x-0 motion-reduce:animate-none [animation:agc-ann-marquee_16s_linear_infinite] hover:[animation-play-state:paused]">
+                  <div className="flex shrink-0 items-center pr-10">
+                    <p className="whitespace-nowrap text-sm font-semibold text-slate-900 dark:text-white">
+                      🎊 Congratulations to{" "}
+                      <span className="rounded-full bg-[#A7D344]/20 px-2 py-0.5 font-extrabold text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
+                        {anniversaryLine}
+                      </span>{" "}
+                      on their work anniversary!
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center pr-10" aria-hidden>
+                    <p className="whitespace-nowrap text-sm font-semibold text-slate-900 dark:text-white">
+                      🎊 Congratulations to{" "}
+                      <span className="rounded-full bg-[#A7D344]/20 px-2 py-0.5 font-extrabold text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
+                        {anniversaryLine}
+                      </span>{" "}
+                      on their work anniversary!
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : null}
             <style>{`
               @keyframes agc-bday-marquee {
+                0% { transform: translateX(0); }
+                100% { transform: translateX(-50%); }
+              }
+              @keyframes agc-ann-marquee {
                 0% { transform: translateX(0); }
                 100% { transform: translateX(-50%); }
               }

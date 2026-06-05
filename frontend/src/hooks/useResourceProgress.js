@@ -52,13 +52,20 @@ export function useResourceProgress(facilityNorm, categoryKey, enabled = true) {
     async (id, completedVal) => {
       const parsed = parseResourceItemId(id);
       if (!parsed || !facilityNorm || !categoryKey) return false;
-      await api.put("/resources/me/progress", {
+      const res = await api.put("/resources/me/progress", {
         business_unit: facilityNorm,
         category: categoryKey,
         resource_kind: parsed.resource_kind,
         resource_id: parsed.resource_id,
         completed: completedVal,
       });
+      if (res.data?.all_training_just_notified) {
+        try {
+          window.dispatchEvent(new CustomEvent("agc-training-complete"));
+        } catch {
+          /* ignore */
+        }
+      }
       setCompleted((prev) => {
         const next = new Set(prev);
         if (completedVal) next.add(id);

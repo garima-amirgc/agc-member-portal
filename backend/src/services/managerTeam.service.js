@@ -1,5 +1,6 @@
 const { db } = require("../config/db");
 const { buildReportingHierarchy } = require("./reportingHierarchy.service");
+const { getTrainingSummary } = require("./trainingCompletion.service");
 
 /**
  * @param {number} managerUserId
@@ -25,7 +26,7 @@ async function getTeamOverview(managerUserId) {
      FROM leave_requests WHERE employee_id = ?
      ORDER BY created_at DESC`
   );
-  const assignStmt = db.prepare(
+  const assignAllStmt = db.prepare(
     `SELECT a.id, a.progress, a.status, a.course_id, c.title AS course_title, c.business_unit AS course_business_unit
      FROM assignments a
      JOIN courses c ON c.id = a.course_id
@@ -35,11 +36,23 @@ async function getTeamOverview(managerUserId) {
 
   const out = [];
   for (const emp of employees) {
+    const facilities = (await facStmt.all(emp.id)).map((r) => r.business_unit);
+    const effectiveFacilities =
+      facilities.length > 0
+        ? facilities
+        : emp.business_unit
+          ? [emp.business_unit]
+          : [];
+    const allAssignments = await assignAllStmt.all(emp.id);
+    const facilitySet = new Set(effectiveFacilities);
+    const assignments = allAssignments.filter((a) => facilitySet.has(a.course_business_unit));
+    const training_summary = await getTrainingSummary(emp.id);
     out.push({
       ...emp,
-      facilities: (await facStmt.all(emp.id)).map((r) => r.business_unit),
+      facilities: effectiveFacilities,
       leave_requests: await leaveStmt.all(emp.id),
-      assignments: await assignStmt.all(emp.id),
+      assignments,
+      training_summary,
     });
   }
   return out;

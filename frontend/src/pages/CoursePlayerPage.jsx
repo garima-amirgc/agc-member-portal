@@ -10,6 +10,7 @@ export default function CoursePlayerPage() {
   const [course, setCourse] = useState(null);
   const [currentLesson, setCurrentLesson] = useState(null);
   const [toast, setToast] = useState("");
+  const [toastKind, setToastKind] = useState("progress");
 
   useEffect(() => {
     api.get(`/courses/${id}`).then((res) => {
@@ -30,7 +31,18 @@ export default function CoursePlayerPage() {
       completed: true,
     });
     setToast(data.message);
-    setTimeout(() => setToast(""), 3000);
+    setToastKind(data.all_training_just_notified ? "all_complete" : "progress");
+    if (data.all_training_just_notified) {
+      try {
+        window.dispatchEvent(new CustomEvent("agc-training-complete"));
+      } catch {
+        /* ignore */
+      }
+    }
+    setTimeout(() => {
+      setToast("");
+      setToastKind("progress");
+    }, data.all_training_just_notified ? 6000 : 3000);
   };
 
   if (!course) {
@@ -43,7 +55,17 @@ export default function CoursePlayerPage() {
     >
       <section className="card">
         <h1 className="mb-4 text-2xl font-bold">{course.title}</h1>
-        {toast && <div className="mb-3 rounded bg-emerald-100 p-2 text-emerald-700">{toast}</div>}
+        {toast && (
+          <div
+            className={`mb-3 rounded p-2 ${
+              toastKind === "all_complete"
+                ? "border border-emerald-400 bg-emerald-50 font-semibold text-emerald-800 dark:border-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-100"
+                : "bg-emerald-100 text-emerald-700"
+            }`}
+          >
+            {toast}
+          </div>
+        )}
         {currentLesson ? (
           <>
             <video

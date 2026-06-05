@@ -4,6 +4,8 @@ const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 
+const { anniversaryYearsEmployed } = require("../utils/profileDates");
+
 const router = express.Router();
 
 function normalizeDob(value) {
@@ -167,7 +169,24 @@ router.get("/feed", authRequired, async (req, res) => {
     label,
   }));
 
-  return res.json({ today, upcoming: [], range_days: 1 });
+  const annRows = await db
+    .prepare(
+      "SELECT id, name, business_unit, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, profile_image_url, join_month, join_day, join_year FROM users WHERE join_month = ? AND join_day = ? ORDER BY name ASC, id ASC"
+    )
+    .all(mo, da);
+
+  const anniversaries_today = (Array.isArray(annRows) ? annRows : []).map((r) => ({
+    id: r.id,
+    name: r.name != null ? String(r.name) : "",
+    facility_name: r.business_unit != null ? String(r.business_unit) : "",
+    company_name: r.business_unit != null ? String(r.business_unit) : "",
+    department: r.department != null ? String(r.department) : "",
+    profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
+    label,
+    years_employed: anniversaryYearsEmployed(r.join_year, now),
+  }));
+
+  return res.json({ today, upcoming: [], anniversaries_today, range_days: 1 });
 });
 
 module.exports = router;

@@ -87,6 +87,33 @@ CREATE TABLE IF NOT EXISTS manager_notifications (
   UNIQUE(manager_id, employee_id, course_id)
 );
 
+CREATE TABLE IF NOT EXISTS manager_all_training_alerts (
+  id SERIAL PRIMARY KEY,
+  manager_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  dismissed_at TEXT,
+  UNIQUE(manager_id, employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS employee_notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'all_training_complete',
+  title TEXT NOT NULL,
+  message TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  dismissed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS all_training_milestones (
+  employee_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  assignment_count INTEGER NOT NULL,
+  notified_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS leave_requests (
   id SERIAL PRIMARY KEY,
   employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -268,6 +295,9 @@ async function migrateColumns(client) {
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_month INTEGER",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_day INTEGER",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS join_month INTEGER",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS join_day INTEGER",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS join_year INTEGER",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_grants TEXT",
@@ -309,6 +339,30 @@ async function migrateColumns(client) {
     "CREATE INDEX IF NOT EXISTS idx_portal_visit_log_visited_at ON portal_visit_log (visited_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_portal_visit_log_user_id ON portal_visit_log (user_id)",
     "CREATE TABLE IF NOT EXISTS report_access_users (report_id INTEGER NOT NULL REFERENCES embedded_reports(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, UNIQUE(report_id, user_id))",
+    `CREATE TABLE IF NOT EXISTS manager_all_training_alerts (
+      id SERIAL PRIMARY KEY,
+      manager_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      dismissed_at TEXT,
+      UNIQUE(manager_id, employee_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS employee_notifications (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'all_training_complete',
+      title TEXT NOT NULL,
+      message TEXT,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      dismissed_at TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS all_training_milestones (
+      employee_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      assignment_count INTEGER NOT NULL,
+      notified_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
   ];
   for (const q of alters) {
     try {

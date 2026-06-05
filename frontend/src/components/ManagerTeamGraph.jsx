@@ -37,18 +37,32 @@ export default function ManagerTeamGraph({ managerName, team }) {
                     <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{emp.name}</div>
                     <div className="mt-0.5 line-clamp-1 text-[11px] text-slate-500 dark:text-slate-400">{emp.email}</div>
                     {(() => {
+                      const summary = emp.training_summary;
                       const assigns = emp.assignments || [];
-                      const avg =
+                      const avg = summary?.avgProgress ?? (
                         assigns.length === 0
                           ? 0
-                          : Math.round(assigns.reduce((s, a) => s + (a.progress ?? 0), 0) / assigns.length);
+                          : Math.round(assigns.reduce((s, a) => s + (a.progress ?? 0), 0) / assigns.length)
+                      );
+                      const allComplete = summary?.allComplete;
+                      const completed = summary?.completed ?? 0;
+                      const total = summary?.total ?? assigns.length;
                       return (
                         <>
-                          <div className="mt-2 text-[10px] font-medium uppercase text-slate-500">Training</div>
+                          <div className="mt-2 flex items-center justify-center gap-1 text-[10px] font-medium uppercase text-slate-500">
+                            <span>Training</span>
+                            {allComplete ? (
+                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold normal-case text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+                                Complete
+                              </span>
+                            ) : null}
+                          </div>
                           <div className="mt-1 px-1">
                             <ProgressBar value={avg} />
                           </div>
-                          <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">{avg}% avg</div>
+                          <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                            {avg}% · {completed}/{total} items
+                          </div>
                         </>
                       );
                     })()}

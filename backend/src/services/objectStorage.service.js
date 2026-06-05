@@ -436,6 +436,58 @@ async function uploadPollBannerImageFromDisk(localPath, filename) {
 }
 
 /**
+ * Public-read image at an explicit object key (e.g. branding/amir-group-logo.png).
+ * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
+ */
+async function uploadPublicImageFromDisk(localPath, objectKey) {
+  const key = String(objectKey || "").replace(/^\/+/, "");
+  const ext = path.extname(key).toLowerCase();
+  const ContentType = IMAGE_EXT_TO_MIME[ext] || "application/octet-stream";
+  const { size: ContentLength } = fs.statSync(localPath);
+  const stream = fs.createReadStream(localPath);
+  try {
+    if (isSpacesEnabled()) {
+      logSpacesCredentialHintOnce();
+      const bucket = envCred("DO_SPACES_BUCKET") || String(process.env.DO_SPACES_BUCKET || "").trim();
+      await getSpacesClient().send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: stream,
+          ContentLength,
+          ContentType,
+          ACL: "public-read",
+          ContentDisposition: "inline",
+          CacheControl: "public, max-age=31536000",
+        })
+      );
+      const base = String(process.env.DO_SPACES_PUBLIC_URL).replace(/\/+$/, "");
+      return { url: `${base}/${key}`, provider: "spaces" };
+    }
+
+    if (isR2Enabled()) {
+      await getR2Client().send(
+        new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Key: key,
+          Body: stream,
+          ContentLength,
+          ContentType,
+          ContentDisposition: "inline",
+          CacheControl: "public, max-age=31536000",
+        })
+      );
+      const base = String(process.env.R2_PUBLIC_URL).replace(/\/+$/, "");
+      return { url: `${base}/${key}`, provider: "r2" };
+    }
+  } finally {
+    stream.destroy();
+  }
+
+  throw new Error("No object storage (R2 or Spaces) is configured");
+}
+
+/**
  * Org chart headshots (key: org-chart/&lt;filename&gt;) — public read, long cache.
  * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
  */
@@ -715,6 +767,7 @@ module.exports = {
   uploadResourceDocumentFromDisk,
   uploadUpcomingImageFromDisk,
   uploadPollBannerImageFromDisk,
+  uploadPublicImageFromDisk,
   uploadOrgChartImageFromDisk,
   uploadAvatarImageFromDisk,
   uploadTicketAttachmentFromDisk,

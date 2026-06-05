@@ -56,19 +56,7 @@ function readAdminGrantsFromBody(body) {
   return { present: false, value: undefined };
 }
 
-function normalizeBirthMonthDay(month, day) {
-  const m = Number(month);
-  const d = Number(day);
-  if (!Number.isFinite(m) || !Number.isFinite(d)) return null;
-  const mo = Math.floor(m);
-  const da = Math.floor(d);
-  if (mo < 1 || mo > 12) return null;
-  if (da < 1 || da > 31) return null;
-  // Validate using a leap year so Feb 29 is allowed.
-  const dt = new Date(Date.UTC(2024, mo - 1, da));
-  if (dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== da) return null;
-  return { birth_month: mo, birth_day: da };
-}
+const { normalizeBirthMonthDay, normalizeJoinDate } = require("../utils/profileDates");
 
 function adminUsersListSql() {
   const facAgg = isPostgres
@@ -97,9 +85,13 @@ function adminUsersListSql() {
 
 // Logged-in user's profile
 router.get("/me", async (req, res) => {
+  if (canonicalRole(req.user.role) !== ROLES.ADMIN) {
+    await syncUserAssignmentsForFacilities(req.user.id);
+  }
+
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, phone, address, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, join_month, join_day, join_year, phone, address, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
     )
     .get(req.user.id);
 
@@ -167,6 +159,18 @@ router.put("/me", async (req, res) => {
     return res.status(400).json({ message: "Invalid date of birth (month and day only)." });
   }
 
+  const providedJoinMonth = req.body?.join_month;
+  const providedJoinDay = req.body?.join_day;
+  const providedJoinYear = req.body?.join_year;
+  const wantsUpdateJoin =
+    providedJoinMonth !== undefined || providedJoinDay !== undefined || providedJoinYear !== undefined;
+  const normalizedJoin = wantsUpdateJoin
+    ? normalizeJoinDate(providedJoinMonth, providedJoinDay, providedJoinYear)
+    : null;
+  if (wantsUpdateJoin && !normalizedJoin) {
+    return res.status(400).json({ message: "Invalid date of joining (month, day, and year required)." });
+  }
+
   if (nextEmail !== existing.email) {
     const emailExists = await db
       .prepare("SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1")
@@ -227,6 +231,12 @@ router.put("/me", async (req, res) => {
   }
 
   await db.prepare("UPDATE users SET phone = ?, address = ? WHERE id = ?").run(nextPhone, nextAddress, req.user.id);
+
+  if (normalizedJoin) {
+    await db
+      .prepare("UPDATE users SET join_month = ?, join_day = ?, join_year = ? WHERE id = ?")
+      .run(normalizedJoin.join_month, normalizedJoin.join_day, normalizedJoin.join_year, req.user.id);
+  }
 
   return res.json({ message: "Profile updated" });
 });
@@ -785,6 +795,9 @@ async function deleteAdminUserCascade(userId, actingAdminId) {
       );
       await client.query(`DELETE FROM assignments WHERE user_id = $1`, [uid]);
       await client.query(`DELETE FROM manager_notifications WHERE manager_id = $1 OR employee_id = $1`, [uid]);
+      await client.query(`DELETE FROM manager_all_training_alerts WHERE manager_id = $1 OR employee_id = $1`, [uid]);
+      await client.query(`DELETE FROM employee_notifications WHERE user_id = $1`, [uid]);
+      await client.query(`DELETE FROM all_training_milestones WHERE employee_id = $1`, [uid]);
       await client.query(`DELETE FROM leave_requests WHERE employee_id = $1 OR manager_id = $1`, [uid]);
       await client.query(`DELETE FROM resource_progress WHERE user_id = $1`, [uid]);
       await client.query(`DELETE FROM user_facilities WHERE user_id = $1`, [uid]);
@@ -816,6 +829,11 @@ async function deleteAdminUserCascade(userId, actingAdminId) {
     .run(userId);
   await db.prepare(`DELETE FROM assignments WHERE user_id = ?`).run(userId);
   await db.prepare(`DELETE FROM manager_notifications WHERE manager_id = ? OR employee_id = ?`).run(userId, userId);
+  await db
+    .prepare(`DELETE FROM manager_all_training_alerts WHERE manager_id = ? OR employee_id = ?`)
+    .run(userId, userId);
+  await db.prepare(`DELETE FROM employee_notifications WHERE user_id = ?`).run(userId);
+  await db.prepare(`DELETE FROM all_training_milestones WHERE employee_id = ?`).run(userId);
   await db.prepare(`DELETE FROM leave_requests WHERE employee_id = ? OR manager_id = ?`).run(userId, userId);
   await db.prepare(`DELETE FROM resource_progress WHERE user_id = ?`).run(userId);
   await db.prepare(`DELETE FROM user_facilities WHERE user_id = ?`).run(userId);

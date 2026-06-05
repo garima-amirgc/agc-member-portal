@@ -7,6 +7,7 @@ import axios from "axios";
 const LOOPBACK_API = "http://localhost:5000";
 
 const DEV_LIKE_PORTS = new Set([
+  "8503",
   "5173",
   "5174",
   "4173",

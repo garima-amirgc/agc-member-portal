@@ -226,6 +226,19 @@ async function start() {
     console.log(
       `Manager team: GET /api/auth/manager-team-overview and GET /api/users/manager/team-overview (same for /auth/... and /users/... without /api)`
     );
+    try {
+      const inviteSvc = require("./services/invite.service");
+      const appUrl = inviteSvc.publicAppBaseUrl();
+      const explicit = (process.env.APP_BASE_URL || process.env.FRONTEND_URL || "").trim();
+      console.log(`Email / invite links base URL: ${appUrl}`);
+      if ((process.env.RENDER || process.env.NODE_ENV === "production") && !explicit) {
+        console.warn(
+          "[APP_BASE_URL] Set APP_BASE_URL on this API service (e.g. https://memberportal.amirgc.com) so invite and reset links use your custom domain, not *.onrender.com."
+        );
+      }
+    } catch {
+      /* ignore */
+    }
   });
 }
 

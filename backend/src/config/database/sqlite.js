@@ -192,6 +192,37 @@ const SCHEMA = `
     UNIQUE(manager_id, employee_id, course_id)
   );
 
+  CREATE TABLE IF NOT EXISTS manager_all_training_alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    manager_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    dismissed_at TEXT,
+    FOREIGN KEY(manager_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(employee_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(manager_id, employee_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS employee_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'all_training_complete',
+    title TEXT NOT NULL,
+    message TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    dismissed_at TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS all_training_milestones (
+    employee_id INTEGER PRIMARY KEY,
+    assignment_count INTEGER NOT NULL,
+    notified_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(employee_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   -- Leave requests: employee -> assigned manager (users.manager_id).
   CREATE TABLE IF NOT EXISTS leave_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -507,6 +538,21 @@ async function initDb() {
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN birth_day INTEGER");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN join_month INTEGER");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN join_day INTEGER");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN join_year INTEGER");
   } catch {
     /* exists */
   }
