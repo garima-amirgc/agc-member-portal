@@ -58,8 +58,11 @@ async function issuePortalSession(userRow, rememberMe) {
 
 /**
  * Resolve portal user by email (case-insensitive). Returns { user, error } where error is a client-facing message or code.
+ * @param {string} email
+ * @param {{ viaMicrosoft?: boolean }} [options] When viaMicrosoft is true, pending invites do not block sign-in.
  */
-async function resolveUserForLogin(email) {
+async function resolveUserForLogin(email, options = {}) {
+  const viaMicrosoft = options.viaMicrosoft === true;
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized) {
     return { user: null, error: "No email returned from Microsoft.", code: "NO_EMAIL" };
@@ -75,7 +78,7 @@ async function resolveUserForLogin(email) {
     };
   }
 
-  if (user.invite_token_hash) {
+  if (!viaMicrosoft && user.invite_token_hash) {
     if (inviteSvc.hasActiveInvite(user)) {
       return {
         user: null,

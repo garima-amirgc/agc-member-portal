@@ -160,7 +160,7 @@ router.get("/microsoft/callback", async (req, res) => {
 
     const tokens = await msAuth.exchangeCodeForTokens(req, code);
     const profile = await msAuth.fetchGraphProfile(tokens.access_token);
-    const gate = await resolveUserForLogin(profile.email);
+    const gate = await resolveUserForLogin(profile.email, { viaMicrosoft: true });
     if (!gate.user) {
       res.setHeader("Set-Cookie", clearStateCookie);
       const codeKey = gate.code ? `&sso_code=${encodeURIComponent(gate.code)}` : "";
@@ -170,7 +170,9 @@ router.get("/microsoft/callback", async (req, res) => {
     }
 
     await db
-      .prepare("UPDATE users SET password_reset_token_hash = NULL, password_reset_expires_at = NULL WHERE id = ?")
+      .prepare(
+        "UPDATE users SET password_reset_token_hash = NULL, password_reset_expires_at = NULL, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
+      )
       .run(gate.user.id);
 
     const session = await issuePortalSession(gate.user, parsedState.remember);
