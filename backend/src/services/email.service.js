@@ -89,13 +89,32 @@ function emailShell({ title, preheader, bodyHtml }) {
 </html>`;
 }
 
+function cleanEnvValue(raw) {
+  const s = String(raw ?? "").trim();
+  if (
+    (s.startsWith('"') && s.endsWith('"') && s.length >= 2) ||
+    (s.startsWith("'") && s.endsWith("'") && s.length >= 2)
+  ) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
+function smtpConfig() {
+  return {
+    host: cleanEnvValue(process.env.SMTP_HOST),
+    user: cleanEnvValue(process.env.SMTP_USER),
+    pass: cleanEnvValue(process.env.SMTP_PASS),
+    from: cleanEnvValue(process.env.EMAIL_FROM),
+  };
+}
+
+const SMTP_NOT_CONFIGURED_MSG =
+  "SMTP is not configured on the API service. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and EMAIL_FROM (Render → Web Service → Environment).";
+
 function isEmailConfigured() {
-  return !!(
-    process.env.SMTP_HOST &&
-    process.env.SMTP_USER &&
-    process.env.SMTP_PASS &&
-    process.env.EMAIL_FROM
-  );
+  const { host, user, pass, from } = smtpConfig();
+  return !!(host && user && pass && from);
 }
 
 let transporter;
@@ -103,15 +122,16 @@ let transporter;
 function getTransporter() {
   if (!isEmailConfigured()) return null;
   if (!transporter) {
+    const { host, user, pass } = smtpConfig();
     const port = Number(process.env.SMTP_PORT || 587);
     const secure = process.env.SMTP_SECURE === "true";
     transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
+      host,
       port,
       secure,
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user,
+        pass,
       },
       tls: {
         rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== "false",
@@ -139,10 +159,10 @@ async function sendMail({ to, subject, text, html }) {
     console.log(
       "[EMAIL] Not configured: set SMTP_HOST, SMTP_PORT (optional), SMTP_USER, SMTP_PASS, EMAIL_FROM in .env"
     );
-    return { skipped: true };
+    return { skipped: true, reason: SMTP_NOT_CONFIGURED_MSG };
   }
 
-  const rawFrom = String(process.env.EMAIL_FROM || "").trim();
+  const { from: rawFrom } = smtpConfig();
   const from = rawFrom.includes("<") ? rawFrom : EMAIL_FROM_NAME ? `${EMAIL_FROM_NAME} <${rawFrom}>` : rawFrom;
 
   await t.sendMail({
@@ -447,11 +467,33 @@ async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
 
   const out = await sendMail({ to, subject, text, html });
   if (out.skipped) {
-    console.warn(
-      "[EMAIL] Invite email not sent — configure SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM (and set APP_BASE_URL / FRONTEND_URL to your public site URL for correct links)."
-    );
+    console.warn("[EMAIL] Invite email not sent —", out.reason || SMTP_NOT_CONFIGURED_MSG);
+    return { skipped: true, reason: out.reason || SMTP_NOT_CONFIGURED_MSG };
   }
+  console.log("[EMAIL] Invite email sent to:", to);
   return out;
+}
+
+/**
+ * Invite email with explicit success/error for admin create / resend flows.
+ * @returns {Promise<{ email_sent: boolean, email_error?: string }>}
+ */
+async function deliverAccountInviteEmail({ to, name, setupUrl, validDays }) {
+  if (!to) {
+    return { email_sent: false, email_error: "Missing recipient email address." };
+  }
+  if (!isEmailConfigured()) {
+    return { email_sent: false, email_error: SMTP_NOT_CONFIGURED_MSG };
+  }
+  try {
+    const mail = await sendAccountInviteEmail({ to, name, setupUrl, validDays });
+    if (mail.sent) return { email_sent: true };
+    return { email_sent: false, email_error: mail.reason || SMTP_NOT_CONFIGURED_MSG };
+  } catch (err) {
+    const msg = String(err?.message || err).slice(0, 300);
+    console.error("[EMAIL] Invite delivery failed for", to, msg);
+    return { email_sent: false, email_error: msg };
+  }
 }
 
 /**
@@ -601,6 +643,7 @@ module.exports = {
   sendITTicketCreatedEmail,
   sendITTicketResolvedEmail,
   sendAccountInviteEmail,
+  deliverAccountInviteEmail,
   sendPasswordResetEmail,
   sendHelpReportEmail,
 };

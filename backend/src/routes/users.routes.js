@@ -333,10 +333,11 @@ router.post("/:id/resend-invite", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), asy
     return res.status(403).json({ message: "Only a full administrator can manage administrator accounts." });
   }
   try {
-    const { setup_url, email_sent } = await issueInviteAndEmail(db, userId);
+    const { setup_url, email_sent, email_error } = await issueInviteAndEmail(db, userId);
     return res.json({
       setup_url,
       email_sent,
+      email_error: email_error || undefined,
       invite_status: "active",
     });
   } catch (e) {
@@ -510,26 +511,18 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
 
     if (useInvite) {
       const setupUrl = `${inviteSvc.publicAppBaseUrl()}/invite?token=${encodeURIComponent(rawInviteToken)}`;
-      let emailSent = false;
-      let emailError = null;
-      try {
-        const mail = await emailSvc.sendAccountInviteEmail({
-          to: String(email).trim(),
-          name: String(name).trim(),
-          setupUrl,
-          validDays: inviteSvc.INVITE_DAYS,
-        });
-        emailSent = mail.sent === true;
-      } catch (mailErr) {
-        console.error("[users] invite email failed (user was created):", mailErr);
-        emailError = String(mailErr?.message || mailErr).slice(0, 300);
-      }
+      const mail = await emailSvc.deliverAccountInviteEmail({
+        to: String(email).trim(),
+        name: String(name).trim(),
+        setupUrl,
+        validDays: inviteSvc.INVITE_DAYS,
+      });
       return res.status(201).json({
         id: userId,
         invite: true,
         setup_url: setupUrl,
-        email_sent: emailSent,
-        email_error: emailError || undefined,
+        email_sent: mail.email_sent === true,
+        email_error: mail.email_error || undefined,
         invite_status: "active",
       });
     }

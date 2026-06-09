@@ -3,7 +3,8 @@ require("dotenv").config({ path: path.join(__dirname, "..", ".env"), override: t
 const express = require("express");
 const cors = require("cors");
 const { ROLES } = require("./config/constants");
-const { EMAIL_TEMPLATE_VERSION } = require("./services/email.service");
+const { EMAIL_TEMPLATE_VERSION, isEmailConfigured } = require("./services/email.service");
+const inviteSvc = require("./services/invite.service");
 
 const app = express();
 /** Static site (e.g. *-web.onrender.com) and API on another host — allow browser + Authorization preflight */
@@ -37,6 +38,8 @@ app.get("/health", (_, res) =>
     ok: true,
     git_commit: process.env.RENDER_GIT_COMMIT || null,
     email_template_version: EMAIL_TEMPLATE_VERSION,
+    email_configured: isEmailConfigured(),
+    invite_links_base_url: inviteSvc.publicAppBaseUrl(),
   })
 );
 

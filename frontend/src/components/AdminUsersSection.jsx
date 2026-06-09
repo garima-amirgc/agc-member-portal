@@ -135,6 +135,7 @@ export default function AdminUsersSection({ className = "card" }) {
       }
       const { data } = await api.post("/users", payload);
       formGrantsSnapshotRef.current = [];
+      const createdEmail = payload.email.trim();
       setForm({ ...EMPTY_USER });
       if (data?.invite && data?.setup_url) {
         setInviteBanner({
@@ -142,6 +143,20 @@ export default function AdminUsersSection({ className = "card" }) {
           email_sent: Boolean(data.email_sent),
           email_error: data.email_error || null,
         });
+        if (data.email_sent) {
+          window.alert(`User created. Invitation email sent to ${createdEmail}.`);
+        } else {
+          window.alert(
+            `User created, but the invitation email was NOT sent.\n\n${
+              data.email_error ||
+              "Configure SMTP on the API service (Render → Web Service → Environment), then use Resend invite."
+            }\n\nCopy the setup link from the banner below.`
+          );
+        }
+      } else if (!payload.password) {
+        window.alert("User created. Leave the password blank to email an invite link automatically.");
+      } else {
+        window.alert("User created with the password you set (no invite email is sent when a password is provided).");
       }
       await load();
     } catch (err) {
@@ -168,7 +183,10 @@ export default function AdminUsersSection({ className = "card" }) {
       const data = await postUsersResendInvite(u.id);
       const lines = [
         data?.setup_url || "(no link)",
-        data?.email_sent ? "Invitation email was sent." : "Email is not configured — copy the link above or set SMTP in the server .env.",
+        data?.email_sent
+          ? "Invitation email was sent."
+          : data?.email_error ||
+            "Email was not sent — configure SMTP on the API service (Render → Web Service → Environment).",
       ];
       window.alert(lines.join("\n\n"));
       await load();
