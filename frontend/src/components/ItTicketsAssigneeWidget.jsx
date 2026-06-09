@@ -4,7 +4,7 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import { ticketRequesterPhotoUrl } from "../utils/ticketUserAvatar";
-import { issueTypeBadgeClass } from "../utils/itTicketStyles";
+import { issueTypeBadgeClass, priorityBadgeClass, priorityBadgeLabel } from "../utils/itTicketStyles";
 
 function formatAt(iso) {
   if (!iso) return "—";
@@ -50,30 +50,37 @@ export default function ItTicketsAssigneeWidget() {
   const seenActiveTicketIdsRef = useRef(new Set());
   const didInitRef = useRef(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    api
-      .get("/tickets/assigned-to-me")
-      .then((r) => setTickets(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setTickets([]))
-      .finally(() => setLoading(false));
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    try {
+      const r = await api.get("/tickets/assigned-to-me");
+      setTickets(Array.isArray(r.data) ? r.data : []);
+    } catch {
+      setTickets([]);
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   useEffect(() => {
-    const onRefresh = () => load();
+    const onRefresh = () => {
+      void load({ silent: true });
+    };
     window.addEventListener("agc-it-tickets-changed", onRefresh);
     return () => window.removeEventListener("agc-it-tickets-changed", onRefresh);
   }, [load]);
 
-  // Poll in case another user submits while this tab is open.
+  // Poll in case another user submits while this tab is open (silent — no layout jump).
   useEffect(() => {
-    const id = window.setInterval(() => {
-      void load();
-    }, 20000);
+    const tick = () => {
+      if (document.hidden) return;
+      void load({ silent: true });
+    };
+    const id = window.setInterval(tick, 60000);
     return () => window.clearInterval(id);
   }, [load]);
 
@@ -96,7 +103,6 @@ export default function ItTicketsAssigneeWidget() {
     setCompletingId(id);
     try {
       await api.patch(`/tickets/${id}`, { status: "closed" });
-      await load();
       window.dispatchEvent(new Event("agc-it-tickets-changed"));
     } catch (e) {
       window.alert(friendlyErrorMessage(e, "Could not update ticket."));
@@ -185,6 +191,11 @@ export default function ItTicketsAssigneeWidget() {
                   >
                     {t.status === "in_progress" ? "In progress" : "Open"}
                   </span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${priorityBadgeClass(t.priority)}`}
+                  >
+                    {priorityBadgeLabel(t.priority)}
+                  </span>
                   </div>
                 </div>
                 </div>
@@ -268,6 +279,11 @@ export default function ItTicketsAssigneeWidget() {
                   ].join(" ")}
                 >
                   {submissionModalTicket.status === "in_progress" ? "In progress" : "Open"}
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide ${priorityBadgeClass(submissionModalTicket.priority)}`}
+                >
+                  {priorityBadgeLabel(submissionModalTicket.priority)}
                 </span>
               </div>
 

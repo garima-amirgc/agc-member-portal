@@ -3,10 +3,26 @@ import api, { postItTicketAttachment } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import { userHasDepartment } from "../utils/userDepts";
+import { isAdministrator } from "../utils/adminAccess";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import ItTicketsMonitorTable from "../components/ItTicketsMonitorTable";
+import TicketEditModal from "../components/TicketEditModal";
 import { ticketRequesterPhotoUrl } from "../utils/ticketUserAvatar";
-import { FORM_FIELD, FORM_LABEL, ISSUE_TYPE_PILL_STYLES, issueTypeBadgeClass } from "../utils/itTicketStyles";
+import {
+  FORM_FIELD,
+  FORM_LABEL,
+  ISSUE_TYPE_PILL_STYLES,
+  TICKET_PRIORITY_OPTIONS,
+  issueTypeBadgeClass,
+  priorityBadgeClass,
+  priorityBadgeLabel,
+} from "../utils/itTicketStyles";
+import {
+  TICKET_ISSUE_TYPES,
+  buildTicketPayload,
+  issueTypeLabelFromTitle,
+  parseTicketAttachmentsRaw,
+} from "../utils/ticketForm";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -20,13 +36,7 @@ function statusBadgeLabel(status) {
   return "Open";
 }
 
-const ISSUE_TYPES = [
-  { value: "hardware", label: "Hardware" },
-  { value: "software", label: "Software" },
-  { value: "report_access", label: "Report Access" },
-  { value: "report", label: "Report" },
-  { value: "other", label: "Other" },
-];
+const ISSUE_TYPES = TICKET_ISSUE_TYPES;
 
 function formatSubmittedAt(iso) {
   if (!iso) return "—";
@@ -46,36 +56,27 @@ function initialsFromName(name) {
   return String(a + b).toUpperCase() || "U";
 }
 
-function issueTypeFromTitle(title) {
-  const raw = String(title || "");
-  const m = raw.match(/^\s*\[([^\]]+)\]\s*/);
-  return (m?.[1] || "").trim();
-}
+const issueTypeFromTitle = issueTypeLabelFromTitle;
 
 const MAX_TICKET_ATTACHMENTS = 5;
 const TICKET_ACCEPT =
   ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif,.webp";
 
 function parseTicketAttachments(ticket) {
-  const raw = ticket?.attachments;
-  if (raw == null || raw === "") return [];
-  try {
-    const v = typeof raw === "string" ? JSON.parse(raw) : raw;
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
+  return parseTicketAttachmentsRaw(ticket?.attachments);
 }
 
 export default function ItTicketsPage() {
   const { user } = useAuth();
   const isIT = userHasDepartment(user, "IT");
+  const isAdmin = isAdministrator(user);
 
   const [tickets, setTickets] = useState([]);
   const [assignees, setAssignees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [issueType, setIssueType] = useState("hardware");
+  const [priority, setPriority] = useState("medium");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [otherIssue, setOtherIssue] = useState("");
@@ -89,33 +90,43 @@ export default function ItTicketsPage() {
   const [attachments, setAttachments] = useState([]);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [editingTicket, setEditingTicket] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    api
-      .get("/tickets")
-      .then((r) => setTickets(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setTickets([]))
-      .finally(() => setLoading(false));
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    try {
+      const r = await api.get("/tickets");
+      setTickets(Array.isArray(r.data) ? r.data : []);
+    } catch {
+      setTickets([]);
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   useEffect(() => {
-    const onRefresh = () => load();
+    const onRefresh = () => {
+      void load({ silent: true });
+    };
     window.addEventListener("agc-it-tickets-changed", onRefresh);
     return () => window.removeEventListener("agc-it-tickets-changed", onRefresh);
   }, [load]);
 
-  // Poll so the requestor can see a confirmation when IT marks a ticket completed.
+  // Background poll: requestors need completion updates; IT/admin board refreshes less often.
   useEffect(() => {
-    const id = window.setInterval(() => {
-      void load();
-    }, 30000);
+    const intervalMs = isIT || isAdmin ? 60000 : 30000;
+    const tick = () => {
+      if (document.hidden) return;
+      void load({ silent: true });
+    };
+    const id = window.setInterval(tick, intervalMs);
     return () => window.clearInterval(id);
-  }, [load]);
+  }, [load, isIT, isAdmin]);
 
   useEffect(() => {
     api
@@ -133,37 +144,24 @@ export default function ItTicketsPage() {
       return;
     }
 
-    const typeLabel = ISSUE_TYPES.find((x) => x.value === issueType)?.label || "Issue";
-
-    let payloadTitle;
-    let payloadDescription;
-
-    if (issueType === "other") {
-      if (!otherIssue.trim()) {
-        setError("Please describe your issue.");
-        return;
-      }
-      const detail = otherIssue.trim();
-      payloadTitle = `[Other] ${detail.length > 90 ? `${detail.slice(0, 87)}…` : detail}`;
-      payloadDescription = detail.length > 90 ? detail : undefined;
-    } else {
-      if (!title.trim()) {
-        setError("Please enter a short title.");
-        return;
-      }
-      payloadTitle = `[${typeLabel}] ${title.trim()}`;
-      payloadDescription = description.trim() || undefined;
+    const built = buildTicketPayload({
+      issueType,
+      title,
+      description,
+      otherIssue,
+      priority,
+      assigneeId,
+      attachments,
+    });
+    if (built.error) {
+      setError(built.error);
+      return;
     }
 
     setSubmitting(true);
     setSubmittedTicketId(null);
     try {
-      const res = await api.post("/tickets", {
-        title: payloadTitle,
-        description: payloadDescription,
-        assignee_id: Number(assigneeId),
-        attachments: attachments.length > 0 ? attachments : undefined,
-      });
+      const res = await api.post("/tickets", built.payload);
       const newTicket = res.data;
       const newId = newTicket?.id;
       if (newId != null) setSubmittedTicketId(Number(newId));
@@ -173,8 +171,8 @@ export default function ItTicketsPage() {
       setOtherIssue("");
       setAssigneeId("");
       setIssueType("hardware");
+      setPriority("medium");
       setAttachments([]);
-      await load();
       window.dispatchEvent(new Event("agc-it-tickets-changed"));
     } catch (err) {
       setError(friendlyErrorMessage(err, "Could not submit ticket."));
@@ -243,13 +241,41 @@ export default function ItTicketsPage() {
     : "";
 
   const setStatus = async (id, status) => {
+    const previous = tickets;
+    setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)));
     try {
-      await api.patch(`/tickets/${id}`, { status });
-      await load();
+      const res = await api.patch(`/tickets/${id}`, { status });
+      setTickets((prev) => prev.map((t) => (t.id === id ? res.data : t)));
       window.dispatchEvent(new Event("agc-it-tickets-changed"));
     } catch (err) {
+      setTickets(previous);
       window.alert(err.response?.data?.message || err.message || "Update failed");
     }
+  };
+
+  const deleteTicket = async (id) => {
+    const ticket = tickets.find((t) => t.id === id);
+    const label = ticket?.title ? `"${ticket.title}"` : `ticket #${id}`;
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+
+    const previous = tickets;
+    setDeletingId(id);
+    setTickets((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await api.delete(`/tickets/${id}`);
+      window.dispatchEvent(new Event("agc-it-tickets-changed"));
+    } catch (err) {
+      setTickets(previous);
+      window.alert(friendlyErrorMessage(err, "Could not delete ticket."));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const saveEditedTicket = (updated) => {
+    if (!updated?.id) return;
+    setTickets((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
+    window.dispatchEvent(new Event("agc-it-tickets-changed"));
   };
 
   return (
@@ -258,8 +284,19 @@ export default function ItTicketsPage() {
         tickets={tickets}
         loading={loading}
         isIT={isIT}
+        isAdmin={isAdmin}
         onStatusChange={setStatus}
+        onDelete={deleteTicket}
+        onEdit={setEditingTicket}
+        deletingId={deletingId}
         currentUser={user}
+      />
+
+      <TicketEditModal
+        ticket={editingTicket}
+        assignees={assignees}
+        onClose={() => setEditingTicket(null)}
+        onSaved={saveEditedTicket}
       />
 
       <section className="card no-title-underline overflow-hidden p-0 shadow-lg ring-1 ring-[rgba(11,62,175,0.08)] dark:ring-[rgba(167,211,68,0.12)]">
@@ -301,6 +338,24 @@ export default function ItTicketsPage() {
                   );
                 })}
               </div>
+            </div>
+
+            <div>
+              <label className={FORM_LABEL} htmlFor="ticket-priority">
+                Priority
+              </label>
+              <select
+                id="ticket-priority"
+                className={FORM_FIELD}
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+              >
+                {TICKET_PRIORITY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {issueType === "other" ? (
@@ -498,6 +553,12 @@ export default function ItTicketsPage() {
                       {issueTypeFromTitle(submissionModalTicket.title)}
                     </span>
                   ) : null}
+
+                  <span
+                    className={`rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide ${priorityBadgeClass(submissionModalTicket.priority)}`}
+                  >
+                    {priorityBadgeLabel(submissionModalTicket.priority)}
+                  </span>
                 </div>
 
                 <div className="space-y-4">

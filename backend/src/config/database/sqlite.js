@@ -663,6 +663,18 @@ async function initDb() {
   }
 
   try {
+    rawDb.exec("ALTER TABLE it_tickets ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'");
+  } catch {
+    /* column exists */
+  }
+
+  try {
+    rawDb.exec("UPDATE it_tickets SET priority = 'medium' WHERE priority IS NULL OR TRIM(priority) = ''");
+  } catch {
+    /* ignore */
+  }
+
+  try {
     rawDb.exec(
       "UPDATE it_tickets SET closed_at = updated_at WHERE status = 'closed' AND (closed_at IS NULL OR TRIM(COALESCE(closed_at, '')) = '')"
     );

@@ -23,5 +23,16 @@ const ASSIGNMENT_STATUS = ["pending", "in_progress", "completed"];
 const DEPARTMENTS = ["IT", "Finance", "Sales", "Purchase", "Safety", "Production"];
 
 const TICKET_STATUS = ["open", "in_progress", "closed"];
+const TICKET_PRIORITIES = ["low", "medium", "high", "urgent"];
+const TICKET_PRIORITY_DEFAULT = "medium";
 
-module.exports = { ROLES, BUSINESS_UNITS, ASSIGNMENT_STATUS, DEPARTMENTS, TICKET_STATUS, canonicalRole };
+module.exports = {
+  ROLES,
+  BUSINESS_UNITS,
+  ASSIGNMENT_STATUS,
+  DEPARTMENTS,
+  TICKET_STATUS,
+  TICKET_PRIORITIES,
+  TICKET_PRIORITY_DEFAULT,
+  canonicalRole,
+};

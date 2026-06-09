@@ -3,6 +3,10 @@ function roleIsAdministrator(raw) {
   return sl === "admin" || sl === "administrator" || sl === "superadmin" || sl === "super admin";
 }
 
+export function isAdministrator(user) {
+  return roleIsAdministrator(user?.role);
+}
+
 /**
  * Full administrator: Admin role and no scoped list stored (`admin_grants` null/undefined).
  * Empty array counts as “no scoped list” (matches API + avoids stale localStorage breaking saves).

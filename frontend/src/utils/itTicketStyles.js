@@ -127,3 +127,29 @@ export const FORM_FIELD =
   "w-full rounded-xl border-2 border-slate-200/90 bg-white px-4 py-3 text-sm shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#0B3EAF] focus:ring-4 focus:ring-[#0B3EAF]/12 dark:border-white/12 dark:bg-[#141414] dark:focus:border-[#A7D344] dark:focus:ring-[#A7D344]/15";
 
 export const FORM_LABEL = "mb-2 block text-xs font-bold uppercase tracking-wide text-[#0B3EAF] dark:text-[#A7D344]";
+
+export const TICKET_PRIORITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "urgent", label: "Urgent" },
+];
+
+export function priorityBadgeLabel(priority) {
+  const key = String(priority || "medium").toLowerCase();
+  return TICKET_PRIORITY_OPTIONS.find((o) => o.value === key)?.label || "Medium";
+}
+
+export function priorityBadgeClass(priority) {
+  const key = String(priority || "medium").toLowerCase();
+  if (key === "urgent") {
+    return "bg-red-100 text-red-900 ring-1 ring-red-200 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-800";
+  }
+  if (key === "high") {
+    return "bg-orange-100 text-orange-900 ring-1 ring-orange-200 dark:bg-orange-950/50 dark:text-orange-200 dark:ring-orange-800";
+  }
+  if (key === "low") {
+    return "bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-white/10 dark:text-slate-300 dark:ring-white/15";
+  }
+  return "bg-blue-100 text-blue-900 ring-1 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:ring-blue-800";
+}

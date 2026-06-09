@@ -1,18 +1,27 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ticketRequesterPhotoUrl } from "../utils/ticketUserAvatar";
 import {
   IT_FILTER_TABS,
   IT_TYPE_FILTER_TABS,
   issueTypeBadgeClass,
   issueTypeFromTicketTitle,
+  priorityBadgeClass,
+  priorityBadgeLabel,
   ticketMatchesIssueTypeFilter,
 } from "../utils/itTicketStyles";
+import { canUserEditTicket } from "../utils/ticketForm";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
   { value: "in_progress", label: "In progress" },
   { value: "closed", label: "Completed" },
 ];
+
+const TH =
+  "px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400";
+const TD = "px-4 py-3.5 align-middle";
+const BADGE =
+  "inline-flex min-w-[5.5rem] items-center justify-center rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide";
 
 function statusBadgeLabel(status) {
   if (status === "closed") return "Completed";
@@ -59,6 +68,31 @@ function formatSubmittedAt(iso) {
   }
 }
 
+function formatSubmittedDate(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function formatSubmittedTime(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
 function parseTicketAttachments(ticket) {
   const raw = ticket?.attachments;
   if (raw == null || raw === "") return [];
@@ -70,14 +104,17 @@ function parseTicketAttachments(ticket) {
   }
 }
 
-function RequesterCell({ ticket, currentUser }) {
+function RequesterCell({ ticket, currentUser, compact = false }) {
   const img = ticketRequesterPhotoUrl(ticket, currentUser);
   const name = ticket?.user_name || "—";
   const [imgFailed, setImgFailed] = useState(false);
   const showImg = img && !imgFailed;
+  const size = compact ? "h-9 w-9" : "h-10 w-10";
   return (
-    <div className="flex min-w-[160px] items-center gap-3">
-      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-[#0B3EAF] to-[#1a5fd4] p-[2px] shadow-sm">
+    <div className="flex min-w-0 items-center gap-2.5">
+      <div
+        className={`${size} shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-[#0B3EAF] to-[#1a5fd4] p-[2px]`}
+      >
         <div className="h-full w-full overflow-hidden rounded-full bg-white dark:bg-[#141414]">
           {showImg ? (
             <img
@@ -87,18 +124,16 @@ function RequesterCell({ ticket, currentUser }) {
               onError={() => setImgFailed(true)}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-[rgba(11,62,175,0.08)] text-xs font-bold text-[#0B3EAF] dark:bg-[rgba(167,211,68,0.12)] dark:text-[#A7D344]">
+            <div className="flex h-full w-full items-center justify-center bg-[rgba(11,62,175,0.08)] text-[10px] font-bold text-[#0B3EAF] dark:bg-[rgba(167,211,68,0.12)] dark:text-[#A7D344]">
               {initialsFromName(name)}
             </div>
           )}
         </div>
       </div>
       <div className="min-w-0">
-        <div className="truncate text-sm font-bold text-slate-900 dark:text-white">{name}</div>
+        <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{name}</div>
         {ticket?.user_department ? (
-          <div className="truncate text-xs font-medium text-[#0B3EAF]/80 dark:text-[#A7D344]/90">
-            {ticket.user_department}
-          </div>
+          <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{ticket.user_department}</div>
         ) : null}
       </div>
     </div>
@@ -108,10 +143,19 @@ function RequesterCell({ ticket, currentUser }) {
 function StatPill({ label, value, accent }) {
   return (
     <div
-      className={`flex min-h-[4.25rem] flex-col items-center justify-center rounded-xl px-3 py-2.5 text-center shadow-sm ring-1 ring-white/25 sm:min-w-[5.25rem] sm:px-4 ${accent}`}
+      className={`flex min-h-[3.75rem] min-w-[4.75rem] flex-col items-center justify-center rounded-lg px-3 py-2 text-center ${accent}`}
     >
-      <div className="text-xl font-bold leading-none tabular-nums sm:text-2xl">{value}</div>
-      <div className="mt-1 text-[9px] font-bold uppercase tracking-wider opacity-90 sm:text-[10px]">{label}</div>
+      <div className="text-xl font-bold leading-none tabular-nums">{value}</div>
+      <div className="mt-1 text-[9px] font-semibold uppercase tracking-wider opacity-90">{label}</div>
+    </div>
+  );
+}
+
+function FilterGroup({ label, children }) {
+  return (
+    <div>
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-white/70">{label}</p>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
   );
 }
@@ -119,10 +163,35 @@ function StatPill({ label, value, accent }) {
 /**
  * Table board for monitoring IT tickets (issues, status, assignee, dates).
  */
-export default function ItTicketsMonitorTable({ tickets, loading, isIT, onStatusChange, currentUser }) {
+export default function ItTicketsMonitorTable({
+  tickets,
+  loading,
+  isIT,
+  isAdmin = false,
+  onStatusChange,
+  onDelete,
+  onEdit,
+  deletingId = null,
+  currentUser,
+}) {
   const [filter, setFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
+
+  const showActionsColumn = useMemo(() => {
+    if (isIT || isAdmin) return true;
+    return (Array.isArray(tickets) ? tickets : []).some((t) =>
+      canUserEditTicket(t, currentUser?.id)
+    );
+  }, [tickets, isIT, isAdmin, currentUser?.id]);
+
+  const colCount = showActionsColumn ? 10 : 9;
+
+  useEffect(() => {
+    if (expandedId != null && !tickets.some((t) => t.id === expandedId)) {
+      setExpandedId(null);
+    }
+  }, [tickets, expandedId]);
 
   const filtered = useMemo(() => {
     let list = Array.isArray(tickets) ? [...tickets] : [];
@@ -152,33 +221,31 @@ export default function ItTicketsMonitorTable({ tickets, loading, isIT, onStatus
   }, [tickets]);
 
   return (
-    <section className="card no-title-underline overflow-hidden p-0 shadow-lg ring-1 ring-[rgba(11,62,175,0.08)] dark:ring-[rgba(167,211,68,0.12)]">
-      <div className="it-ticket-board-header relative overflow-hidden border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4]">
-        <div
-          className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-[#A7D344]/25 blur-2xl"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -bottom-12 left-1/4 h-32 w-32 rounded-full bg-white/10 blur-2xl"
-          aria-hidden
-        />
+    <section className="card no-title-underline overflow-hidden p-0 shadow-lg ring-1 ring-slate-200/80 dark:ring-white/10">
+      <div className="relative border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] text-white">
+        <div className="relative flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
+                {isIT || isAdmin ? "IT ticket board" : "Your tickets"}
+              </h2>
+              <p className="mt-1 text-sm text-white/75">
+                {isIT || isAdmin
+                  ? "Triage, assign, and resolve support requests."
+                  : "Track the status of your submitted requests."}
+              </p>
+            </div>
 
-        <div className="relative flex flex-col gap-6 px-6 py-6 sm:px-8 sm:py-7">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between md:gap-8">
-            <h2 className="shrink-0 text-2xl font-bold tracking-tight sm:text-[1.65rem]">
-              {isIT ? "IT ticket board" : "Your tickets"}
-            </h2>
-
-            <div className="grid w-full grid-cols-4 gap-2 sm:gap-3 md:w-auto md:shrink-0">
-              <StatPill label="Total" value={counts.all} accent="bg-white/20 text-white" />
+            <div className="flex flex-wrap gap-2">
+              <StatPill label="Total" value={counts.all} accent="bg-white/15 ring-1 ring-white/20" />
               <StatPill label="Open" value={counts.open} accent="bg-[#A7D344] text-[#0a0a0a]" />
               <StatPill label="In progress" value={counts.in_progress} accent="bg-amber-300 text-amber-950" />
               <StatPill label="Done" value={counts.closed} accent="bg-emerald-300 text-emerald-950" />
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 border-t border-white/20 pt-5">
-            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter tickets by status">
+          <div className="grid gap-4 border-t border-white/15 pt-4 sm:grid-cols-2">
+            <FilterGroup label="Status">
               {IT_FILTER_TABS.map((tab) => {
                 const count = counts[tab.key] ?? 0;
                 const isActive = filter === tab.key;
@@ -190,7 +257,7 @@ export default function ItTicketsMonitorTable({ tickets, loading, isIT, onStatus
                     aria-selected={isActive}
                     onClick={() => setFilter(tab.key)}
                     className={[
-                      "min-h-[2.25rem] rounded-full px-4 py-2 text-xs font-bold transition sm:text-sm",
+                      "rounded-md px-3 py-1.5 text-xs font-semibold transition",
                       isActive ? tab.active : tab.idle,
                     ].join(" ")}
                   >
@@ -198,9 +265,9 @@ export default function ItTicketsMonitorTable({ tickets, loading, isIT, onStatus
                   </button>
                 );
               })}
-            </div>
+            </FilterGroup>
 
-            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter tickets by issue type">
+            <FilterGroup label="Category">
               {IT_TYPE_FILTER_TABS.map((tab) => {
                 const count = typeCounts[tab.key] ?? 0;
                 const isActive = typeFilter === tab.key;
@@ -212,7 +279,7 @@ export default function ItTicketsMonitorTable({ tickets, loading, isIT, onStatus
                     aria-selected={isActive}
                     onClick={() => setTypeFilter(tab.key)}
                     className={[
-                      "min-h-[2.25rem] rounded-full px-4 py-2 text-xs font-bold transition sm:text-sm",
+                      "rounded-md px-3 py-1.5 text-xs font-semibold transition",
                       isActive ? tab.active : tab.idle,
                     ].join(" ")}
                   >
@@ -220,161 +287,276 @@ export default function ItTicketsMonitorTable({ tickets, loading, isIT, onStatus
                   </button>
                 );
               })}
-            </div>
+            </FilterGroup>
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-3 px-6 py-14">
+        <div className="flex items-center justify-center gap-3 px-6 py-16">
           <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
           <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
           <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
           <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading tickets…</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="mx-5 my-10 rounded-2xl border-2 border-dashed border-[rgba(11,62,175,0.2)] bg-[rgba(11,62,175,0.04)] px-6 py-12 text-center dark:border-[rgba(167,211,68,0.25)] dark:bg-[rgba(167,211,68,0.06)]">
-          <p className="text-base font-semibold text-[#0B3EAF] dark:text-[#A7D344]">
+        <div className="mx-5 my-12 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center dark:border-white/10 dark:bg-white/[0.03]">
+          <p className="text-base font-semibold text-slate-800 dark:text-white">
             {filter === "all" && typeFilter === "all" ? "No tickets yet" : "Nothing in this filter"}
           </p>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             {filter === "all" && typeFilter === "all"
               ? "Submit a request using the form below."
-              : "Try another status or issue type filter above."}
+              : "Try another status or category filter above."}
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto px-2 pb-2 pt-1 sm:px-3">
-          <table className="w-full min-w-[920px] border-collapse text-left text-sm">
-            <thead>
-              <tr className="bg-gradient-to-r from-slate-50 to-[rgba(11,62,175,0.06)] text-[11px] font-bold uppercase tracking-wide text-[#0B3EAF] dark:from-[#1a1a1a] dark:to-[rgba(11,62,175,0.15)] dark:text-[#A7D344]">
-                <th className="rounded-tl-xl px-5 py-4">#</th>
-                <th className="px-5 py-4">Submitted by</th>
-                <th className="px-5 py-4">Issue</th>
-                <th className="px-5 py-4">Description</th>
-                <th className="px-5 py-4">Status</th>
-                <th className="px-5 py-4">Type</th>
-                <th className="px-5 py-4">Submitted</th>
-                <th className="px-5 py-4">Assigned to</th>
-                {isIT ? <th className="rounded-tr-xl px-5 py-4 text-right">Actions</th> : null}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1080px] table-fixed border-collapse text-sm">
+            <colgroup>
+              <col className="w-[3.25rem]" />
+              <col className="w-[6.5rem]" />
+              <col className="w-[6.5rem]" />
+              <col className="w-[7rem]" />
+              <col className="w-[14rem]" />
+              <col />
+              <col className="w-[10.5rem]" />
+              <col className="w-[8.5rem]" />
+              <col className="w-[7.5rem]" />
+              {showActionsColumn ? <col className="w-[11.5rem]" /> : null}
+            </colgroup>
+            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm dark:border-white/10 dark:bg-[#1a1a1a]/95">
+              <tr>
+                <th className={`${TH} text-center`}>ID</th>
+                <th className={TH}>Status</th>
+                <th className={TH}>Priority</th>
+                <th className={TH}>Category</th>
+                <th className={TH}>Issue</th>
+                <th className={TH}>Description</th>
+                <th className={TH}>Requester</th>
+                <th className={TH}>Assignee</th>
+                <th className={TH}>Submitted</th>
+                {showActionsColumn ? <th className={`${TH} text-right`}>Actions</th> : null}
               </tr>
             </thead>
-            <tbody>
-              {filtered.map((t, rowIdx) => {
+            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+              {filtered.map((t) => {
                 const typeLabel = issueTypeFromTicketTitle(t.title);
                 const issueName = titleWithoutTypePrefix(t.title);
                 const attCount = parseTicketAttachments(t).length;
                 const expanded = expandedId === t.id;
-                const zebra = rowIdx % 2 === 0 ? "bg-white dark:bg-[#141414]" : "bg-slate-50/80 dark:bg-[#181818]";
+                const canEdit = canUserEditTicket(t, currentUser?.id);
+                const hasRowActions = isIT || isAdmin || canEdit;
                 return (
                   <Fragment key={t.id}>
-                    <tr
-                      className={`border-b border-slate-100 transition hover:bg-[rgba(11,62,175,0.05)] dark:border-white/5 dark:hover:bg-[rgba(167,211,68,0.06)] ${zebra}`}
-                    >
-                      <td className="px-5 py-4 align-top">
+                    <tr className="transition-colors hover:bg-slate-50/80 dark:hover:bg-white/[0.03]">
+                      <td className={`${TD} text-center`}>
                         <button
                           type="button"
-                          className="inline-flex min-h-[2rem] min-w-[2rem] items-center justify-center rounded-lg bg-[rgba(11,62,175,0.1)] px-2 font-bold text-[#0B3EAF] transition hover:bg-[#0B3EAF] hover:text-white dark:bg-[rgba(167,211,68,0.15)] dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]"
+                          className={[
+                            "inline-flex h-8 min-w-[2rem] items-center justify-center gap-0.5 rounded-md text-xs font-bold tabular-nums transition",
+                            expanded
+                              ? "bg-[#0B3EAF] text-white dark:bg-[#A7D344] dark:text-[#0a0a0a]"
+                              : "bg-slate-100 text-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:bg-white/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]",
+                          ].join(" ")}
                           onClick={() => setExpandedId(expanded ? null : t.id)}
-                          title="Show details"
+                          title={expanded ? "Hide details" : "View details"}
+                          aria-expanded={expanded}
+                          aria-label={expanded ? `Hide details for ticket ${t.id}` : `View details for ticket ${t.id}`}
                         >
-                          {t.id}
+                          <span>{t.id}</span>
+                          <span
+                            className={["text-[9px] leading-none", expanded ? "rotate-180" : ""].join(" ")}
+                            aria-hidden
+                          >
+                            ▾
+                          </span>
                         </button>
                       </td>
-                      <td className="px-5 py-4 align-top">
-                        <RequesterCell ticket={t} currentUser={currentUser} />
-                      </td>
-                      <td className="max-w-[220px] px-5 py-4 align-top">
-                        <div className="font-bold text-slate-900 dark:text-white">{issueName}</div>
-                        {attCount > 0 ? (
-                          <div className="mt-1.5 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-800 dark:bg-violet-950/50 dark:text-violet-200">
-                            {attCount} file{attCount === 1 ? "" : "s"}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="max-w-[240px] px-5 py-4 align-top text-slate-700 dark:text-slate-300">
-                        <span className={expanded ? "whitespace-pre-wrap leading-relaxed" : "line-clamp-2"}>
-                          {t.description?.trim() || "—"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 align-top">
-                        <span
-                          className={`inline-block rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${statusBadgeClass(t.status)}`}
-                        >
+                      <td className={TD}>
+                        <span className={`${BADGE} ${statusBadgeClass(t.status)}`}>
                           {statusBadgeLabel(t.status)}
                         </span>
                       </td>
-                      <td className="px-5 py-4 align-top">
+                      <td className={TD}>
+                        <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`}>
+                          {priorityBadgeLabel(t.priority)}
+                        </span>
+                      </td>
+                      <td className={TD}>
                         {typeLabel ? (
-                          <span
-                            className={`inline-block rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${issueTypeBadgeClass(typeLabel)}`}
-                          >
-                            {typeLabel}
-                          </span>
+                          <span className={`${BADGE} ${issueTypeBadgeClass(typeLabel)}`}>{typeLabel}</span>
                         ) : (
-                          "—"
+                          <span className="text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-4 align-top text-xs font-medium text-slate-600 dark:text-slate-400">
-                        {formatSubmittedAt(t.created_at)}
+                      <td className={`${TD} align-top`}>
+                        <div className="min-w-0">
+                          <div className="font-semibold leading-snug text-slate-900 dark:text-white">{issueName}</div>
+                          {attCount > 0 ? (
+                            <div className="mt-1 inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+                              {attCount} attachment{attCount === 1 ? "" : "s"}
+                            </div>
+                          ) : null}
+                        </div>
                       </td>
-                      <td className="px-5 py-4 align-top">
-                        <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-800 dark:bg-white/10 dark:text-slate-200">
+                      <td className={`${TD} align-top`}>
+                        <span className="line-clamp-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+                          {t.description?.trim() || "—"}
+                        </span>
+                      </td>
+                      <td className={TD}>
+                        <RequesterCell ticket={t} currentUser={currentUser} compact />
+                      </td>
+                      <td className={TD}>
+                        <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-200">
                           {t.assignee_name?.trim() || "—"}
                         </span>
                       </td>
-                      {isIT ? (
-                        <td className="px-5 py-4 align-top text-right">
-                          <div className="flex flex-col items-end gap-2">
-                            <select
-                              className="rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-xs font-bold text-[#0B3EAF] shadow-sm outline-none focus:border-[#0B3EAF] focus:ring-2 focus:ring-[#0B3EAF]/20 dark:border-white/10 dark:bg-[#1a1a1a] dark:text-[#A7D344]"
-                              value={t.status}
-                              onChange={(e) => onStatusChange(t.id, e.target.value)}
-                              aria-label={`Status for ticket ${t.id}`}
-                            >
-                              {STATUS_OPTIONS.map((o) => (
-                                <option key={o.value} value={o.value}>
-                                  {o.label}
-                                </option>
-                              ))}
-                            </select>
-                            {t.status !== "closed" ? (
-                              <button
-                                type="button"
-                                className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600"
-                                onClick={() => onStatusChange(t.id, "closed")}
-                              >
-                                Mark completed
-                              </button>
-                            ) : null}
+                      <td className={TD}>
+                        <div className="tabular-nums">
+                          <div className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                            {formatSubmittedDate(t.created_at)}
                           </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {formatSubmittedTime(t.created_at)}
+                          </div>
+                        </div>
+                      </td>
+                      {showActionsColumn ? (
+                        <td className={`${TD} text-right`}>
+                          {hasRowActions ? (
+                            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                              {canEdit ? (
+                                <button
+                                  type="button"
+                                  className="h-8 whitespace-nowrap rounded-md border border-[#0B3EAF]/25 bg-white px-2.5 text-[11px] font-semibold text-[#0B3EAF] transition hover:bg-[#0B3EAF] hover:text-white dark:border-[#A7D344]/30 dark:bg-[#1a1a1a] dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]"
+                                  onClick={() => onEdit?.(t)}
+                                >
+                                  Edit
+                                </button>
+                              ) : null}
+                              {isIT ? (
+                                <>
+                                  <select
+                                    className="h-8 max-w-full rounded-md border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-800 outline-none focus:border-[#0B3EAF] focus:ring-1 focus:ring-[#0B3EAF]/30 dark:border-white/10 dark:bg-[#1a1a1a] dark:text-slate-200"
+                                    value={t.status}
+                                    onChange={(e) => onStatusChange(t.id, e.target.value)}
+                                    aria-label={`Status for ticket ${t.id}`}
+                                  >
+                                    {STATUS_OPTIONS.map((o) => (
+                                      <option key={o.value} value={o.value}>
+                                        {o.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {t.status !== "closed" ? (
+                                    <button
+                                      type="button"
+                                      className="h-8 whitespace-nowrap rounded-md bg-emerald-600 px-2.5 text-[11px] font-semibold text-white transition hover:bg-emerald-700"
+                                      onClick={() => onStatusChange(t.id, "closed")}
+                                    >
+                                      Done
+                                    </button>
+                                  ) : null}
+                                </>
+                              ) : null}
+                              {isAdmin ? (
+                                <button
+                                  type="button"
+                                  disabled={deletingId === t.id}
+                                  className="h-8 whitespace-nowrap rounded-md border border-red-200 bg-red-50 px-2.5 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
+                                  onClick={() => onDelete?.(t.id)}
+                                >
+                                  {deletingId === t.id ? "Deleting…" : "Delete"}
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
                         </td>
                       ) : null}
                     </tr>
                     {expanded ? (
-                      <tr className="border-b border-slate-100 dark:border-white/5">
-                        <td colSpan={isIT ? 9 : 8} className="px-5 py-4">
-                          <div className="rounded-xl border-l-4 border-[#A7D344] bg-gradient-to-r from-[rgba(11,62,175,0.06)] to-transparent px-5 py-4 dark:from-[rgba(167,211,68,0.08)]">
-                            <div className="grid gap-4 sm:grid-cols-2">
-                              <div>
-                                <div className="text-xs font-bold uppercase tracking-wide text-[#0B3EAF] dark:text-[#A7D344]">
+                      <tr className="bg-slate-50/60 dark:bg-white/[0.02]">
+                        <td colSpan={colCount} className="px-4 py-4">
+                          <div className="rounded-lg border border-slate-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-[#141414]">
+                            <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3 dark:border-white/10">
+                              <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                Ticket #{t.id}
+                              </span>
+                              <span className={`${BADGE} ${statusBadgeClass(t.status)}`}>
+                                {statusBadgeLabel(t.status)}
+                              </span>
+                              <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`}>
+                                {priorityBadgeLabel(t.priority)}
+                              </span>
+                              {typeLabel ? (
+                                <span className={`${BADGE} ${issueTypeBadgeClass(typeLabel)}`}>{typeLabel}</span>
+                              ) : null}
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                              <div className="sm:col-span-2 lg:col-span-3">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                   Full title
                                 </div>
-                                <div className="mt-1.5 text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+                                <div className="mt-1 text-sm leading-relaxed text-slate-800 dark:text-slate-200">
                                   {t.title}
                                 </div>
                               </div>
-                              {isIT && t.user_email ? (
+                              {t.description?.trim() ? (
+                                <div className="sm:col-span-2 lg:col-span-3">
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                    Description
+                                  </div>
+                                  <div className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                                    {t.description.trim()}
+                                  </div>
+                                </div>
+                              ) : null}
+                              <div>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                  Requester
+                                </div>
+                                <div className="mt-2">
+                                  <RequesterCell ticket={t} currentUser={currentUser} />
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                  Assignee
+                                </div>
+                                <div className="mt-1 text-sm text-slate-800 dark:text-slate-200">
+                                  {t.assignee_name?.trim() || "Unassigned"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                  Submitted
+                                </div>
+                                <div className="mt-1 text-sm tabular-nums text-slate-800 dark:text-slate-200">
+                                  {formatSubmittedAt(t.created_at)}
+                                </div>
+                              </div>
+                              {(isIT || isAdmin) && t.user_email ? (
                                 <div>
-                                  <div className="text-xs font-bold uppercase tracking-wide text-[#0B3EAF] dark:text-[#A7D344]">
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                     Contact
                                   </div>
-                                  <div className="mt-1.5 text-sm text-slate-800 dark:text-slate-200">{t.user_email}</div>
+                                  <div className="mt-1 text-sm">
+                                    <a
+                                      href={`mailto:${t.user_email}`}
+                                      className="font-medium text-[#0B3EAF] underline-offset-2 hover:underline dark:text-[#A7D344]"
+                                    >
+                                      {t.user_email}
+                                    </a>
+                                  </div>
                                 </div>
                               ) : null}
                               {parseTicketAttachments(t).length > 0 ? (
-                                <div className="sm:col-span-2">
-                                  <div className="text-xs font-bold uppercase tracking-wide text-[#0B3EAF] dark:text-[#A7D344]">
+                                <div className="sm:col-span-2 lg:col-span-3">
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                     Attachments
                                   </div>
                                   <ul className="mt-2 flex flex-wrap gap-2">
@@ -384,7 +566,7 @@ export default function ItTicketsMonitorTable({ tickets, loading, isIT, onStatus
                                           href={a.url}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#0B3EAF] ring-1 ring-[#0B3EAF]/20 transition hover:bg-[#0B3EAF] hover:text-white dark:bg-[#1a1a1a] dark:text-[#A7D344] dark:ring-[#A7D344]/30"
+                                          className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-[#0B3EAF] transition hover:border-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:border-white/10 dark:bg-[#1a1a1a] dark:text-[#A7D344]"
                                         >
                                           {a.name || `File ${i + 1}`}
                                         </a>

@@ -289,6 +289,7 @@ async function migrateColumns(client) {
     "ALTER TABLE resource_documents ADD COLUMN IF NOT EXISTS file_uploaded_at TIMESTAMPTZ",
     "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS attachments TEXT",
     "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ",
+    "ALTER TABLE it_tickets ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'medium'",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token_hash TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_expires_at TIMESTAMPTZ",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_hash TEXT",
@@ -400,6 +401,15 @@ async function migrateColumns(client) {
     `);
   } catch (e) {
     console.warn("[pg migrate] it_tickets closed_at backfill:", e.message);
+  }
+
+  try {
+    await client.query(`
+      UPDATE it_tickets SET priority = 'medium'
+      WHERE priority IS NULL OR TRIM(priority) = ''
+    `);
+  } catch (e) {
+    console.warn("[pg migrate] it_tickets priority backfill:", e.message);
   }
 
   try {

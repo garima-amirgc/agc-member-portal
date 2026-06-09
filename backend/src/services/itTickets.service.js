@@ -1,5 +1,5 @@
 const { db, isPostgres } = require("../config/db");
-const { TICKET_STATUS } = require("../config/constants");
+const { ROLES, TICKET_STATUS, TICKET_PRIORITIES, TICKET_PRIORITY_DEFAULT, canonicalRole } = require("../config/constants");
 const email = require("./email.service");
 const userDeptSvc = require("./userDepartments.service");
 
@@ -63,6 +63,10 @@ const USER_DEPT_LABEL_SQL = isPostgres
 
 /** Completed tickets stay visible for 30 days after completion, then drop from queue lists. */
 const COMPLETED_TICKET_RETENTION_DAYS = 30;
+
+const TICKET_PRIORITY_ORDER_SQL = `CASE COALESCE(NULLIF(TRIM(t.priority), ''), '${TICKET_PRIORITY_DEFAULT}')
+  WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 2 END`;
+
 const IT_TICKET_LIST_VISIBILITY_PREDICATE = isPostgres
   ? `(t.status <> 'closed' OR COALESCE(t.closed_at, t.updated_at) >= (CURRENT_TIMESTAMP - INTERVAL '${COMPLETED_TICKET_RETENTION_DAYS} days'))`
   : `(t.status <> 'closed' OR datetime(COALESCE(t.closed_at, t.updated_at)) >= datetime('now', '-${COMPLETED_TICKET_RETENTION_DAYS} days'))`;
@@ -87,6 +91,16 @@ async function listItAssignees() {
       `
     )
     .all();
+}
+
+function normalizePriority(raw) {
+  const v = String(raw ?? TICKET_PRIORITY_DEFAULT).trim().toLowerCase();
+  if (!TICKET_PRIORITIES.includes(v)) {
+    const e = new Error("Invalid priority. Choose low, medium, high, or urgent.");
+    e.statusCode = 400;
+    throw e;
+  }
+  return v;
 }
 
 async function validateItAssignee(assigneeId) {
@@ -121,14 +135,15 @@ async function createTicket(userId, body) {
   }
 
   const assignee = await validateItAssignee(body?.assignee_id);
+  const priority = normalizePriority(body?.priority);
 
   const attachmentsJson = normalizeAttachmentsJson(body);
 
   const result = await db
     .prepare(
-      "INSERT INTO it_tickets (user_id, assignee_id, title, description, status, updated_at, attachments) VALUES (?, ?, ?, ?, 'open', datetime('now'), ?)"
+      "INSERT INTO it_tickets (user_id, assignee_id, title, description, status, priority, updated_at, attachments) VALUES (?, ?, ?, ?, 'open', ?, datetime('now'), ?)"
     )
-    .run(userId, assignee.id, title, description || null, attachmentsJson);
+    .run(userId, assignee.id, title, description || null, priority, attachmentsJson);
 
   const ticketId = result.lastInsertRowid;
   return { ticket: mapTicketRow(await getTicketById(ticketId)), assignee };
@@ -184,7 +199,10 @@ async function listAllTicketsForIT() {
       JOIN users u ON u.id = t.user_id
       LEFT JOIN users a ON a.id = t.assignee_id
       WHERE ${IT_TICKET_LIST_VISIBILITY_PREDICATE}
-      ORDER BY datetime(t.created_at) DESC
+      ORDER BY
+        CASE t.status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END,
+        ${TICKET_PRIORITY_ORDER_SQL},
+        datetime(t.created_at) DESC
       `
     )
     .all();
@@ -206,6 +224,7 @@ async function listTicketsAssignedToAssignee(assigneeUserId) {
         AND ${IT_TICKET_LIST_VISIBILITY_PREDICATE}
       ORDER BY
         CASE t.status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END,
+        ${TICKET_PRIORITY_ORDER_SQL},
         datetime(t.created_at) DESC
       `
     )
@@ -301,6 +320,7 @@ async function notifyItStaffNewTicket(ticketRow, creator, assignee) {
         ticketId: ticketRow.id,
         title: ticketRow.title,
         description: ticketRow.description,
+        priority: ticketRow.priority,
         attachments: attachmentList,
       })
     )
@@ -308,6 +328,91 @@ async function notifyItStaffNewTicket(ticketRow, creator, assignee) {
 
   const sent = results.filter((r) => r.sent).length;
   return { notified: recipients.length, sent };
+}
+
+async function updateTicketByOwner(userId, ticketId, body) {
+  const id = Number(ticketId);
+  if (!Number.isFinite(id) || id < 1) {
+    const e = new Error("Invalid ticket id");
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const row = await db.prepare("SELECT * FROM it_tickets WHERE id = ?").get(id);
+  if (!row) {
+    const e = new Error("Ticket not found");
+    e.statusCode = 404;
+    throw e;
+  }
+  if (Number(row.user_id) !== Number(userId)) {
+    const e = new Error("You can only edit your own tickets");
+    e.statusCode = 403;
+    throw e;
+  }
+  if (row.status !== "open") {
+    const e = new Error("Only open tickets can be edited");
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const title = body?.title != null ? String(body.title).trim() : String(row.title || "").trim();
+  if (!title) {
+    const e = new Error("Title is required");
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const description =
+    body?.description !== undefined
+      ? body.description != null
+        ? String(body.description).trim() || null
+        : null
+      : row.description;
+
+  const priority = body?.priority != null ? normalizePriority(body.priority) : normalizePriority(row.priority);
+
+  let assigneeId = row.assignee_id;
+  if (body?.assignee_id != null) {
+    const assignee = await validateItAssignee(body.assignee_id);
+    assigneeId = assignee.id;
+  }
+
+  let attachmentsJson = row.attachments;
+  if (body?.attachments !== undefined) {
+    attachmentsJson = normalizeAttachmentsJson(body);
+  }
+
+  await db
+    .prepare(
+      `UPDATE it_tickets
+       SET title = ?, description = ?, priority = ?, assignee_id = ?, attachments = ?, updated_at = datetime('now')
+       WHERE id = ?`
+    )
+    .run(title, description, priority, assigneeId, attachmentsJson, id);
+
+  return getTicketById(id);
+}
+
+async function deleteTicket(actor, ticketId) {
+  if (!actor || canonicalRole(actor.role) !== ROLES.ADMIN) {
+    const e = new Error("Only administrators can delete tickets");
+    e.statusCode = 403;
+    throw e;
+  }
+  const id = Number(ticketId);
+  if (!Number.isFinite(id) || id < 1) {
+    const e = new Error("Invalid ticket id");
+    e.statusCode = 400;
+    throw e;
+  }
+  const ticket = await db.prepare("SELECT id FROM it_tickets WHERE id = ?").get(id);
+  if (!ticket) {
+    const e = new Error("Ticket not found");
+    e.statusCode = 404;
+    throw e;
+  }
+  await db.prepare("DELETE FROM it_tickets WHERE id = ?").run(id);
+  return { deleted: id };
 }
 
 async function createTicketAndNotify(userId, body) {
@@ -336,5 +441,7 @@ module.exports = {
   listAllTicketsForIT,
   listTicketsAssignedToAssignee,
   updateTicketStatus,
+  updateTicketByOwner,
+  deleteTicket,
   normalizeDept,
 };

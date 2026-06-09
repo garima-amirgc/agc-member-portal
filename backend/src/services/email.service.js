@@ -295,9 +295,12 @@ async function sendITTicketCreatedEmail({
   ticketId,
   title,
   description,
+  priority,
   attachments = [],
 }) {
   if (!to) return { skipped: true };
+
+  const priorityLabel = String(priority || "medium").trim().toUpperCase();
 
   const attLines =
     Array.isArray(attachments) && attachments.length > 0
@@ -332,6 +335,7 @@ async function sendITTicketCreatedEmail({
     `A new IT ticket was submitted.`,
     "",
     `Ticket #${ticketId}: ${title}`,
+    `Priority: ${priorityLabel}`,
     assigneeName ? `Assigned to: ${assigneeName}` : "",
     `From: ${creatorName || "—"} (${creatorEmail || "—"})`,
     `Department: ${creatorDepartment || "—"}`,
@@ -355,6 +359,7 @@ async function sendITTicketCreatedEmail({
   <p style="margin: 16px 0; padding: 12px 16px; background: #eef2fb; border-left: 4px solid #0b3eaf;">
     <strong>#${escapeHtml(String(ticketId))}</strong> — ${escapeHtml(title)}
   </p>
+  <p><strong>Priority:</strong> ${escapeHtml(priorityLabel)}</p>
   ${assigneeName ? `<p><strong>Assigned to:</strong> ${escapeHtml(assigneeName)}</p>` : ""}
   <p><strong>From:</strong> ${escapeHtml(creatorName || "—")} (${escapeHtml(creatorEmail || "—")})<br/>
      <strong>Department:</strong> ${escapeHtml(creatorDepartment || "—")}</p>
