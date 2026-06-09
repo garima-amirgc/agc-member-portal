@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import AppSidebar from "./AppSidebar";
 import AppTopBar from "./AppTopBar";
+import BirthdayStrip from "./BirthdayStrip";
 import BottomBirdBand from "./BottomBirdBand";
 import Footer from "./Footer";
 import api from "../../services/api";
@@ -155,6 +156,7 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
         <AppSidebar />
         <div className="agc-main-column relative flex min-w-0 flex-1 flex-col">
           <AppTopBar darkMode={darkMode} setDarkMode={setDarkMode} />
+          <BirthdayStrip />
           <div className="min-h-0 min-w-0 flex-1 pb-2 sm:pb-3">
             <Outlet />
           </div>

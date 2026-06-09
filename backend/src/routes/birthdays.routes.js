@@ -5,6 +5,7 @@ const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 
 const { anniversaryYearsEmployed } = require("../utils/profileDates");
+const { portalTodayParts, daysUntilMonthDay, monthDayLabel, parseRangeDays } = require("../utils/portalDate");
 
 const router = express.Router();
 
@@ -24,32 +25,6 @@ function normalizeDob(value) {
   const dt = new Date(Date.UTC(y, mo - 1, d));
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
   return `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-function monthDayKey(dob) {
-  // dob is YYYY-MM-DD
-  const mo = Number(dob.slice(5, 7));
-  const d = Number(dob.slice(8, 10));
-  return mo * 100 + d; // 101..1231
-}
-
-function todayMonthDayKey(now = new Date()) {
-  const mo = now.getMonth() + 1;
-  const d = now.getDate();
-  return mo * 100 + d;
-}
-
-function addDays(date, days) {
-  const out = new Date(date);
-  out.setDate(out.getDate() + days);
-  return out;
-}
-
-function fmtMonDay(dob) {
-  const mo = Number(dob.slice(5, 7));
-  const d = Number(dob.slice(8, 10));
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${months[mo - 1] || "?"} ${d}`;
 }
 
 function shapeRow(r) {
@@ -145,48 +120,123 @@ router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS
  *   range_days: number
  * }
  */
-router.get("/feed", authRequired, async (req, res) => {
-  // Birthdays are now driven by user profiles (month/day only, no year).
-  const now = new Date();
-  const mo = now.getMonth() + 1;
-  const da = now.getDate();
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const label = `${months[mo - 1] || "?"} ${da}`;
-
-  const rows = await db
-    .prepare(
-      "SELECT id, name, business_unit, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, profile_image_url, birth_month, birth_day FROM users WHERE birth_month = ? AND birth_day = ? ORDER BY name ASC, id ASC"
-    )
-    .all(mo, da);
-
-  const today = (Array.isArray(rows) ? rows : []).map((r) => ({
-    id: r.id,
-    name: r.name != null ? String(r.name) : "",
-    facility_name: r.business_unit != null ? String(r.business_unit) : "",
-    company_name: r.business_unit != null ? String(r.business_unit) : "",
-    department: r.department != null ? String(r.department) : "",
-    profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
+function shapeCelebrationRow(row, inDays, todayParts) {
+  const label = monthDayLabel(row.month, row.day);
+  const base = {
+    id: row.id,
+    name: row.name,
+    facility_name: row.facility_name,
+    company_name: row.company_name,
+    department: row.department,
+    profile_image_url: row.profile_image_url,
     label,
-  }));
+    in_days: inDays,
+  };
+  if (inDays === 0) {
+    base.label = monthDayLabel(todayParts.month, todayParts.day);
+  }
+  return base;
+}
+
+function dedupeBirthdayCandidates(candidates) {
+  const byKey = new Map();
+  for (const c of candidates) {
+    const key = `${c.month}-${c.day}-${c.name.trim().toLowerCase()}`;
+    const existing = byKey.get(key);
+    if (!existing || (existing.source === "list" && c.source === "user")) {
+      byKey.set(key, c);
+    }
+  }
+  return [...byKey.values()];
+}
+
+async function loadBirthdayCandidates() {
+  const userRows = await db
+    .prepare(
+      "SELECT id, name, business_unit, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, profile_image_url, birth_month, birth_day FROM users WHERE birth_month IS NOT NULL AND birth_day IS NOT NULL"
+    )
+    .all();
+  const listRows = await db
+    .prepare("SELECT id, name, company_name, department, dob FROM birthday_list WHERE dob IS NOT NULL AND TRIM(dob) <> ''")
+    .all();
+
+  const candidates = [];
+  for (const r of Array.isArray(userRows) ? userRows : []) {
+    candidates.push({
+      id: r.id,
+      name: r.name != null ? String(r.name) : "",
+      facility_name: r.business_unit != null ? String(r.business_unit) : "",
+      company_name: r.business_unit != null ? String(r.business_unit) : "",
+      department: r.department != null ? String(r.department) : "",
+      profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
+      month: Number(r.birth_month),
+      day: Number(r.birth_day),
+      source: "user",
+    });
+  }
+  for (const r of Array.isArray(listRows) ? listRows : []) {
+    const dob = normalizeDob(r.dob);
+    if (!dob) continue;
+    candidates.push({
+      id: `bl-${r.id}`,
+      name: r.name != null ? String(r.name) : "",
+      facility_name: r.company_name != null ? String(r.company_name) : "",
+      company_name: r.company_name != null ? String(r.company_name) : "",
+      department: r.department != null ? String(r.department) : "",
+      profile_image_url: "",
+      month: Number(dob.slice(5, 7)),
+      day: Number(dob.slice(8, 10)),
+      source: "list",
+    });
+  }
+  return dedupeBirthdayCandidates(candidates);
+}
+
+router.get("/feed", authRequired, async (req, res) => {
+  const rangeDays = parseRangeDays(req.query?.days, 14);
+  const todayParts = portalTodayParts();
+  const refDate = new Date(todayParts.year, todayParts.month - 1, todayParts.day);
+
+  const candidates = await loadBirthdayCandidates();
+  const today = [];
+  const upcoming = [];
+
+  for (const row of candidates) {
+    const inDays = daysUntilMonthDay(todayParts, row.month, row.day);
+    if (inDays == null || inDays > rangeDays) continue;
+    const shaped = shapeCelebrationRow(row, inDays, todayParts);
+    if (inDays === 0) today.push(shaped);
+    else upcoming.push(shaped);
+  }
+
+  today.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  upcoming.sort((a, b) => (a.in_days - b.in_days) || String(a.name).localeCompare(String(b.name)));
 
   const annRows = await db
     .prepare(
-      "SELECT id, name, business_unit, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, profile_image_url, join_month, join_day, join_year FROM users WHERE join_month = ? AND join_day = ? ORDER BY name ASC, id ASC"
+      "SELECT id, name, business_unit, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, profile_image_url, join_month, join_day, join_year FROM users WHERE join_month IS NOT NULL AND join_day IS NOT NULL"
     )
-    .all(mo, da);
+    .all();
 
-  const anniversaries_today = (Array.isArray(annRows) ? annRows : []).map((r) => ({
-    id: r.id,
-    name: r.name != null ? String(r.name) : "",
-    facility_name: r.business_unit != null ? String(r.business_unit) : "",
-    company_name: r.business_unit != null ? String(r.business_unit) : "",
-    department: r.department != null ? String(r.department) : "",
-    profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
-    label,
-    years_employed: anniversaryYearsEmployed(r.join_year, now),
-  }));
+  const anniversaries_today = [];
+  for (const r of Array.isArray(annRows) ? annRows : []) {
+    const inDays = daysUntilMonthDay(todayParts, r.join_month, r.join_day);
+    if (inDays !== 0) continue;
+    anniversaries_today.push({
+      id: r.id,
+      name: r.name != null ? String(r.name) : "",
+      facility_name: r.business_unit != null ? String(r.business_unit) : "",
+      company_name: r.business_unit != null ? String(r.business_unit) : "",
+      department: r.department != null ? String(r.department) : "",
+      profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
+      label: monthDayLabel(todayParts.month, todayParts.day),
+      years_employed: anniversaryYearsEmployed(r.join_year, refDate),
+      in_days: 0,
+    });
+  }
+  anniversaries_today.sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
-  return res.json({ today, upcoming: [], anniversaries_today, range_days: 1 });
+  return res.json({ today, upcoming, anniversaries_today, range_days: rangeDays });
 });
 
 module.exports = router;
