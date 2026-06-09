@@ -437,10 +437,8 @@ async function migrateColumns(client) {
   try {
     const { backfillProfileCelebrationDates } = require("../../services/profileCelebrationBackfill.service");
     const stats = await backfillProfileCelebrationDates(db);
-    if (stats.birth_from_list > 0 || stats.join_from_created > 0) {
-      console.log(
-        `[pg migrate] profile celebration backfill: birth_from_list=${stats.birth_from_list}, join_from_created=${stats.join_from_created}`
-      );
+    if (stats.join_from_created > 0) {
+      console.log(`[pg migrate] profile join-date backfill: join_from_created=${stats.join_from_created}`);
     }
   } catch (e) {
     console.warn("[pg migrate] profile celebration backfill:", e.message);

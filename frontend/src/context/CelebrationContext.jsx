@@ -38,7 +38,7 @@ export function CelebrationProvider({ children, userId }) {
   const loadFeed = useCallback(() => {
     feedReadyRef.current = false;
     return api
-      .get("/birthdays/feed", { params: { days: 14 } })
+      .get("/birthdays/feed")
       .then(({ data }) => {
         const d = data || {};
         setFeed({

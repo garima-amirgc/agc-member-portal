@@ -22,11 +22,14 @@ function CelebrationMiniCard({ item, onClick, kind = "birthday" }) {
   const img = resolvePublicMediaUrl(item?.profile_image_url);
   const isAnniversary = kind === "anniversary";
   const years = Number(item?.years_employed);
+  const inDays = Number(item?.in_days);
   const headline = isAnniversary
     ? Number.isFinite(years) && years >= 1
       ? `${years} yr${years === 1 ? "" : "s"} — ${firstName}`
       : `Anniversary — ${firstName}`
-    : `HBD ${firstName}`;
+    : inDays === 0
+      ? `HBD ${firstName}`
+      : `HBD ${firstName} · in ${inDays}d`;
   const fallback =
     "data:image/svg+xml;utf8," +
     encodeURIComponent(`
@@ -51,11 +54,6 @@ function CelebrationMiniCard({ item, onClick, kind = "birthday" }) {
           : "border-[#e8b6c6]/50 bg-gradient-to-br from-[#fff7fb] via-[#fff2ea] to-[#eef8ff] dark:border-white/10 dark:from-white/5 dark:via-white/5 dark:to-white/5"
       }`}
     >
-      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.55]">
-        <div className="absolute -left-10 -top-12 h-24 w-24 rounded-full bg-[#ffcad8]/60 blur-xl" />
-        <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[#d7f3ff]/60 blur-xl" />
-        <div className="absolute -bottom-16 left-16 h-28 w-28 rounded-full bg-[#fff0b8]/60 blur-xl" />
-      </div>
       <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/15">
         <div className="flex h-full w-full items-center justify-center">
           <img src={img || fallback} alt="" className="max-h-full max-w-full object-contain" />

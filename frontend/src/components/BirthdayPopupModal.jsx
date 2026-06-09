@@ -17,18 +17,6 @@ const FALLBACK_AVATAR_SVG =
   <path d="M210 520c26-86 90-132 110-132s84 46 110 132" fill="#0B3EAF" opacity="0.15"/>
 </svg>`);
 
-function PartyPopper({ className = "" }) {
-  return (
-    <span
-      className={`celebration-popper inline-block text-4xl sm:text-5xl ${className}`}
-      role="img"
-      aria-hidden
-    >
-      🎉
-    </span>
-  );
-}
-
 export default function BirthdayPopupModal({ open, onClose, person, celebrationKind = "birthday" }) {
   useEffect(() => {
     if (!open) return;
@@ -76,16 +64,11 @@ export default function BirthdayPopupModal({ open, onClose, person, celebrationK
       <div
         className={`celebration-modal-card relative w-full max-w-lg overflow-hidden rounded-3xl border-2 shadow-[0_24px_80px_rgba(11,62,175,0.35)] ring-4 sm:max-w-xl ${
           isAnniversary
-            ? "border-[#A7D344]/50 bg-gradient-to-br from-[#f0f7e8] via-[#fffef5] to-[#eef2fb] ring-[#A7D344]/25 dark:from-[#1a2410] dark:via-[#141414] dark:to-[#0f1729] dark:ring-[#A7D344]/15"
-            : "border-[#ffcad8]/60 bg-gradient-to-br from-[#fff0f5] via-[#fffaf0] to-[#eef8ff] ring-[#ff9ec5]/30 dark:from-[#2a1520] dark:via-[#141414] dark:to-[#0f1729] dark:ring-[#ff6b9d]/15"
+            ? "border-[#0B3EAF]/45 bg-gradient-to-br from-[#dbeafe] via-[#eff6ff] to-[#c7d2fe] ring-[#0B3EAF]/20 dark:border-[#60a5fa]/40 dark:from-[#0c1929] dark:via-[#0f2744] dark:to-[#1e3a8a]/40 dark:ring-[#0B3EAF]/25"
+            : "border-[#ffcad8]/60 bg-gradient-to-br from-[#fff0f5] via-[#fff5f8] to-[#fce7f3] ring-[#ff9ec5]/30 dark:from-[#2a1520] dark:via-[#141414] dark:to-[#1a1020] dark:ring-[#ff6b9d]/15"
         }`}
       >
         <CelebrationConfetti active density={32} />
-
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-[#0B3EAF] via-[#A7D344] to-[#E02B20]"
-          aria-hidden
-        />
 
         <button
           type="button"
@@ -96,46 +79,21 @@ export default function BirthdayPopupModal({ open, onClose, person, celebrationK
           ×
         </button>
 
-        <PartyPopper className="absolute left-3 top-3 z-20" />
-        <PartyPopper className="absolute right-14 top-2 z-20 [animation-delay:0.35s]" />
-        <span
-          className="celebration-sparkle absolute left-[18%] top-[42%] text-2xl opacity-80"
-          aria-hidden
-        >
-          ✨
-        </span>
-        <span
-          className="celebration-sparkle absolute right-[20%] top-[38%] text-xl opacity-80 [animation-delay:0.5s]"
-          aria-hidden
-        >
-          ✨
-        </span>
-        <span className="absolute bottom-4 left-4 text-3xl opacity-90 motion-reduce:animate-none" aria-hidden>
-          🎊
-        </span>
-        <span
-          className="absolute bottom-5 right-5 text-3xl opacity-90 motion-reduce:animate-none [animation-delay:0.2s]"
-          aria-hidden
-        >
-          🎊
-        </span>
-
         <div className="relative z-10 px-6 pb-8 pt-10 text-center sm:px-8 sm:pb-10 sm:pt-12">
           <div
             className={`celebration-badge mx-auto mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] ${
               isAnniversary
-                ? "bg-[#A7D344]/25 text-[#2d5016] dark:bg-[#A7D344]/20 dark:text-[#d4f5a0]"
+                ? "bg-[#0B3EAF]/15 text-[#0B3EAF] dark:bg-[#0B3EAF]/30 dark:text-[#93c5fd]"
                 : "bg-[#ffcad8]/50 text-[#8b2942] dark:bg-[#ff6b9d]/20 dark:text-[#ffc4d6]"
             }`}
           >
-            <span aria-hidden>{isAnniversary ? "🏆" : "🎂"}</span>
-            Let&apos;s celebrate
+            {isAnniversary ? "Work milestone" : "Birthday"}
           </div>
 
           <div className="relative mx-auto mb-5 h-[120px] w-[120px] sm:h-[132px] sm:w-[132px]">
             <div
               className={`celebration-avatar-ring absolute inset-0 rounded-full ${
-                isAnniversary ? "bg-[#A7D344]/30" : "bg-[#ff9ec5]/40"
+                isAnniversary ? "bg-[#0B3EAF]/25" : "bg-[#ff9ec5]/40"
               }`}
               aria-hidden
             />
@@ -170,7 +128,7 @@ export default function BirthdayPopupModal({ open, onClose, person, celebrationK
           </p>
 
           <button type="button" onClick={onClose} className="btn-primary mt-8 min-w-[10rem] px-8">
-            Celebrate! 🎉
+            Celebrate!
           </button>
         </div>
       </div>

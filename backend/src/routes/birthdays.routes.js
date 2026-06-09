@@ -1,44 +1,11 @@
 const express = require("express");
 const { db } = require("../config/db");
 const { authRequired } = require("../middleware/auth");
-const { requireAdminGrant } = require("../middleware/adminGrants");
-const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 
 const { anniversaryYearsEmployed } = require("../utils/profileDates");
 const { portalTodayParts, daysUntilMonthDay, monthDayLabel, parseRangeDays } = require("../utils/portalDate");
 
 const router = express.Router();
-
-function normalizeDob(value) {
-  if (value === undefined || value === null) return null;
-  const s = String(value).trim();
-  if (!s) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
-  if (mo < 1 || mo > 12) return null;
-  if (d < 1 || d > 31) return null;
-  const dt = new Date(Date.UTC(y, mo - 1, d));
-  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
-  return `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-function shapeRow(r) {
-  if (!r || typeof r !== "object") return r;
-  return {
-    id: r.id,
-    name: r.name != null ? String(r.name) : "",
-    facility_name: r.company_name != null ? String(r.company_name) : "",
-    company_name: r.company_name != null ? String(r.company_name) : "",
-    department: r.department != null ? String(r.department) : "",
-    dob: r.dob != null ? String(r.dob) : "",
-    profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
-    created_at: r.created_at != null ? String(r.created_at) : null,
-  };
-}
 
 function validMonthDay(month, day) {
   const mo = Number(month);
@@ -111,76 +78,7 @@ async function loadProfileAnniversaryCandidates() {
   return candidates;
 }
 
-// Admin CRUD
-router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS), async (_req, res) => {
-  const rows = await db.prepare("SELECT * FROM birthday_list ORDER BY dob ASC, name ASC, id ASC").all();
-  return res.json((Array.isArray(rows) ? rows : []).map(shapeRow));
-});
-
-router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS), async (req, res) => {
-  const name = req.body?.name != null ? String(req.body.name).trim() : "";
-  const facilityRaw =
-    req.body?.facility_name != null
-      ? req.body.facility_name
-      : req.body?.company_name != null
-        ? req.body.company_name
-        : "";
-  const facility_name = String(facilityRaw).trim().toUpperCase();
-  const department = req.body?.department != null ? String(req.body.department).trim() : "";
-  const dob = normalizeDob(req.body?.dob);
-  if (!name) return res.status(400).json({ message: "name is required" });
-  if (!facility_name) return res.status(400).json({ message: "facility_name is required" });
-  if (!department) return res.status(400).json({ message: "department is required" });
-  if (!dob) return res.status(400).json({ message: "dob must be YYYY-MM-DD" });
-
-  const result = await db
-    .prepare("INSERT INTO birthday_list(name, company_name, department, dob) VALUES (?, ?, ?, ?)")
-    .run(name.slice(0, 120), facility_name.slice(0, 160), department.slice(0, 120), dob);
-  const row = await db.prepare("SELECT * FROM birthday_list WHERE id = ?").get(result.lastInsertRowid);
-  return res.status(201).json(shapeRow(row));
-});
-
-router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS), async (req, res) => {
-  const existing = await db.prepare("SELECT * FROM birthday_list WHERE id = ?").get(req.params.id);
-  if (!existing) return res.status(404).json({ message: "Not found" });
-
-  const name = req.body?.name !== undefined ? String(req.body.name).trim() : String(existing.name || "").trim();
-  const facilityRaw =
-    req.body?.facility_name !== undefined
-      ? req.body.facility_name
-      : req.body?.company_name !== undefined
-        ? req.body.company_name
-        : undefined;
-  const facility_name =
-    facilityRaw !== undefined
-      ? String(facilityRaw).trim().toUpperCase()
-      : String(existing.company_name || "").trim().toUpperCase();
-  const department =
-    req.body?.department !== undefined ? String(req.body.department).trim() : String(existing.department || "").trim();
-  const dob = req.body?.dob !== undefined ? normalizeDob(req.body.dob) : normalizeDob(existing.dob);
-
-  if (!name) return res.status(400).json({ message: "name is required" });
-  if (!facility_name) return res.status(400).json({ message: "facility_name is required" });
-  if (!department) return res.status(400).json({ message: "department is required" });
-  if (!dob) return res.status(400).json({ message: "dob must be YYYY-MM-DD" });
-
-  await db
-    .prepare("UPDATE birthday_list SET name = ?, company_name = ?, department = ?, dob = ? WHERE id = ?")
-    .run(name.slice(0, 120), facility_name.slice(0, 160), department.slice(0, 120), dob, req.params.id);
-  const row = await db.prepare("SELECT * FROM birthday_list WHERE id = ?").get(req.params.id);
-  return res.json(shapeRow(row));
-});
-
-router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS), async (req, res) => {
-  const existing = await db.prepare("SELECT * FROM birthday_list WHERE id = ?").get(req.params.id);
-  if (!existing) return res.status(404).json({ message: "Not found" });
-  await db.prepare("DELETE FROM birthday_list WHERE id = ?").run(req.params.id);
-  return res.json({ message: "Deleted" });
-});
-
-/**
- * Celebrations feed — driven by user profile birth_month/birth_day and join_month/join_day/join_year.
- */
+/** Celebrations from user profiles — popups use today; dashboard sidebar uses upcoming within `days`. */
 router.get("/feed", authRequired, async (req, res) => {
   const rangeDays = parseRangeDays(req.query?.days, 14);
   const todayParts = portalTodayParts();
@@ -197,7 +95,6 @@ router.get("/feed", authRequired, async (req, res) => {
     if (inDays === 0) today.push(shaped);
     else upcoming.push(shaped);
   }
-
   today.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   upcoming.sort((a, b) => (a.in_days - b.in_days) || String(a.name).localeCompare(String(b.name)));
 
@@ -215,7 +112,6 @@ router.get("/feed", authRequired, async (req, res) => {
     if (inDays === 0) anniversaries_today.push(shaped);
     else anniversaries_upcoming.push(shaped);
   }
-
   anniversaries_today.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   anniversaries_upcoming.sort(
     (a, b) => (a.in_days - b.in_days) || String(a.name).localeCompare(String(b.name))

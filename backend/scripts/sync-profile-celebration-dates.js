@@ -1,5 +1,5 @@
 /**
- * Backfill users.birth_* / users.join_* from birthday_list and created_at.
+ * Backfill users.join_* from account created_at when missing.
  * Usage: node scripts/sync-profile-celebration-dates.js
  */
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });

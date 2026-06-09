@@ -8,7 +8,6 @@ const ADMIN_GRANT_KEYS = Object.freeze({
   LEARNING_ADMIN: "learning_admin",
   REPORTS: "reports",
   SYSTEM: "system",
-  BIRTHDAYS: "birthdays",
   FEEDBACK_POLLS: "feedback_polls",
 });
 

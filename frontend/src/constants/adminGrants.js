@@ -6,7 +6,6 @@ export const ADMIN_GRANT_KEYS = Object.freeze({
   LEARNING_ADMIN: "learning_admin",
   REPORTS: "reports",
   SYSTEM: "system",
-  BIRTHDAYS: "birthdays",
   FEEDBACK_POLLS: "feedback_polls",
 });
 
@@ -18,6 +17,5 @@ export const ADMIN_GRANT_OPTIONS = Object.freeze([
   { key: ADMIN_GRANT_KEYS.LEARNING_ADMIN, label: "Learning admin (courses, videos, assignments, resource docs)" },
   { key: ADMIN_GRANT_KEYS.REPORTS, label: "Manage Power BI reports" },
   { key: ADMIN_GRANT_KEYS.SYSTEM, label: "System status" },
-  { key: ADMIN_GRANT_KEYS.BIRTHDAYS, label: "Birthday directory (admin API)" },
   { key: ADMIN_GRANT_KEYS.FEEDBACK_POLLS, label: "Feedback & polls (popup surveys)" },
 ]);
