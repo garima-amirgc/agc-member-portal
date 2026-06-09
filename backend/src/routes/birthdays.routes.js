@@ -21,7 +21,6 @@ function normalizeDob(value) {
   if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
   if (mo < 1 || mo > 12) return null;
   if (d < 1 || d > 31) return null;
-  // Basic day validation (avoid Date parsing timezone surprises by validating via UTC).
   const dt = new Date(Date.UTC(y, mo - 1, d));
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
   return `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -32,7 +31,6 @@ function shapeRow(r) {
   return {
     id: r.id,
     name: r.name != null ? String(r.name) : "",
-    // Stored as `company_name` in DB (legacy), exposed as `facility_name` to the UI.
     facility_name: r.company_name != null ? String(r.company_name) : "",
     company_name: r.company_name != null ? String(r.company_name) : "",
     department: r.department != null ? String(r.department) : "",
@@ -40,6 +38,77 @@ function shapeRow(r) {
     profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
     created_at: r.created_at != null ? String(r.created_at) : null,
   };
+}
+
+function validMonthDay(month, day) {
+  const mo = Number(month);
+  const da = Number(day);
+  if (!Number.isFinite(mo) || !Number.isFinite(da) || mo < 1 || mo > 12 || da < 1 || da > 31) return null;
+  return { month: mo, day: da };
+}
+
+function shapeCelebrationRow(row, inDays, todayParts) {
+  return {
+    id: row.id,
+    name: row.name,
+    facility_name: row.facility_name,
+    company_name: row.company_name,
+    department: row.department,
+    profile_image_url: row.profile_image_url,
+    label: inDays === 0 ? monthDayLabel(todayParts.month, todayParts.day) : monthDayLabel(row.month, row.day),
+    in_days: inDays,
+  };
+}
+
+async function loadProfileBirthdayCandidates() {
+  const userRows = await db
+    .prepare(
+      "SELECT id, name, business_unit, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, profile_image_url, birth_month, birth_day FROM users WHERE birth_month IS NOT NULL AND birth_day IS NOT NULL"
+    )
+    .all();
+
+  const candidates = [];
+  for (const r of Array.isArray(userRows) ? userRows : []) {
+    const md = validMonthDay(r.birth_month, r.birth_day);
+    if (!md) continue;
+    candidates.push({
+      id: r.id,
+      name: r.name != null ? String(r.name) : "",
+      facility_name: r.business_unit != null ? String(r.business_unit) : "",
+      company_name: r.business_unit != null ? String(r.business_unit) : "",
+      department: r.department != null ? String(r.department) : "",
+      profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
+      month: md.month,
+      day: md.day,
+    });
+  }
+  return candidates;
+}
+
+async function loadProfileAnniversaryCandidates() {
+  const annRows = await db
+    .prepare(
+      "SELECT id, name, business_unit, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, profile_image_url, join_month, join_day, join_year FROM users WHERE join_month IS NOT NULL AND join_day IS NOT NULL AND join_year IS NOT NULL"
+    )
+    .all();
+
+  const candidates = [];
+  for (const r of Array.isArray(annRows) ? annRows : []) {
+    const md = validMonthDay(r.join_month, r.join_day);
+    if (!md) continue;
+    candidates.push({
+      id: r.id,
+      name: r.name != null ? String(r.name) : "",
+      facility_name: r.business_unit != null ? String(r.business_unit) : "",
+      company_name: r.business_unit != null ? String(r.business_unit) : "",
+      department: r.department != null ? String(r.department) : "",
+      profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
+      month: md.month,
+      day: md.day,
+      join_year: Number(r.join_year),
+    });
+  }
+  return candidates;
 }
 
 // Admin CRUD
@@ -110,98 +179,18 @@ router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.BIRTHDAYS
 });
 
 /**
- * Below-nav feed for all authenticated users.
- * Returns birthdays that fall within the next N days (inclusive), plus today's.
- *
- * Response shape:
- * {
- *   today: [{ id, name, department, dob, label }],
- *   upcoming: [{ id, name, department, dob, label, in_days }],
- *   range_days: number
- * }
+ * Celebrations feed — driven by user profile birth_month/birth_day and join_month/join_day/join_year.
  */
-function shapeCelebrationRow(row, inDays, todayParts) {
-  const label = monthDayLabel(row.month, row.day);
-  const base = {
-    id: row.id,
-    name: row.name,
-    facility_name: row.facility_name,
-    company_name: row.company_name,
-    department: row.department,
-    profile_image_url: row.profile_image_url,
-    label,
-    in_days: inDays,
-  };
-  if (inDays === 0) {
-    base.label = monthDayLabel(todayParts.month, todayParts.day);
-  }
-  return base;
-}
-
-function dedupeBirthdayCandidates(candidates) {
-  const byKey = new Map();
-  for (const c of candidates) {
-    const key = `${c.month}-${c.day}-${c.name.trim().toLowerCase()}`;
-    const existing = byKey.get(key);
-    if (!existing || (existing.source === "list" && c.source === "user")) {
-      byKey.set(key, c);
-    }
-  }
-  return [...byKey.values()];
-}
-
-async function loadBirthdayCandidates() {
-  const userRows = await db
-    .prepare(
-      "SELECT id, name, business_unit, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, profile_image_url, birth_month, birth_day FROM users WHERE birth_month IS NOT NULL AND birth_day IS NOT NULL"
-    )
-    .all();
-  const listRows = await db
-    .prepare("SELECT id, name, company_name, department, dob FROM birthday_list WHERE dob IS NOT NULL AND TRIM(dob) <> ''")
-    .all();
-
-  const candidates = [];
-  for (const r of Array.isArray(userRows) ? userRows : []) {
-    candidates.push({
-      id: r.id,
-      name: r.name != null ? String(r.name) : "",
-      facility_name: r.business_unit != null ? String(r.business_unit) : "",
-      company_name: r.business_unit != null ? String(r.business_unit) : "",
-      department: r.department != null ? String(r.department) : "",
-      profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
-      month: Number(r.birth_month),
-      day: Number(r.birth_day),
-      source: "user",
-    });
-  }
-  for (const r of Array.isArray(listRows) ? listRows : []) {
-    const dob = normalizeDob(r.dob);
-    if (!dob) continue;
-    candidates.push({
-      id: `bl-${r.id}`,
-      name: r.name != null ? String(r.name) : "",
-      facility_name: r.company_name != null ? String(r.company_name) : "",
-      company_name: r.company_name != null ? String(r.company_name) : "",
-      department: r.department != null ? String(r.department) : "",
-      profile_image_url: "",
-      month: Number(dob.slice(5, 7)),
-      day: Number(dob.slice(8, 10)),
-      source: "list",
-    });
-  }
-  return dedupeBirthdayCandidates(candidates);
-}
-
 router.get("/feed", authRequired, async (req, res) => {
   const rangeDays = parseRangeDays(req.query?.days, 14);
   const todayParts = portalTodayParts();
   const refDate = new Date(todayParts.year, todayParts.month - 1, todayParts.day);
 
-  const candidates = await loadBirthdayCandidates();
+  const birthdayCandidates = await loadProfileBirthdayCandidates();
   const today = [];
   const upcoming = [];
 
-  for (const row of candidates) {
+  for (const row of birthdayCandidates) {
     const inDays = daysUntilMonthDay(todayParts, row.month, row.day);
     if (inDays == null || inDays > rangeDays) continue;
     const shaped = shapeCelebrationRow(row, inDays, todayParts);
@@ -212,32 +201,33 @@ router.get("/feed", authRequired, async (req, res) => {
   today.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   upcoming.sort((a, b) => (a.in_days - b.in_days) || String(a.name).localeCompare(String(b.name)));
 
-  const annRows = await db
-    .prepare(
-      "SELECT id, name, business_unit, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, profile_image_url, join_month, join_day, join_year FROM users WHERE join_month IS NOT NULL AND join_day IS NOT NULL"
-    )
-    .all();
-
+  const anniversaryCandidates = await loadProfileAnniversaryCandidates();
   const anniversaries_today = [];
-  for (const r of Array.isArray(annRows) ? annRows : []) {
-    const inDays = daysUntilMonthDay(todayParts, r.join_month, r.join_day);
-    if (inDays !== 0) continue;
-    anniversaries_today.push({
-      id: r.id,
-      name: r.name != null ? String(r.name) : "",
-      facility_name: r.business_unit != null ? String(r.business_unit) : "",
-      company_name: r.business_unit != null ? String(r.business_unit) : "",
-      department: r.department != null ? String(r.department) : "",
-      profile_image_url: r.profile_image_url != null ? String(r.profile_image_url) : "",
-      label: monthDayLabel(todayParts.month, todayParts.day),
-      years_employed: anniversaryYearsEmployed(r.join_year, refDate),
-      in_days: 0,
-    });
-  }
-  anniversaries_today.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const anniversaries_upcoming = [];
 
-  return res.json({ today, upcoming, anniversaries_today, range_days: rangeDays });
+  for (const row of anniversaryCandidates) {
+    const inDays = daysUntilMonthDay(todayParts, row.month, row.day);
+    if (inDays == null || inDays > rangeDays) continue;
+    const shaped = {
+      ...shapeCelebrationRow(row, inDays, todayParts),
+      years_employed: anniversaryYearsEmployed(row.join_year, refDate),
+    };
+    if (inDays === 0) anniversaries_today.push(shaped);
+    else anniversaries_upcoming.push(shaped);
+  }
+
+  anniversaries_today.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  anniversaries_upcoming.sort(
+    (a, b) => (a.in_days - b.in_days) || String(a.name).localeCompare(String(b.name))
+  );
+
+  return res.json({
+    today,
+    upcoming,
+    anniversaries_today,
+    anniversaries_upcoming,
+    range_days: rangeDays,
+  });
 });
 
 module.exports = router;
-

@@ -190,53 +190,55 @@ router.put("/me", async (req, res) => {
     clearInvite = true;
   }
 
+  let nextBirthMonth = existing.birth_month;
+  let nextBirthDay = existing.birth_day;
+  if (wantsUpdateDob) {
+    if (!normalizedDob) {
+      return res.status(400).json({ message: "Invalid date of birth (month and day only)." });
+    }
+    nextBirthMonth = normalizedDob.birth_month;
+    nextBirthDay = normalizedDob.birth_day;
+  }
+
+  let nextJoinMonth = existing.join_month;
+  let nextJoinDay = existing.join_day;
+  let nextJoinYear = existing.join_year;
+  if (wantsUpdateJoin) {
+    if (!normalizedJoin) {
+      return res.status(400).json({ message: "Invalid date of joining (month, day, and year required)." });
+    }
+    nextJoinMonth = normalizedJoin.join_month;
+    nextJoinDay = normalizedJoin.join_day;
+    nextJoinYear = normalizedJoin.join_year;
+  }
+
+  let nextInviteHash = existing.invite_token_hash;
+  let nextInviteExpires = existing.invite_expires_at;
   if (clearInvite) {
-    if (normalizedDob) {
-      await db
-        .prepare(
-          "UPDATE users SET name = ?, email = ?, designation = ?, password = ?, birth_month = ?, birth_day = ?, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
-        )
-        .run(nextName, nextEmail, nextDesignation, nextPassword, normalizedDob.birth_month, normalizedDob.birth_day, req.user.id);
-    } else {
-      await db
-        .prepare(
-          "UPDATE users SET name = ?, email = ?, designation = ?, password = ?, invite_token_hash = NULL, invite_expires_at = NULL WHERE id = ?"
-        )
-        .run(nextName, nextEmail, nextDesignation, nextPassword, req.user.id);
-    }
-  } else {
-    if (normalizedDob) {
-      await db
-        .prepare("UPDATE users SET name = ?, email = ?, designation = ?, password = ?, birth_month = ?, birth_day = ? WHERE id = ?")
-        .run(
-          nextName,
-          nextEmail,
-          nextDesignation,
-          nextPassword,
-          normalizedDob.birth_month,
-          normalizedDob.birth_day,
-          req.user.id
-        );
-    } else {
-      await db.prepare("UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?").run(
-        nextName,
-        nextEmail,
-        nextPassword,
-        req.user.id
-      );
-      if (nextDesignation !== existing.designation) {
-        await db.prepare("UPDATE users SET designation = ? WHERE id = ?").run(nextDesignation, req.user.id);
-      }
-    }
+    nextInviteHash = null;
+    nextInviteExpires = null;
   }
 
-  await db.prepare("UPDATE users SET phone = ?, address = ? WHERE id = ?").run(nextPhone, nextAddress, req.user.id);
-
-  if (normalizedJoin) {
-    await db
-      .prepare("UPDATE users SET join_month = ?, join_day = ?, join_year = ? WHERE id = ?")
-      .run(normalizedJoin.join_month, normalizedJoin.join_day, normalizedJoin.join_year, req.user.id);
-  }
+  await db
+    .prepare(
+      "UPDATE users SET name = ?, email = ?, designation = ?, password = ?, phone = ?, address = ?, birth_month = ?, birth_day = ?, join_month = ?, join_day = ?, join_year = ?, invite_token_hash = ?, invite_expires_at = ? WHERE id = ?"
+    )
+    .run(
+      nextName,
+      nextEmail,
+      nextDesignation,
+      nextPassword,
+      nextPhone,
+      nextAddress,
+      nextBirthMonth,
+      nextBirthDay,
+      nextJoinMonth,
+      nextJoinDay,
+      nextJoinYear,
+      nextInviteHash,
+      nextInviteExpires,
+      req.user.id
+    );
 
   return res.json({ message: "Profile updated" });
 });

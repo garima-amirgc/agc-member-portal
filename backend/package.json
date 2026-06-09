@@ -11,7 +11,8 @@
     "start": "node src/server.js",
     "upload:org-chart": "node scripts/upload-org-chart-to-spaces.js",
     "migrate:uploads": "node scripts/migrate-local-uploads-to-spaces.js",
-    "test:smtp": "node scripts/test-smtp.js"
+    "test:smtp": "node scripts/test-smtp.js",
+    "sync:celebration-dates": "node scripts/sync-profile-celebration-dates.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1026.0",

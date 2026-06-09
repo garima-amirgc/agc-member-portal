@@ -81,7 +81,13 @@ export default function DashboardPage() {
   const isIT = userHasDepartment(user, "IT");
   const [upcoming, setUpcoming] = useState([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
-  const [birthdays, setBirthdays] = useState({ today: [], upcoming: [], anniversaries_today: [], range_days: 14 });
+  const [birthdays, setBirthdays] = useState({
+    today: [],
+    upcoming: [],
+    anniversaries_today: [],
+    anniversaries_upcoming: [],
+    range_days: 14,
+  });
   const [birthdaysLoading, setBirthdaysLoading] = useState(true);
   const { openCelebration } = useCelebration();
   const [topVisitors, setTopVisitors] = useState([]);
@@ -109,11 +115,18 @@ export default function DashboardPage() {
         today: Array.isArray(d.today) ? d.today : [],
         upcoming: Array.isArray(d.upcoming) ? d.upcoming : [],
         anniversaries_today: Array.isArray(d.anniversaries_today) ? d.anniversaries_today : [],
+        anniversaries_upcoming: Array.isArray(d.anniversaries_upcoming) ? d.anniversaries_upcoming : [],
         range_days: Number(d.range_days) || 14,
       });
     } catch (err) {
       console.warn("Birthdays feed failed:", err.response?.status, err.response?.data ?? err.message);
-      setBirthdays({ today: [], upcoming: [], anniversaries_today: [], range_days: 14 });
+      setBirthdays({
+        today: [],
+        upcoming: [],
+        anniversaries_today: [],
+        anniversaries_upcoming: [],
+        range_days: 14,
+      });
     } finally {
       setBirthdaysLoading(false);
     }
@@ -176,8 +189,9 @@ export default function DashboardPage() {
   }, [birthdays]);
 
   const anniversaryCards = useMemo(() => {
-    const list = Array.isArray(birthdays?.anniversaries_today) ? birthdays.anniversaries_today : [];
-    return list.slice(0, 4);
+    const today = Array.isArray(birthdays?.anniversaries_today) ? birthdays.anniversaries_today : [];
+    const up = Array.isArray(birthdays?.anniversaries_upcoming) ? birthdays.anniversaries_upcoming : [];
+    return [...today, ...up].slice(0, 4);
   }, [birthdays]);
 
   const openUpcomingEvent = (event) => {

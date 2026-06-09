@@ -20,14 +20,20 @@ function safeText(v) {
 }
 
 export default function BirthdayStrip() {
-  const [data, setData] = useState({ today: [], upcoming: [], anniversaries_today: [], range_days: 365 });
+  const [data, setData] = useState({
+    today: [],
+    upcoming: [],
+    anniversaries_today: [],
+    anniversaries_upcoming: [],
+    range_days: 14,
+  });
   const [error, setError] = useState("");
 
   useEffect(() => {
     let alive = true;
     setError("");
     api
-      .get("/birthdays/feed", { params: { days: 365 } })
+      .get("/birthdays/feed", { params: { days: 14 } })
       .then((res) => {
         if (!alive) return;
         const d = res.data || {};
@@ -35,7 +41,8 @@ export default function BirthdayStrip() {
           today: Array.isArray(d.today) ? d.today : [],
           upcoming: Array.isArray(d.upcoming) ? d.upcoming : [],
           anniversaries_today: Array.isArray(d.anniversaries_today) ? d.anniversaries_today : [],
-          range_days: Number(d.range_days) || 365,
+          anniversaries_upcoming: Array.isArray(d.anniversaries_upcoming) ? d.anniversaries_upcoming : [],
+          range_days: Number(d.range_days) || 14,
         });
       })
       .catch((e) => {
@@ -51,6 +58,11 @@ export default function BirthdayStrip() {
 
   const today = useMemo(() => uniqById(data.today).slice(0, 6), [data.today]);
   const anniversaries = useMemo(() => uniqById(data.anniversaries_today).slice(0, 6), [data.anniversaries_today]);
+  const upcomingBirthdays = useMemo(() => uniqById(data.upcoming).slice(0, 6), [data.upcoming]);
+  const upcomingAnniversaries = useMemo(
+    () => uniqById(data.anniversaries_upcoming).slice(0, 6),
+    [data.anniversaries_upcoming]
+  );
 
   const formatNames = (list) =>
     list
@@ -62,12 +74,20 @@ export default function BirthdayStrip() {
       .join(", ");
 
   const todayLine = useMemo(() => (today.length === 0 ? "" : formatNames(today)), [today]);
+  const upcomingBirthdayLine = useMemo(
+    () => (upcomingBirthdays.length === 0 ? "" : formatNames(upcomingBirthdays)),
+    [upcomingBirthdays]
+  );
   const anniversaryLine = useMemo(
     () => (anniversaries.length === 0 ? "" : formatNames(anniversaries)),
     [anniversaries]
   );
+  const upcomingAnniversaryLine = useMemo(
+    () => (upcomingAnniversaries.length === 0 ? "" : formatNames(upcomingAnniversaries)),
+    [upcomingAnniversaries]
+  );
 
-  if (!todayLine && !anniversaryLine && !error) return null;
+  if (!todayLine && !upcomingBirthdayLine && !anniversaryLine && !upcomingAnniversaryLine && !error) return null;
 
   return (
     <div className={`border-b border-slate-200/90 bg-white/80 py-3 backdrop-blur-sm dark:border-white/10 dark:bg-[#0f0f0f]/75 ${PAGE_GUTTER_X}`}>
@@ -100,6 +120,12 @@ export default function BirthdayStrip() {
                 </div>
               </div>
             ) : null}
+            {upcomingBirthdayLine ? (
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                🎂 Upcoming birthdays:{" "}
+                <span className="font-extrabold text-[#0B3EAF] dark:text-[#A7D344]">{upcomingBirthdayLine}</span>
+              </p>
+            ) : null}
             {anniversaryLine ? (
               <div className="overflow-hidden">
                 <div className="flex w-max motion-reduce:translate-x-0 motion-reduce:animate-none [animation:agc-ann-marquee_16s_linear_infinite] hover:[animation-play-state:paused]">
@@ -123,6 +149,12 @@ export default function BirthdayStrip() {
                   </div>
                 </div>
               </div>
+            ) : null}
+            {upcomingAnniversaryLine ? (
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                🎊 Upcoming work anniversaries:{" "}
+                <span className="font-extrabold text-[#0B3EAF] dark:text-[#A7D344]">{upcomingAnniversaryLine}</span>
+              </p>
             ) : null}
             <style>{`
               @keyframes agc-bday-marquee {
