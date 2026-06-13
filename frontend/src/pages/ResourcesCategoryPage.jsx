@@ -25,9 +25,10 @@ export default function ResourcesCategoryPage() {
   const facilityNorm = normalizeFacilityParam(facility);
   const key = (category || "").toLowerCase();
   const { user } = useAuth();
-  const [contentTab, setContentTab] = useState("videos"); // videos | documentation
+  const [contentTab, setContentTab] = useState("videos"); // videos | documentation | reports
   const [videosLoading, setVideosLoading] = useState(false);
   const [docsLoading, setDocsLoading] = useState(false);
+  const [reportsLoading, setReportsLoading] = useState(false);
   const [categoryCounts, setCategoryCounts] = useState({});
   const [categoryCountsLoading, setCategoryCountsLoading] = useState(true);
 
@@ -35,6 +36,7 @@ export default function ResourcesCategoryPage() {
   const seedBlock = useMemo(() => seedItems(key), [key]);
   const [lmsVideos, setLmsVideos] = useState([]);
   const [lmsDocs, setLmsDocs] = useState([]);
+  const [lmsReports, setLmsReports] = useState([]);
   const [lmsLoadError, setLmsLoadError] = useState(null);
   const items = useMemo(
     () => mergeLmsResourceItems(seedBlock, lmsVideos, lmsDocs),
@@ -58,9 +60,12 @@ export default function ResourcesCategoryPage() {
       await Promise.all(
         CATEGORIES.map(async (c) => {
           const catKey = c.key;
-          const [videosRes, docsRes] = await Promise.allSettled([
+          const [videosRes, docsRes, reportsRes] = await Promise.allSettled([
             api.get(`/resources/facility/${facilityNorm}/category/${catKey}`),
             api.get(`/resources/facility/${facilityNorm}/category/${catKey}/documents`),
+            catKey === "it"
+              ? api.get(`/resources/facility/${facilityNorm}/category/${catKey}/reports`)
+              : Promise.resolve({ data: { reports: [] } }),
           ]);
           const videos =
             videosRes.status === "fulfilled" && Array.isArray(videosRes.value?.data?.videos)
@@ -70,7 +75,16 @@ export default function ResourcesCategoryPage() {
             docsRes.status === "fulfilled" && Array.isArray(docsRes.value?.data?.documents)
               ? docsRes.value.data.documents
               : [];
-          out[catKey] = { videos: videos.length, docs: docs.length, total: videos.length + docs.length };
+          const reports =
+            reportsRes.status === "fulfilled" && Array.isArray(reportsRes.value?.data?.reports)
+              ? reportsRes.value.data.reports
+              : [];
+          out[catKey] = {
+            videos: videos.length,
+            docs: docs.length,
+            reports: reports.length,
+            total: videos.length + docs.length + reports.length,
+          };
         })
       );
       if (cancelled) return;
@@ -143,6 +157,31 @@ export default function ResourcesCategoryPage() {
   }, [facilityNorm, key, current]);
 
   useEffect(() => {
+    if (!facilityNorm || !current || key !== "it") {
+      setLmsReports([]);
+      setReportsLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setReportsLoading(true);
+    api
+      .get(`/resources/facility/${facilityNorm}/category/${key}/reports`)
+      .then((reportsRes) => {
+        if (cancelled) return;
+        setLmsReports(Array.isArray(reportsRes.data?.reports) ? reportsRes.data.reports : []);
+      })
+      .catch(() => {
+        if (!cancelled) setLmsReports([]);
+      })
+      .finally(() => {
+        if (!cancelled) setReportsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityNorm, key, current]);
+
+  useEffect(() => {
     setContentTab("videos");
   }, [key, facilityNorm]);
 
@@ -157,18 +196,28 @@ export default function ResourcesCategoryPage() {
   const { totalCount, completedCount, progress } = computeProgress({ items, completedSet: completed });
   const hasVideos = (items?.videos || []).length > 0;
   const hasDocs = (items?.docs || []).length > 0;
+  const hasReports = key === "it" && (lmsReports || []).length > 0;
+  const showTabs = hasVideos || hasDocs || hasReports;
   const visibleCategories = useMemo(() => {
     if (categoryCountsLoading) return CATEGORIES;
     return CATEGORIES.filter((c) => (categoryCounts?.[c.key]?.total || 0) > 0);
   }, [categoryCounts, categoryCountsLoading]);
 
   useEffect(() => {
-    // Default to Video. Only auto-switch once we KNOW videos are empty (after loading),
-    // otherwise the docs request often wins the race and flips the UI to Documentation.
-    if (videosLoading || docsLoading) return;
-    if (contentTab === "videos" && !hasVideos && hasDocs) setContentTab("documentation");
-    if (contentTab === "documentation" && !hasDocs && hasVideos) setContentTab("videos");
-  }, [contentTab, hasVideos, hasDocs, videosLoading, docsLoading]);
+    if (videosLoading || docsLoading || reportsLoading) return;
+    if (contentTab === "videos" && !hasVideos) {
+      if (hasDocs) setContentTab("documentation");
+      else if (hasReports) setContentTab("reports");
+    }
+    if (contentTab === "documentation" && !hasDocs) {
+      if (hasVideos) setContentTab("videos");
+      else if (hasReports) setContentTab("reports");
+    }
+    if (contentTab === "reports" && !hasReports) {
+      if (hasVideos) setContentTab("videos");
+      else if (hasDocs) setContentTab("documentation");
+    }
+  }, [contentTab, hasVideos, hasDocs, hasReports, videosLoading, docsLoading, reportsLoading]);
 
   return (
     <main className={PAGE_SHELL}>
@@ -210,7 +259,7 @@ export default function ResourcesCategoryPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr,176px]">
         <section className="min-w-0">
-          {hasVideos || hasDocs ? (
+          {showTabs ? (
             <div className="relative flex items-end gap-3">
               {hasVideos ? (
                 <button
@@ -248,6 +297,24 @@ export default function ResourcesCategoryPage() {
                   Documentation
                 </button>
               ) : null}
+              {hasReports ? (
+                <button
+                  type="button"
+                  onClick={() => setContentTab("reports")}
+                  className={[
+                    "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+                    "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
+                    "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
+                    contentTab === "reports"
+                      ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
+                      : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
+                  ].join(" ")}
+                  role="tab"
+                  aria-selected={contentTab === "reports"}
+                >
+                  Reports
+                </button>
+              ) : null}
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-px bg-slate-200 dark:bg-slate-700" />
             </div>
           ) : null}
@@ -256,8 +323,8 @@ export default function ResourcesCategoryPage() {
             className="rounded-b-2xl border border-t-0 border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"
             role="tabpanel"
           >
-            {!hasVideos && !hasDocs ? (
-              <div className="text-sm text-slate-500 dark:text-slate-400">No videos or documents yet.</div>
+            {!showTabs ? (
+              <div className="text-sm text-slate-500 dark:text-slate-400">No content yet.</div>
             ) : null}
 
             {contentTab === "videos" && hasVideos ? (
@@ -391,6 +458,46 @@ export default function ResourcesCategoryPage() {
                       );
                     })}
                 </div>
+              </div>
+            ) : null}
+
+            {contentTab === "reports" && hasReports ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {lmsReports.map((r) => {
+                  const desc =
+                    r.description != null && String(r.description).trim()
+                      ? String(r.description).trim()
+                      : "";
+                  const added = formatAddedDate(r.created_at);
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40"
+                    >
+                      <div className="min-w-0">
+                        <h3 className="text-base font-bold leading-snug text-brand-blue dark:text-brand-green">
+                          {r.title}
+                        </h3>
+                        {desc ? (
+                          <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{desc}</p>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-3 dark:border-slate-600/60">
+                        <span className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">
+                          {added ? <>Added {added}</> : <span className="text-slate-400">Report dashboard</span>}
+                        </span>
+                        <a
+                          href={r.link_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 inline-flex items-center justify-center rounded-full border-2 border-[rgba(11,62,175,0.28)] bg-white px-3 py-1 text-xs font-semibold text-[#0B3EAF] transition hover:border-[#0B3EAF] hover:bg-[#f7f9fe] dark:border-[rgba(167,211,68,0.4)] dark:bg-[#141414] dark:text-[#A7D344] dark:hover:border-[#A7D344]"
+                        >
+                          Open dashboard
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </div>

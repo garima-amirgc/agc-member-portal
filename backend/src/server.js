@@ -3,7 +3,7 @@ require("dotenv").config({ path: path.join(__dirname, "..", ".env"), override: t
 const express = require("express");
 const cors = require("cors");
 const { ROLES } = require("./config/constants");
-const { EMAIL_TEMPLATE_VERSION, isEmailConfigured } = require("./services/email.service");
+const { EMAIL_TEMPLATE_VERSION, isEmailConfigured, verifySmtpConnection } = require("./services/email.service");
 const inviteSvc = require("./services/invite.service");
 
 const app = express();
@@ -65,6 +65,12 @@ async function start() {
   const uploadRoutes = require("./routes/upload.routes");
   const notificationsRoutes = require("./routes/notifications.routes");
   const upcomingRoutes = require("./routes/upcoming.routes");
+  const employeeOfMonthRoutes = require("./routes/employeeOfMonth.routes");
+  const leadershipUpdatesRoutes = require("./routes/leadershipUpdates.routes");
+  const newHiresRoutes = require("./routes/newHires.routes");
+  const customerWinsRoutes = require("./routes/customerWins.routes");
+  const communityInvolvementRoutes = require("./routes/communityInvolvement.routes");
+  const homeSpotlightRoutes = require("./routes/homeSpotlight.routes");
   const birthdaysRoutes = require("./routes/birthdays.routes");
   const ticketsRoutes = require("./routes/tickets.routes");
   const avatarRoutes = require("./routes/avatar.routes");
@@ -150,6 +156,12 @@ async function start() {
   api.use("/assignments", assignmentRoutes);
   api.use("/notifications", notificationsRoutes);
   api.use("/upcoming", upcomingRoutes);
+  api.use("/employee-of-month", employeeOfMonthRoutes);
+  api.use("/leadership-updates", leadershipUpdatesRoutes);
+  api.use("/new-hires", newHiresRoutes);
+  api.use("/customer-wins", customerWinsRoutes);
+  api.use("/community-involvement", communityInvolvementRoutes);
+  api.use("/home-spotlight", homeSpotlightRoutes);
   api.use("/birthdays", birthdaysRoutes);
   api.use("/tickets", ticketsRoutes);
   api.use("/upload", uploadRoutes);
@@ -172,6 +184,12 @@ async function start() {
   app.use("/assignments", assignmentRoutes);
   app.use("/notifications", notificationsRoutes);
   app.use("/upcoming", upcomingRoutes);
+  app.use("/employee-of-month", employeeOfMonthRoutes);
+  app.use("/leadership-updates", leadershipUpdatesRoutes);
+  app.use("/new-hires", newHiresRoutes);
+  app.use("/customer-wins", customerWinsRoutes);
+  app.use("/community-involvement", communityInvolvementRoutes);
+  app.use("/home-spotlight", homeSpotlightRoutes);
   app.use("/birthdays", birthdaysRoutes);
   app.use("/tickets", ticketsRoutes);
   app.use("/upload", uploadRoutes);
@@ -229,6 +247,7 @@ async function start() {
     console.log(
       `Manager team: GET /api/auth/manager-team-overview and GET /api/users/manager/team-overview (same for /auth/... and /users/... without /api)`
     );
+    void verifySmtpConnection().catch(() => {});
     try {
       const inviteSvc = require("./services/invite.service");
       const appUrl = inviteSvc.publicAppBaseUrl();

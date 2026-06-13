@@ -75,7 +75,7 @@ router.patch("/:id", async (req, res) => {
       const updated = await itTickets.updateTicketStatus(req.user.id, id, body.status);
       return res.json(updated);
     }
-    const updated = await itTickets.updateTicketByOwner(req.user.id, id, body);
+    const updated = await itTickets.updateTicketByOwner(req.user, id, body);
     return res.json(updated);
   } catch (e) {
     const code = e.statusCode || 500;

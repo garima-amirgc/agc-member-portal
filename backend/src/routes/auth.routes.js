@@ -39,6 +39,23 @@ const router = express.Router();
 
 const PASSWORD_RESET_MINUTES = Math.min(24 * 60, Math.max(15, Number(process.env.PASSWORD_RESET_MINUTES || 60)));
 
+/** On local dev, return the setup/reset URL in the JSON so you can test without inbox delivery. */
+function recoverAccessDevExtrasEnabled() {
+  if (process.env.RECOVER_ACCESS_DEV_LINKS === "1") return true;
+  if (process.env.RENDER || process.env.NODE_ENV === "production") return false;
+  const base = inviteSvc.publicAppBaseUrl();
+  return /localhost|127\.0\.0\.1/i.test(base);
+}
+
+function recoverAccessResponse(base, { devLink, devHint } = {}) {
+  const out = { ...base };
+  if (recoverAccessDevExtrasEnabled()) {
+    if (devLink) out.dev_link = devLink;
+    if (devHint) out.dev_hint = devHint;
+  }
+  return out;
+}
+
 function jwtExpiresForSession(rememberMe) {
   const r = rememberMe === true || rememberMe === "true" || rememberMe === 1;
   return r ? "30d" : "8h";
@@ -201,18 +218,36 @@ router.post("/recover-access", async (req, res) => {
 
   const generic = {
     message:
-      "If this address is registered, we sent instructions to your inbox. Check spam folders and wait a few minutes.",
+      "If this address is registered, we've sent instructions to your inbox. Please allow a few minutes for delivery.",
   };
 
   try {
-    const user = await db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+    const user = await db
+      .prepare("SELECT * FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))")
+      .get(email);
     if (!user) {
-      return res.json(generic);
+      return res.json(
+        recoverAccessResponse(generic, {
+          devHint: "No portal account uses that email. Try the exact address your admin added.",
+        })
+      );
     }
 
     if (user.invite_token_hash != null && String(user.invite_token_hash).trim() !== "") {
-      await issueInviteAndEmail(db, user.id);
-      return res.json(generic);
+      const inviteMail = await issueInviteAndEmail(db, user.id);
+      if (!inviteMail.email_sent) {
+        console.warn("[auth] recover-access: invite email not sent for", user.email, inviteMail.email_error || "");
+      } else {
+        console.log("[auth] recover-access: invite email sent for", user.email);
+      }
+      return res.json(
+        recoverAccessResponse(generic, {
+          devLink: inviteMail.setup_url,
+          devHint: inviteMail.email_sent
+            ? undefined
+            : `Email could not be sent (${inviteMail.email_error || "SMTP error"}). Use the link below on localhost.`,
+        })
+      );
     }
 
     const raw = inviteSvc.generateInviteRawToken();
@@ -223,13 +258,29 @@ router.post("/recover-access", async (req, res) => {
       .run(h, exp, user.id);
 
     const resetUrl = `${inviteSvc.publicAppBaseUrl()}/reset-password?token=${encodeURIComponent(raw)}`;
-    await emailSvc.sendPasswordResetEmail({
+    const resetMail = await emailSvc.sendPasswordResetEmail({
       to: String(user.email).trim(),
       name: String(user.name || "").trim(),
       resetUrl,
       validMinutes: PASSWORD_RESET_MINUTES,
     });
-    return res.json(generic);
+    if (!resetMail.email_sent) {
+      console.warn(
+        "[auth] recover-access: password reset email not sent for",
+        user.email,
+        resetMail.email_error || "unknown error"
+      );
+    } else {
+      console.log("[auth] recover-access: password reset email sent for", user.email);
+    }
+    return res.json(
+      recoverAccessResponse(generic, {
+        devLink: resetUrl,
+        devHint: resetMail.email_sent
+          ? undefined
+          : `Email could not be sent (${resetMail.email_error || "SMTP error"}). Use the link below on localhost.`,
+      })
+    );
   } catch (e) {
     console.error("[auth] recover-access:", e);
     return res.json(generic);

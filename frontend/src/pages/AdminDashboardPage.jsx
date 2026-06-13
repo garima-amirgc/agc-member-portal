@@ -8,10 +8,11 @@ import { CATEGORIES } from "../utils/resourcesContent";
 
 const EMPTY_COURSE = { title: "", description: "", business_unit: "AGC", resource_category: "" };
 const EMPTY_DOC = { business_unit: "AGC", category: "finance", title: "" };
+const EMPTY_REPORT = { business_unit: "AGC", title: "", link_url: "", description: "" };
 
 /** Videos and documents. Upcoming → /admin/upcoming. */
 export default function AdminDashboardPage() {
-  const [active, setActive] = useState("videos"); // videos | documents
+  const [active, setActive] = useState("videos"); // videos | documents | reports
   const [courses, setCourses] = useState([]);
   const [resourceDocuments, setResourceDocuments] = useState([]);
   const [courseForm, setCourseForm] = useState(EMPTY_COURSE);
@@ -28,6 +29,11 @@ export default function AdminDashboardPage() {
   const [docEdit, setDocEdit] = useState(null);
   const docEditFileRef = useRef(null);
   const [savingDocEdit, setSavingDocEdit] = useState(false);
+  const [resourceReports, setResourceReports] = useState([]);
+  const [reportForm, setReportForm] = useState(EMPTY_REPORT);
+  const [savingReport, setSavingReport] = useState(false);
+  const [reportEdit, setReportEdit] = useState(null);
+  const [savingReportEdit, setSavingReportEdit] = useState(false);
 
   const load = () => {
     api.get("/courses").then((r) => setCourses(r.data));
@@ -40,13 +46,21 @@ export default function AdminDashboardPage() {
       .catch(() => setResourceDocuments([]));
   }, []);
 
+  const loadResourceReports = useCallback(() => {
+    api
+      .get("/resources/reports")
+      .then((r) => setResourceReports(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setResourceReports([]));
+  }, []);
+
   useEffect(() => {
     load();
   }, []);
 
   useEffect(() => {
     if (active === "documents") loadResourceDocuments();
-  }, [active, loadResourceDocuments]);
+    if (active === "reports") loadResourceReports();
+  }, [active, loadResourceDocuments, loadResourceReports]);
 
   const createCourse = async (e) => {
     e.preventDefault();
@@ -274,9 +288,84 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const createReportLink = async (e) => {
+    e.preventDefault();
+    if (!String(reportForm.title || "").trim()) {
+      window.alert("Please enter a report name.");
+      return;
+    }
+    if (!String(reportForm.link_url || "").trim()) {
+      window.alert("Please enter a dashboard link.");
+      return;
+    }
+    setSavingReport(true);
+    try {
+      await api.post("/resources/reports", {
+        business_unit: reportForm.business_unit,
+        title: reportForm.title.trim(),
+        link_url: reportForm.link_url.trim(),
+        description: reportForm.description?.trim() || "",
+      });
+      setReportForm(EMPTY_REPORT);
+      loadResourceReports();
+    } catch (err) {
+      window.alert(
+        err.response?.data?.message || err.message || "Could not save report link."
+      );
+    } finally {
+      setSavingReport(false);
+    }
+  };
+
+  const startEditReport = (row) => {
+    setReportEdit({
+      id: row.id,
+      business_unit: row.business_unit,
+      title: row.title || "",
+      link_url: row.link_url || "",
+      description: row.description || "",
+    });
+  };
+
+  const saveReportEdit = async (e) => {
+    e.preventDefault();
+    if (!reportEdit) return;
+    setSavingReportEdit(true);
+    try {
+      await api.put(`/resources/reports/${reportEdit.id}`, {
+        business_unit: reportEdit.business_unit,
+        title: reportEdit.title.trim(),
+        link_url: reportEdit.link_url.trim(),
+        description: reportEdit.description?.trim() || "",
+      });
+      setReportEdit(null);
+      loadResourceReports();
+    } catch (err) {
+      window.alert(
+        err.response?.data?.message || err.message || "Could not update report link."
+      );
+    } finally {
+      setSavingReportEdit(false);
+    }
+  };
+
+  const deleteReportLink = async (row) => {
+    if (!window.confirm(`Delete report link "${row.title}"?`)) return;
+    try {
+      await api.delete(`/resources/reports/${row.id}`);
+      if (reportEdit?.id === row.id) setReportEdit(null);
+      loadResourceReports();
+    } catch (err) {
+      window.alert(
+        err.response?.data?.message || err.message || "Could not delete report link."
+      );
+    }
+  };
+
   const nav = [
     { id: "videos", label: "Videos" },
     { id: "documents", label: "Documents" },
+    { id: "reports", label: "IT report links" },
   ];
 
   return (
@@ -761,6 +850,177 @@ export default function AdminDashboardPage() {
                         </div>
                       );
                     })
+                  )}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {active === "reports" && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="card">
+                <h2 className="mb-1 text-lg font-semibold">Add IT report link</h2>
+                <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
+                  Appears under University → IT → Reports when at least one link exists for that facility.
+                </p>
+                <form className="agc-form space-y-3" onSubmit={createReportLink}>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Facility</label>
+                    <select
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      value={reportForm.business_unit}
+                      onChange={(e) => setReportForm({ ...reportForm, business_unit: e.target.value })}
+                      disabled={savingReport}
+                    >
+                      <option value="AGC">AGC</option>
+                      <option value="AQM">AQM</option>
+                      <option value="SCF">SCF</option>
+                      <option value="ASP">ASP</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Report / dashboard name
+                    </label>
+                    <input
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      placeholder="e.g. IT ticket metrics"
+                      value={reportForm.title}
+                      onChange={(e) => setReportForm({ ...reportForm, title: e.target.value })}
+                      disabled={savingReport}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Dashboard link (URL)
+                    </label>
+                    <input
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      type="url"
+                      placeholder="https://..."
+                      value={reportForm.link_url}
+                      onChange={(e) => setReportForm({ ...reportForm, link_url: e.target.value })}
+                      disabled={savingReport}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Short description (optional)
+                    </label>
+                    <textarea
+                      className="min-h-[80px] w-full rounded border p-2 dark:bg-slate-700"
+                      placeholder="What this dashboard shows…"
+                      value={reportForm.description}
+                      onChange={(e) => setReportForm({ ...reportForm, description: e.target.value })}
+                      disabled={savingReport}
+                    />
+                  </div>
+                  <button type="submit" className="btn-primary w-full" disabled={savingReport}>
+                    {savingReport ? "Saving…" : "Add report link"}
+                  </button>
+                </form>
+              </section>
+
+              <section className="card flex max-h-[calc(100svh-10rem)] flex-col">
+                <h2 className="mb-3 text-lg font-semibold">IT report links</h2>
+                <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1">
+                  {resourceReports.length === 0 ? (
+                    <div className="text-sm text-slate-500 dark:text-slate-400">No report links yet.</div>
+                  ) : (
+                    resourceReports.map((r) => (
+                      <div key={r.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                        {reportEdit?.id === r.id ? (
+                          <form className="agc-form space-y-2" onSubmit={saveReportEdit}>
+                            <select
+                              className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                              value={reportEdit.business_unit}
+                              onChange={(e) =>
+                                setReportEdit({ ...reportEdit, business_unit: e.target.value })
+                              }
+                              disabled={savingReportEdit}
+                            >
+                              <option value="AGC">AGC</option>
+                              <option value="AQM">AQM</option>
+                              <option value="SCF">SCF</option>
+                              <option value="ASP">ASP</option>
+                            </select>
+                            <input
+                              className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                              placeholder="Report name"
+                              value={reportEdit.title}
+                              onChange={(e) => setReportEdit({ ...reportEdit, title: e.target.value })}
+                              disabled={savingReportEdit}
+                            />
+                            <input
+                              className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                              type="url"
+                              placeholder="https://..."
+                              value={reportEdit.link_url}
+                              onChange={(e) => setReportEdit({ ...reportEdit, link_url: e.target.value })}
+                              disabled={savingReportEdit}
+                            />
+                            <textarea
+                              className="min-h-[72px] w-full rounded border p-2 text-sm dark:bg-slate-700"
+                              placeholder="Description"
+                              value={reportEdit.description}
+                              onChange={(e) =>
+                                setReportEdit({ ...reportEdit, description: e.target.value })
+                              }
+                              disabled={savingReportEdit}
+                            />
+                            <div className="flex gap-2">
+                              <button type="submit" className="btn-primary flex-1" disabled={savingReportEdit}>
+                                {savingReportEdit ? "Saving…" : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline"
+                                onClick={() => setReportEdit(null)}
+                                disabled={savingReportEdit}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              {r.business_unit} · IT · Reports
+                            </div>
+                            <div className="mt-1 text-base font-bold text-brand-blue dark:text-brand-green">
+                              {r.title}
+                            </div>
+                            {r.description ? (
+                              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{r.description}</p>
+                            ) : null}
+                            <a
+                              href={r.link_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2 block truncate text-xs text-brand-blue underline dark:text-brand-green"
+                            >
+                              {r.link_url}
+                            </a>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="btn-outline px-3 py-1.5 text-xs"
+                                onClick={() => startEditReport(r)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-danger px-3 py-1.5 text-xs"
+                                onClick={() => deleteReportLink(r)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))
                   )}
                 </div>
               </section>

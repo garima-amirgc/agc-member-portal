@@ -246,6 +246,108 @@ router.get("/facility/:facility/category/:category/documents", async (req, res) 
   res.json({ documents });
 });
 
+router.get("/facility/:facility/category/:category/reports", async (req, res) => {
+  const facility = String(req.params.facility || "").toUpperCase();
+  const category = String(req.params.category || "").toLowerCase();
+  if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
+  if (category !== "it") return res.json({ reports: [] });
+  if (!(await facilityAllowed(req.user, facility))) return res.status(403).json({ message: "No access to this facility" });
+
+  const rows = await db
+    .prepare(
+      `SELECT id, title, link_url, description, created_at
+       FROM resource_report_links
+       WHERE business_unit = ?
+         AND LOWER(TRIM(COALESCE(category, ''))) = 'it'
+       ORDER BY id DESC`
+    )
+    .all(facility);
+
+  const reports = rows.map((r) => ({
+    id: `report-${r.id}`,
+    reportId: r.id,
+    title: r.title,
+    link_url: r.link_url,
+    description: r.description != null ? String(r.description).trim() : "",
+    created_at: r.created_at,
+  }));
+  res.json({ reports });
+});
+
+function normalizeReportLink(raw) {
+  const url = String(raw || "").trim();
+  if (!url) return null;
+  if (!/^https?:\/\//i.test(url)) return null;
+  return url;
+}
+
+router.get("/reports", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (_req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT id, business_unit, category, title, link_url, description, created_at
+       FROM resource_report_links
+       ORDER BY id DESC`
+    )
+    .all();
+  res.json(rows);
+});
+
+router.post("/reports", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+  const { business_unit, title, link_url, description } = req.body || {};
+  const facility = String(business_unit || "").toUpperCase();
+  const t = String(title || "").trim();
+  const url = normalizeReportLink(link_url);
+  const desc = description != null ? String(description).trim() : "";
+
+  if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
+  if (!t) return res.status(400).json({ message: "Report name is required" });
+  if (!url) return res.status(400).json({ message: "A valid http(s) dashboard link is required" });
+
+  const out = await db
+    .prepare(
+      `INSERT INTO resource_report_links (business_unit, category, title, link_url, description, created_by)
+       VALUES (?, 'it', ?, ?, ?, ?)`
+    )
+    .run(facility, t, url, desc || null, req.user.id);
+  return res.status(201).json({ id: out.lastInsertRowid });
+});
+
+router.put("/reports/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+
+  const { business_unit, title, link_url, description } = req.body || {};
+  const facility = String(business_unit || "").toUpperCase();
+  const t = String(title || "").trim();
+  const url = normalizeReportLink(link_url);
+  const desc = description != null ? String(description).trim() : "";
+
+  if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
+  if (!t) return res.status(400).json({ message: "Report name is required" });
+  if (!url) return res.status(400).json({ message: "A valid http(s) dashboard link is required" });
+
+  const existing = await db.prepare("SELECT id FROM resource_report_links WHERE id = ?").get(id);
+  if (!existing) return res.status(404).json({ message: "Not found" });
+
+  await db
+    .prepare(
+      `UPDATE resource_report_links
+       SET business_unit = ?, category = 'it', title = ?, link_url = ?, description = ?
+       WHERE id = ?`
+    )
+    .run(facility, t, url, desc || null, id);
+  return res.json({ message: "Report link updated" });
+});
+
+router.delete("/reports/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+  const row = await db.prepare("SELECT id FROM resource_report_links WHERE id = ?").get(id);
+  if (!row) return res.status(404).json({ message: "Not found" });
+  await db.prepare("DELETE FROM resource_report_links WHERE id = ?").run(id);
+  return res.json({ message: "Report link deleted" });
+});
+
 function normalizeCategory(raw) {
   if (raw == null || !String(raw).trim()) return null;
   return String(raw).trim().toLowerCase();

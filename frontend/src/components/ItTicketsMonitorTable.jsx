@@ -17,11 +17,52 @@ const STATUS_OPTIONS = [
   { value: "closed", label: "Completed" },
 ];
 
-const TH =
-  "px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400";
+const TH_BASE =
+  "px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300";
 const TD = "px-4 py-3.5 align-middle";
 const BADGE =
   "inline-flex min-w-[5.5rem] items-center justify-center rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide";
+
+function vline(isLastColumn) {
+  return isLastColumn ? "" : "border-r border-slate-200 dark:border-slate-600/55";
+}
+
+const HEADER_COL_BG = {
+  id: "bg-slate-200/70 dark:bg-slate-800",
+  requester: "bg-[rgba(11,62,175,0.1)] dark:bg-[rgba(11,62,175,0.28)]",
+  issue: "bg-[rgba(11,62,175,0.06)] dark:bg-[rgba(11,62,175,0.18)]",
+  status: "bg-emerald-100/55 dark:bg-emerald-950/35",
+  priority: "bg-sky-100/55 dark:bg-sky-950/35",
+  category: "bg-amber-100/50 dark:bg-amber-950/30",
+  assignee: "bg-violet-100/45 dark:bg-violet-950/30",
+  submitted: "bg-slate-200/55 dark:bg-slate-800/80",
+  actions: "bg-slate-200/60 dark:bg-slate-800",
+};
+
+/** Per-column soft background + row alternation (always visible, not hover-only). */
+function bodyColBg(col, rowIdx) {
+  const alt = rowIdx % 2 === 1;
+  const map = {
+    id: alt ? "bg-slate-200/45 dark:bg-slate-800/70" : "bg-slate-100/80 dark:bg-slate-800/45",
+    requester: alt ? "bg-blue-50 dark:bg-blue-950/25" : "bg-blue-50/45 dark:bg-blue-950/15",
+    issue: alt ? "bg-[#eef3fa] dark:bg-[#1e2433]" : "bg-white dark:bg-[#141414]",
+    status: alt ? "bg-emerald-50/90 dark:bg-emerald-950/20" : "bg-emerald-50/50 dark:bg-emerald-950/10",
+    priority: alt ? "bg-sky-50/95 dark:bg-sky-950/20" : "bg-sky-50/55 dark:bg-sky-950/10",
+    category: alt ? "bg-amber-50/85 dark:bg-amber-950/18" : "bg-amber-50/45 dark:bg-amber-950/10",
+    assignee: alt ? "bg-violet-50/80 dark:bg-violet-950/18" : "bg-violet-50/40 dark:bg-violet-950/10",
+    submitted: alt ? "bg-slate-100 dark:bg-slate-800/55" : "bg-slate-50 dark:bg-slate-800/35",
+    actions: alt ? "bg-[#eef3fa] dark:bg-[#1e2433]" : "bg-white dark:bg-[#141414]",
+  };
+  return `${map[col] || (alt ? "bg-[#eef3fa]" : "bg-white")} group-hover:brightness-[0.98] dark:group-hover:brightness-110`;
+}
+
+function thClass(col, extra = "", isLast = false) {
+  return [TH_BASE, HEADER_COL_BG[col] || "", vline(isLast), extra].filter(Boolean).join(" ");
+}
+
+function tdClass(col, rowIdx, extra = "", isLast = false) {
+  return [TD, bodyColBg(col, rowIdx), vline(isLast), extra].filter(Boolean).join(" ");
+}
 
 function statusBadgeLabel(status) {
   if (status === "closed") return "Completed";
@@ -51,21 +92,6 @@ function initialsFromName(name) {
 function titleWithoutTypePrefix(title) {
   const raw = String(title || "").trim();
   return raw.replace(/^\s*\[[^\]]+\]\s*/, "").trim() || raw;
-}
-
-function formatSubmittedAt(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
 }
 
 function formatSubmittedDate(iso) {
@@ -111,7 +137,7 @@ function RequesterCell({ ticket, currentUser, compact = false }) {
   const showImg = img && !imgFailed;
   const size = compact ? "h-9 w-9" : "h-10 w-10";
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
+    <div className="flex min-w-0 max-w-full items-center gap-2.5 overflow-hidden">
       <div
         className={`${size} shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-[#0B3EAF] to-[#1a5fd4] p-[2px]`}
       >
@@ -181,11 +207,11 @@ export default function ItTicketsMonitorTable({
   const showActionsColumn = useMemo(() => {
     if (isIT || isAdmin) return true;
     return (Array.isArray(tickets) ? tickets : []).some((t) =>
-      canUserEditTicket(t, currentUser?.id)
+      canUserEditTicket(t, currentUser, { isIT, isAdmin })
     );
-  }, [tickets, isIT, isAdmin, currentUser?.id]);
+  }, [tickets, isIT, isAdmin, currentUser]);
 
-  const colCount = showActionsColumn ? 10 : 9;
+  const colCount = showActionsColumn ? 9 : 8;
 
   useEffect(() => {
     if (expandedId != null && !tickets.some((t) => t.id === expandedId)) {
@@ -312,45 +338,44 @@ export default function ItTicketsMonitorTable({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] table-fixed border-collapse text-sm">
+          <table className="w-full min-w-[980px] border-collapse border border-slate-200 text-sm dark:border-slate-600/50">
             <colgroup>
-              <col className="w-[3.25rem]" />
-              <col className="w-[6.5rem]" />
-              <col className="w-[6.5rem]" />
-              <col className="w-[7rem]" />
-              <col className="w-[14rem]" />
-              <col />
-              <col className="w-[10.5rem]" />
-              <col className="w-[8.5rem]" />
-              <col className="w-[7.5rem]" />
-              {showActionsColumn ? <col className="w-[11.5rem]" /> : null}
+              <col style={{ width: "3.25rem" }} />
+              <col style={{ width: "11.5rem" }} />
+              <col style={{ width: "14rem" }} />
+              <col style={{ width: "6.75rem" }} />
+              <col style={{ width: "6.75rem" }} />
+              <col style={{ width: "7.25rem" }} />
+              <col style={{ width: "8.5rem" }} />
+              <col style={{ width: "7.5rem" }} />
+              {showActionsColumn ? <col style={{ width: "11.5rem" }} /> : null}
             </colgroup>
-            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm dark:border-white/10 dark:bg-[#1a1a1a]/95">
+            <thead className="sticky top-0 z-10 border-b-2 border-slate-300 backdrop-blur-sm dark:border-slate-600">
               <tr>
-                <th className={`${TH} text-center`}>ID</th>
-                <th className={TH}>Status</th>
-                <th className={TH}>Priority</th>
-                <th className={TH}>Category</th>
-                <th className={TH}>Issue</th>
-                <th className={TH}>Description</th>
-                <th className={TH}>Requester</th>
-                <th className={TH}>Assignee</th>
-                <th className={TH}>Submitted</th>
-                {showActionsColumn ? <th className={`${TH} text-right`}>Actions</th> : null}
+                <th className={thClass("id", "text-center")}>ID</th>
+                <th className={thClass("requester")}>Requester</th>
+                <th className={thClass("issue")}>Issue</th>
+                <th className={thClass("status")}>Status</th>
+                <th className={thClass("priority")}>Priority</th>
+                <th className={thClass("category")}>Category</th>
+                <th className={thClass("assignee")}>Assignee</th>
+                <th className={thClass("submitted", "", !showActionsColumn)}>Submitted</th>
+                {showActionsColumn ? <th className={thClass("actions", "text-right", true)}>Actions</th> : null}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-              {filtered.map((t) => {
+            <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
+              {filtered.map((t, rowIdx) => {
                 const typeLabel = issueTypeFromTicketTitle(t.title);
                 const issueName = titleWithoutTypePrefix(t.title);
                 const attCount = parseTicketAttachments(t).length;
                 const expanded = expandedId === t.id;
-                const canEdit = canUserEditTicket(t, currentUser?.id);
+                const canEdit = canUserEditTicket(t, currentUser, { isIT, isAdmin });
                 const hasRowActions = isIT || isAdmin || canEdit;
+                const lastCol = !showActionsColumn;
                 return (
                   <Fragment key={t.id}>
-                    <tr className="transition-colors hover:bg-slate-50/80 dark:hover:bg-white/[0.03]">
-                      <td className={`${TD} text-center`}>
+                    <tr className="group border-b border-slate-200/80 transition-colors dark:border-slate-700/50">
+                      <td className={tdClass("id", rowIdx, "text-center")}>
                         <button
                           type="button"
                           className={[
@@ -373,26 +398,14 @@ export default function ItTicketsMonitorTable({
                           </span>
                         </button>
                       </td>
-                      <td className={TD}>
-                        <span className={`${BADGE} ${statusBadgeClass(t.status)}`}>
-                          {statusBadgeLabel(t.status)}
-                        </span>
+                      <td className={tdClass("requester", rowIdx, "max-w-[11.5rem] overflow-hidden")}>
+                        <RequesterCell ticket={t} currentUser={currentUser} compact />
                       </td>
-                      <td className={TD}>
-                        <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`}>
-                          {priorityBadgeLabel(t.priority)}
-                        </span>
-                      </td>
-                      <td className={TD}>
-                        {typeLabel ? (
-                          <span className={`${BADGE} ${issueTypeBadgeClass(typeLabel)}`}>{typeLabel}</span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                      <td className={`${TD} align-top`}>
-                        <div className="min-w-0">
-                          <div className="font-semibold leading-snug text-slate-900 dark:text-white">{issueName}</div>
+                      <td className={tdClass("issue", rowIdx, "max-w-[14rem] align-top")}>
+                        <div className="min-w-0 overflow-hidden">
+                          <div className="truncate font-semibold text-slate-900 dark:text-white" title={issueName}>
+                            {issueName}
+                          </div>
                           {attCount > 0 ? (
                             <div className="mt-1 inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
                               {attCount} attachment{attCount === 1 ? "" : "s"}
@@ -400,20 +413,29 @@ export default function ItTicketsMonitorTable({
                           ) : null}
                         </div>
                       </td>
-                      <td className={`${TD} align-top`}>
-                        <span className="line-clamp-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-                          {t.description?.trim() || "—"}
+                      <td className={tdClass("status", rowIdx)}>
+                        <span className={`${BADGE} ${statusBadgeClass(t.status)}`}>
+                          {statusBadgeLabel(t.status)}
                         </span>
                       </td>
-                      <td className={TD}>
-                        <RequesterCell ticket={t} currentUser={currentUser} compact />
+                      <td className={tdClass("priority", rowIdx)}>
+                        <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`}>
+                          {priorityBadgeLabel(t.priority)}
+                        </span>
                       </td>
-                      <td className={TD}>
+                      <td className={tdClass("category", rowIdx)}>
+                        {typeLabel ? (
+                          <span className={`${BADGE} ${issueTypeBadgeClass(typeLabel)}`}>{typeLabel}</span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className={tdClass("assignee", rowIdx, "max-w-[8.5rem] overflow-hidden")}>
                         <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-200">
                           {t.assignee_name?.trim() || "—"}
                         </span>
                       </td>
-                      <td className={TD}>
+                      <td className={tdClass("submitted", rowIdx, "", lastCol)}>
                         <div className="tabular-nums">
                           <div className="text-xs font-medium text-slate-800 dark:text-slate-200">
                             {formatSubmittedDate(t.created_at)}
@@ -424,7 +446,7 @@ export default function ItTicketsMonitorTable({
                         </div>
                       </td>
                       {showActionsColumn ? (
-                        <td className={`${TD} text-right`}>
+                        <td className={tdClass("actions", rowIdx, "text-right", true)}>
                           {hasRowActions ? (
                             <div className="flex flex-wrap items-center justify-end gap-1.5">
                               {canEdit ? (
@@ -479,103 +501,59 @@ export default function ItTicketsMonitorTable({
                       ) : null}
                     </tr>
                     {expanded ? (
-                      <tr className="bg-slate-50/60 dark:bg-white/[0.02]">
-                        <td colSpan={colCount} className="px-4 py-4">
-                          <div className="rounded-lg border border-slate-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-[#141414]">
-                            <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3 dark:border-white/10">
-                              <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                Ticket #{t.id}
-                              </span>
-                              <span className={`${BADGE} ${statusBadgeClass(t.status)}`}>
-                                {statusBadgeLabel(t.status)}
-                              </span>
-                              <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`}>
-                                {priorityBadgeLabel(t.priority)}
-                              </span>
-                              {typeLabel ? (
-                                <span className={`${BADGE} ${issueTypeBadgeClass(typeLabel)}`}>{typeLabel}</span>
-                              ) : null}
-                            </div>
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                              <div className="sm:col-span-2 lg:col-span-3">
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                  Full title
-                                </div>
-                                <div className="mt-1 text-sm leading-relaxed text-slate-800 dark:text-slate-200">
-                                  {t.title}
-                                </div>
-                              </div>
-                              {t.description?.trim() ? (
-                                <div className="sm:col-span-2 lg:col-span-3">
-                                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                    Description
-                                  </div>
-                                  <div className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-                                    {t.description.trim()}
-                                  </div>
-                                </div>
-                              ) : null}
+                      <tr className="group border-b border-slate-200/80 dark:border-slate-700/50">
+                        <td
+                          colSpan={colCount}
+                          className={`px-4 py-4 ${bodyColBg("issue", rowIdx)} border-t border-slate-200/60 dark:border-slate-600/40`}
+                        >
+                          <div className="rounded-lg border border-slate-200 border-l-4 border-l-[#0B3EAF] bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:border-l-[#5b8fd9] dark:bg-[#1c1c1c]">
+                            <div className="grid gap-5 sm:grid-cols-2">
                               <div>
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">
                                   Requester
                                 </div>
                                 <div className="mt-2">
                                   <RequesterCell ticket={t} currentUser={currentUser} />
                                 </div>
+                                {(isIT || isAdmin) && t.user_email ? (
+                                  <a
+                                    href={`mailto:${t.user_email}`}
+                                    className="mt-2 inline-block text-sm font-medium text-[#0B3EAF] underline-offset-2 hover:underline dark:text-[#A7D344]"
+                                  >
+                                    {t.user_email}
+                                  </a>
+                                ) : null}
                               </div>
                               <div>
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                  Assignee
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">
+                                  Description
                                 </div>
-                                <div className="mt-1 text-sm text-slate-800 dark:text-slate-200">
-                                  {t.assignee_name?.trim() || "Unassigned"}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                  Submitted
-                                </div>
-                                <div className="mt-1 text-sm tabular-nums text-slate-800 dark:text-slate-200">
-                                  {formatSubmittedAt(t.created_at)}
+                                <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+                                  {t.description?.trim() || "—"}
                                 </div>
                               </div>
-                              {(isIT || isAdmin) && t.user_email ? (
-                                <div>
-                                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                    Contact
-                                  </div>
-                                  <div className="mt-1 text-sm">
-                                    <a
-                                      href={`mailto:${t.user_email}`}
-                                      className="font-medium text-[#0B3EAF] underline-offset-2 hover:underline dark:text-[#A7D344]"
-                                    >
-                                      {t.user_email}
-                                    </a>
-                                  </div>
-                                </div>
-                              ) : null}
-                              {parseTicketAttachments(t).length > 0 ? (
-                                <div className="sm:col-span-2 lg:col-span-3">
-                                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                    Attachments
-                                  </div>
-                                  <ul className="mt-2 flex flex-wrap gap-2">
-                                    {parseTicketAttachments(t).map((a, i) => (
-                                      <li key={`${t.id}-exp-att-${i}`}>
-                                        <a
-                                          href={a.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-[#0B3EAF] transition hover:border-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:border-white/10 dark:bg-[#1a1a1a] dark:text-[#A7D344]"
-                                        >
-                                          {a.name || `File ${i + 1}`}
-                                        </a>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ) : null}
                             </div>
+                            {parseTicketAttachments(t).length > 0 ? (
+                              <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">
+                                  Attachments
+                                </div>
+                                <ul className="mt-2 flex flex-wrap gap-2">
+                                  {parseTicketAttachments(t).map((a, i) => (
+                                    <li key={`${t.id}-att-${i}`}>
+                                      <a
+                                        href={a.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex rounded-md border border-[rgba(11,62,175,0.2)] bg-white px-3 py-2 text-xs font-semibold text-[#0B3EAF] shadow-sm transition hover:border-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:border-[#A7D344]/30 dark:bg-[#1a1a1a] dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]"
+                                      >
+                                        {a.name || `File ${i + 1}`}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
                           </div>
                         </td>
                       </tr>

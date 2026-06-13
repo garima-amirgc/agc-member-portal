@@ -28,6 +28,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    strictPort: true,
     // Browser calls same origin `/api/*`; Vite forwards to the Express app on 5000.
     proxy: backendProxy,
   },

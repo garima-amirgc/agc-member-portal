@@ -100,7 +100,9 @@ export function buildTicketPayload({
   };
 }
 
-export function canUserEditTicket(ticket, userId) {
-  if (!ticket || userId == null) return false;
-  return Number(ticket.user_id) === Number(userId) && ticket.status === "open";
+export function canUserEditTicket(ticket, user, { isIT = false, isAdmin = false } = {}) {
+  if (!ticket || user?.id == null) return false;
+  if (ticket.status !== "open") return false;
+  if (isIT || isAdmin) return true;
+  return Number(ticket.user_id) === Number(user.id);
 }

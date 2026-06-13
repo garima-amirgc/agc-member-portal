@@ -22,6 +22,7 @@ export default function LoginPage() {
     password: isDev ? "admin123" : "",
   });
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
@@ -291,13 +292,34 @@ export default function LoginPage() {
                 <span className="w-1 shrink-0 bg-brand-blue/85 dark:bg-brand-green/90" aria-hidden />
                 <input
                   id="login-password"
-                  className="min-w-0 flex-1 border-0 bg-transparent py-3 pl-3.5 pr-3.5 text-base text-brand-black outline-none ring-0 sm:py-3.5 sm:pl-4 sm:pr-4 sm:text-sm dark:text-stone-100"
-                  type="password"
+                  className="min-w-0 flex-1 border-0 bg-transparent py-3 pl-3.5 pr-2 text-base text-brand-black outline-none ring-0 sm:py-3.5 sm:pl-4 sm:pr-2 sm:text-sm dark:text-stone-100"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   placeholder="••••••••"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                 />
+                <button
+                  type="button"
+                  className="flex shrink-0 items-center justify-center px-3 text-slate-500 transition hover:text-brand-blue dark:text-stone-400 dark:hover:text-brand-green"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? (
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <path d="M3 3l18 18" strokeLinecap="round" />
+                      <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83" />
+                      <path d="M9.88 5.09A10.94 10.94 0 0 1 12 5c5.52 0 10 4.48 10 8 0 1.1-.28 2.14-.77 3.05" />
+                      <path d="M6.61 6.61A10.94 10.94 0 0 0 2 13c0 3.52 4.48 8 10 8 1.74 0 3.37-.44 4.78-1.22" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <path d="M2 13c0-3.52 4.48-8 10-8s10 4.48 10 8-4.48 8-10 8-10-4.48-10-8z" />
+                      <circle cx="12" cy="13" r="3" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
 

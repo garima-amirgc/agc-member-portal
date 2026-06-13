@@ -125,7 +125,7 @@ export default function TicketEditModal({ ticket, assignees, onClose, onSaved })
                 Edit ticket #{ticket.id}
               </h2>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                You can update open requests until IT starts working on them.
+                Update open tickets while IT has not started work on them yet.
               </p>
             </div>
             <button

@@ -238,6 +238,86 @@ const SCHEMA = `
     FOREIGN KEY(manager_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
+  -- Employee of the Month (home page spotlight).
+  CREATE TABLE IF NOT EXISTS employee_of_month (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    manual_name TEXT,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
+    citation TEXT,
+    image_url TEXT,
+    published INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS leadership_updates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    link_url TEXT,
+    image_url TEXT,
+    published INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS new_hires (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    link_url TEXT,
+    image_url TEXT,
+    published INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS portal_settings (
+    setting_key TEXT PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS customer_wins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    link_url TEXT,
+    image_url TEXT,
+    published INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS community_involvement (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    link_url TEXT,
+    image_url TEXT,
+    published INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
   -- Admin-managed events shown on facility pages (Upcoming).
   CREATE TABLE IF NOT EXISTS facility_upcoming (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -577,6 +657,231 @@ async function initDb() {
     /* exists */
   }
 
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS employee_of_month (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        manual_name TEXT,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
+        citation TEXT,
+        image_url TEXT,
+        published INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+  } catch {
+    /* ignore */
+  }
+  try {
+    rawDb.exec("ALTER TABLE employee_of_month ADD COLUMN image_url TEXT");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE employee_of_month ADD COLUMN manual_name TEXT");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE employee_of_month ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("UPDATE employee_of_month SET sort_order = id WHERE COALESCE(sort_order, 0) = 0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS leadership_updates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        link_url TEXT,
+        image_url TEXT,
+        published INTEGER NOT NULL DEFAULT 1,
+        created_by INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+  } catch {
+    /* ignore */
+  }
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS new_hires (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        link_url TEXT,
+        image_url TEXT,
+        published INTEGER NOT NULL DEFAULT 1,
+        created_by INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    rawDb.exec("ALTER TABLE leadership_updates ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE new_hires ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* exists */
+  }
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS portal_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL,
+        updated_at TEXT
+      );
+    `);
+  } catch {
+    /* ignore */
+  }
+  try {
+    const migrated = rawDb
+      .prepare("SELECT 1 FROM portal_settings WHERE setting_key = 'eom_multi_per_month' LIMIT 1")
+      .get();
+    if (!migrated) {
+      rawDb.exec(`
+        CREATE TABLE employee_of_month__multi (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          manual_name TEXT,
+          year INTEGER NOT NULL,
+          month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
+          citation TEXT,
+          image_url TEXT,
+          published INTEGER NOT NULL DEFAULT 1,
+          created_by INTEGER,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+      rawDb.exec(`
+        INSERT INTO employee_of_month__multi (
+          id, user_id, manual_name, year, month, citation, image_url, published, created_by, created_at, updated_at
+        )
+        SELECT id, user_id, manual_name, year, month, citation, image_url, published, created_by, created_at, updated_at
+        FROM employee_of_month;
+      `);
+      rawDb.exec("DROP TABLE employee_of_month");
+      rawDb.exec("ALTER TABLE employee_of_month__multi RENAME TO employee_of_month");
+      rawDb.exec(`
+        INSERT INTO portal_settings (setting_key, setting_value, updated_at)
+        VALUES ('eom_multi_per_month', '1', datetime('now'));
+      `);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const migrated = rawDb
+      .prepare("SELECT 1 FROM portal_settings WHERE setting_key = 'eom_manual_entry' LIMIT 1")
+      .get();
+    if (!migrated) {
+      rawDb.exec(`
+        CREATE TABLE employee_of_month__manual (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          manual_name TEXT,
+          year INTEGER NOT NULL,
+          month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
+          citation TEXT,
+          image_url TEXT,
+          published INTEGER NOT NULL DEFAULT 1,
+          created_by INTEGER,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+      rawDb.exec(`
+        INSERT INTO employee_of_month__manual (
+          id, user_id, manual_name, year, month, citation, image_url, published, created_by, created_at, updated_at
+        )
+        SELECT id, user_id, manual_name, year, month, citation, image_url, published, created_by, created_at, updated_at
+        FROM employee_of_month;
+      `);
+      rawDb.exec("DROP TABLE employee_of_month");
+      rawDb.exec("ALTER TABLE employee_of_month__manual RENAME TO employee_of_month");
+      rawDb.exec(`
+        INSERT INTO portal_settings (setting_key, setting_value, updated_at)
+        VALUES ('eom_manual_entry', '1', datetime('now'));
+      `);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    rawDb.exec("UPDATE leadership_updates SET sort_order = id WHERE COALESCE(sort_order, 0) = 0");
+    rawDb.exec("UPDATE new_hires SET sort_order = id WHERE COALESCE(sort_order, 0) = 0");
+    rawDb.exec("UPDATE customer_wins SET sort_order = id WHERE COALESCE(sort_order, 0) = 0");
+    rawDb.exec("UPDATE community_involvement SET sort_order = id WHERE COALESCE(sort_order, 0) = 0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS customer_wins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        link_url TEXT,
+        image_url TEXT,
+        published INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+  } catch {
+    /* ignore */
+  }
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS community_involvement (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        link_url TEXT,
+        image_url TEXT,
+        published INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+  } catch {
+    /* ignore */
+  }
+
   // Polls/feedback popup tables (safe no-op if already exist).
   try {
     rawDb.exec(`
@@ -739,6 +1044,20 @@ async function initDb() {
   } catch {
     /* ignore */
   }
+
+  rawDb.exec(`
+    CREATE TABLE IF NOT EXISTS resource_report_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      business_unit TEXT NOT NULL CHECK(business_unit IN ('AGC','AQM','SCF','ASP')),
+      category TEXT NOT NULL DEFAULT 'it',
+      title TEXT NOT NULL,
+      link_url TEXT NOT NULL,
+      description TEXT,
+      created_by INTEGER,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+  `);
 
   rawDb.exec(`
     CREATE TABLE IF NOT EXISTS resource_progress (

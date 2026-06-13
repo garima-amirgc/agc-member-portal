@@ -14,6 +14,20 @@ import DashboardIndex from "./pages/DashboardIndex";
 import DashboardPage from "./pages/DashboardPage";
 import UpcomingPage, { UpcomingEventDetailPage } from "./pages/UpcomingPage";
 import AdminUpcomingPage from "./pages/AdminUpcomingPage";
+import AdminEmployeeOfMonthPage from "./pages/AdminEmployeeOfMonthPage";
+import AdminLeadershipUpdatesPage from "./pages/AdminLeadershipUpdatesPage";
+import AdminNewHiresPage from "./pages/AdminNewHiresPage";
+import EmployeeOfMonthHistoryPage from "./pages/EmployeeOfMonthHistoryPage";
+import LeadershipUpdatesPage from "./pages/LeadershipUpdatesPage";
+import LeadershipUpdateDetailPage from "./pages/LeadershipUpdateDetailPage";
+import NewHiresPage from "./pages/NewHiresPage";
+import NewHireDetailPage from "./pages/NewHireDetailPage";
+import CustomerWinsPage from "./pages/CustomerWinsPage";
+import CustomerWinDetailPage from "./pages/CustomerWinDetailPage";
+import AdminCustomerWinsPage from "./pages/AdminCustomerWinsPage";
+import CommunityInvolvementPage from "./pages/CommunityInvolvementPage";
+import CommunityInvolvementDetailPage from "./pages/CommunityInvolvementDetailPage";
+import AdminCommunityInvolvementPage from "./pages/AdminCommunityInvolvementPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import CoursePlayerPage from "./pages/CoursePlayerPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
@@ -100,6 +114,15 @@ export default function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="upcoming" element={<UpcomingPage />} />
         <Route path="upcoming/:eventId" element={<UpcomingEventDetailPage />} />
+        <Route path="employee-of-month/history" element={<EmployeeOfMonthHistoryPage />} />
+        <Route path="leadership-updates" element={<LeadershipUpdatesPage />} />
+        <Route path="leadership-updates/:id" element={<LeadershipUpdateDetailPage />} />
+        <Route path="new-hires" element={<NewHiresPage />} />
+        <Route path="new-hires/:id" element={<NewHireDetailPage />} />
+        <Route path="customer-wins" element={<CustomerWinsPage />} />
+        <Route path="customer-wins/:id" element={<CustomerWinDetailPage />} />
+        <Route path="community-involvement" element={<CommunityInvolvementPage />} />
+        <Route path="community-involvement/:id" element={<CommunityInvolvementDetailPage />} />
         <Route
           path="users"
           element={
@@ -162,6 +185,46 @@ export default function App() {
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
               <AdminUpcomingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/employee-of-month"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+              <AdminEmployeeOfMonthPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/leadership-updates"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+              <AdminLeadershipUpdatesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/new-hires"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+              <AdminNewHiresPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/customer-wins"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+              <AdminCustomerWinsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/community-involvement"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+              <AdminCommunityInvolvementPage />
             </ProtectedRoute>
           }
         />

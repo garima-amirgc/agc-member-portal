@@ -165,14 +165,33 @@ async function sendMail({ to, subject, text, html }) {
   const { from: rawFrom } = smtpConfig();
   const from = rawFrom.includes("<") ? rawFrom : EMAIL_FROM_NAME ? `${EMAIL_FROM_NAME} <${rawFrom}>` : rawFrom;
 
-  await t.sendMail({
+  const info = await t.sendMail({
     from,
     to,
     subject,
     text,
     html,
   });
-  return { sent: true };
+  console.log(`[EMAIL] Sent "${subject}" to ${to}${info.messageId ? ` (${info.messageId})` : ""}`);
+  return { sent: true, messageId: info.messageId };
+}
+
+/** Log SMTP readiness at startup (Render / production debugging). */
+async function verifySmtpConnection() {
+  const t = getTransporter();
+  if (!t) {
+    console.log("[EMAIL] SMTP not configured — password reset and invite mail will be skipped.");
+    return false;
+  }
+  try {
+    await t.verify();
+    console.log(`[EMAIL] SMTP connection verified (${smtpConfig().host})`);
+    return true;
+  } catch (err) {
+    const msg = String(err?.message || err).slice(0, 300);
+    console.error("[EMAIL] SMTP verify failed:", msg);
+    return false;
+  }
 }
 
 /**
@@ -375,6 +394,101 @@ async function sendITTicketCreatedEmail({
 }
 
 /**
+ * Notify assignee and requester when an open ticket is updated.
+ */
+async function sendITTicketUpdatedEmail({
+  to,
+  recipientName,
+  editorName,
+  assigneeName,
+  creatorName,
+  creatorEmail,
+  creatorDepartment,
+  ticketId,
+  title,
+  description,
+  priority,
+  attachments = [],
+}) {
+  if (!to) return { skipped: true };
+
+  const priorityLabel = String(priority || "medium").trim().toUpperCase();
+
+  const attLines =
+    Array.isArray(attachments) && attachments.length > 0
+      ? [
+          "Attachments:",
+          ...attachments.map((a, i) => {
+            const label = a?.name || `File ${i + 1}`;
+            const url = a?.url || "";
+            return url ? `  - ${label}: ${url}` : "";
+          }),
+          "",
+        ].filter(Boolean)
+      : [];
+
+  const attHtml =
+    Array.isArray(attachments) && attachments.length > 0
+      ? `<p><strong>Attachments:</strong></p><ul style="margin: 8px 0; padding-left: 20px;">${attachments
+          .map((a) => {
+            const url = String(a?.url || "").trim();
+            const label = escapeHtml(String(a?.name || "File"));
+            if (!url) return "";
+            return `<li><a href="${escapeHtml(url)}">${label}</a></li>`;
+          })
+          .filter(Boolean)
+          .join("")}</ul>`
+      : "";
+
+  const subject = `[AGC IT] Ticket #${ticketId} updated: ${title}`;
+  const text = [
+    `Hello${recipientName ? ` ${recipientName}` : ""},`,
+    "",
+    `An IT ticket was updated.`,
+    editorName ? `Updated by: ${editorName}` : "",
+    "",
+    `Ticket #${ticketId}: ${title}`,
+    `Priority: ${priorityLabel}`,
+    assigneeName ? `Assigned to: ${assigneeName}` : "",
+    `From: ${creatorName || "—"} (${creatorEmail || "—"})`,
+    `Department: ${creatorDepartment || "—"}`,
+    "",
+    description ? `Details:\n${description}` : "(No additional details)",
+    "",
+    ...attLines,
+    `Updated: ${new Date().toISOString()}`,
+    "",
+    `${APP_MAIL_BRAND} — IT ticketing`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="font-family: Segoe UI, Arial, sans-serif; line-height: 1.5; color: #0a0a0a;">
+  <p>Hello${recipientName ? ` ${escapeHtml(recipientName)}` : ""},</p>
+  <p><strong>An IT ticket was updated</strong> in ${escapeHtml(APP_MAIL_BRAND)}.</p>
+  ${editorName ? `<p><strong>Updated by:</strong> ${escapeHtml(editorName)}</p>` : ""}
+  <p style="margin: 16px 0; padding: 12px 16px; background: #fff8e8; border-left: 4px solid #f59e0b;">
+    <strong>#${escapeHtml(String(ticketId))}</strong> — ${escapeHtml(title)}
+  </p>
+  <p><strong>Priority:</strong> ${escapeHtml(priorityLabel)}</p>
+  ${assigneeName ? `<p><strong>Assigned to:</strong> ${escapeHtml(assigneeName)}</p>` : ""}
+  <p><strong>From:</strong> ${escapeHtml(creatorName || "—")} (${escapeHtml(creatorEmail || "—")})<br/>
+     <strong>Department:</strong> ${escapeHtml(creatorDepartment || "—")}</p>
+  ${description ? `<p style="white-space: pre-wrap;">${escapeHtml(description)}</p>` : ""}
+  ${attHtml}
+  <p style="font-size: 12px; color: #5c5f66;">${escapeHtml(new Date().toLocaleString())}</p>
+  <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
+  <p style="font-size: 12px; color: #5c5f66;">${APP_MAIL_BRAND} — automated IT notification</p>
+</body>
+</html>`;
+
+  return sendMail({ to, subject, text, html });
+}
+
+/**
  * Notify the ticket creator when their ticket is marked completed.
  */
 async function sendITTicketResolvedEmail({
@@ -505,7 +619,12 @@ async function deliverAccountInviteEmail({ to, name, setupUrl, validDays }) {
  * Password reset for accounts that already completed invite setup.
  */
 async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
-  if (!to) return { skipped: true };
+  if (!to) {
+    return { email_sent: false, email_error: "Missing recipient email address." };
+  }
+  if (!isEmailConfigured()) {
+    return { email_sent: false, email_error: SMTP_NOT_CONFIGURED_MSG };
+  }
   const mins = validMinutes ?? 60;
   const subject = `Reset your ${APP_MAIL_BRAND} password`;
   const rawUrl = String(resetUrl || "").trim();
@@ -546,13 +665,15 @@ async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
     bodyHtml,
   });
 
-  const out = await sendMail({ to, subject, text, html });
-  if (out.skipped) {
-    console.warn(
-      "[EMAIL] Password reset email not sent — configure SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM (and APP_BASE_URL / FRONTEND_URL for correct links)."
-    );
+  try {
+    const mail = await sendMail({ to, subject, text, html });
+    if (mail.sent) return { email_sent: true, messageId: mail.messageId };
+    return { email_sent: false, email_error: mail.reason || SMTP_NOT_CONFIGURED_MSG };
+  } catch (err) {
+    const msg = String(err?.message || err).slice(0, 300);
+    console.error("[EMAIL] Password reset delivery failed for", to, msg);
+    return { email_sent: false, email_error: msg };
   }
-  return out;
 }
 
 async function sendHelpReportEmail({
@@ -640,12 +761,14 @@ async function sendHelpReportEmail({
 module.exports = {
   EMAIL_TEMPLATE_VERSION,
   isEmailConfigured,
+  verifySmtpConnection,
   sendMail,
   resetTransporter,
   sendManagerCourseCompletionEmail,
   sendEmployeeAllTrainingCompleteEmail,
   sendManagerAllTrainingCompleteEmail,
   sendITTicketCreatedEmail,
+  sendITTicketUpdatedEmail,
   sendITTicketResolvedEmail,
   sendAccountInviteEmail,
   deliverAccountInviteEmail,

@@ -142,6 +142,79 @@ CREATE TABLE IF NOT EXISTS facility_upcoming (
   business_units TEXT
 );
 
+CREATE TABLE IF NOT EXISTS employee_of_month (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  manual_name TEXT,
+  year INTEGER NOT NULL,
+  month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
+  citation TEXT,
+  image_url TEXT,
+  published INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS leadership_updates (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  link_url TEXT,
+  image_url TEXT,
+  published INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS new_hires (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  link_url TEXT,
+  image_url TEXT,
+  published INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS portal_settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS customer_wins (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  link_url TEXT,
+  image_url TEXT,
+  published INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS community_involvement (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  link_url TEXT,
+  image_url TEXT,
+  published INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS birthday_list (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -249,6 +322,17 @@ CREATE TABLE IF NOT EXISTS resource_documents (
   file_uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS resource_report_links (
+  id SERIAL PRIMARY KEY,
+  business_unit TEXT NOT NULL CHECK(business_unit IN ('AGC','AQM','SCF','ASP')),
+  category TEXT NOT NULL DEFAULT 'it',
+  title TEXT NOT NULL,
+  link_url TEXT NOT NULL,
+  description TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS resource_progress (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -336,6 +420,86 @@ async function migrateColumns(client) {
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       visited_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS employee_of_month (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      manual_name TEXT,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
+      citation TEXT,
+      image_url TEXT,
+      published INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ
+    )`,
+    "ALTER TABLE employee_of_month ADD COLUMN IF NOT EXISTS image_url TEXT",
+    "ALTER TABLE employee_of_month ADD COLUMN IF NOT EXISTS manual_name TEXT",
+    "ALTER TABLE employee_of_month ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
+    `CREATE TABLE IF NOT EXISTS leadership_updates (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      link_url TEXT,
+      image_url TEXT,
+      published INTEGER NOT NULL DEFAULT 1,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS new_hires (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      link_url TEXT,
+      image_url TEXT,
+      published INTEGER NOT NULL DEFAULT 1,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ
+    )`,
+    "ALTER TABLE leadership_updates ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE new_hires ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
+    `CREATE TABLE IF NOT EXISTS portal_settings (
+      setting_key TEXT PRIMARY KEY,
+      setting_value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS customer_wins (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      link_url TEXT,
+      image_url TEXT,
+      published INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_involvement (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      link_url TEXT,
+      image_url TEXT,
+      published INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS resource_report_links (
+      id SERIAL PRIMARY KEY,
+      business_unit TEXT NOT NULL CHECK(business_unit IN ('AGC','AQM','SCF','ASP')),
+      category TEXT NOT NULL DEFAULT 'it',
+      title TEXT NOT NULL,
+      link_url TEXT NOT NULL,
+      description TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )`,
     "CREATE INDEX IF NOT EXISTS idx_portal_visit_log_visited_at ON portal_visit_log (visited_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_portal_visit_log_user_id ON portal_visit_log (user_id)",
@@ -442,6 +606,35 @@ async function migrateColumns(client) {
     `);
   } catch (e) {
     console.warn("[pg migrate] resource_documents file_uploaded_at backfill:", e.message);
+  }
+
+  try {
+    await client.query(`ALTER TABLE employee_of_month DROP CONSTRAINT IF EXISTS employee_of_month_year_month_key`);
+  } catch (e) {
+    console.warn("[pg migrate] employee_of_month drop unique:", e.message);
+  }
+
+  try {
+    await client.query(`ALTER TABLE employee_of_month ADD COLUMN IF NOT EXISTS manual_name TEXT`);
+    await client.query(`ALTER TABLE employee_of_month ALTER COLUMN user_id DROP NOT NULL`);
+  } catch (e) {
+    console.warn("[pg migrate] employee_of_month manual entry:", e.message);
+  }
+
+  try {
+    await client.query(`ALTER TABLE employee_of_month ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0`);
+    await client.query(`UPDATE employee_of_month SET sort_order = id WHERE COALESCE(sort_order, 0) = 0`);
+  } catch (e) {
+    console.warn("[pg migrate] employee_of_month sort_order:", e.message);
+  }
+
+  try {
+    await client.query(`UPDATE leadership_updates SET sort_order = id WHERE COALESCE(sort_order, 0) = 0`);
+    await client.query(`UPDATE new_hires SET sort_order = id WHERE COALESCE(sort_order, 0) = 0`);
+    await client.query(`UPDATE customer_wins SET sort_order = id WHERE COALESCE(sort_order, 0) = 0`);
+    await client.query(`UPDATE community_involvement SET sort_order = id WHERE COALESCE(sort_order, 0) = 0`);
+  } catch (e) {
+    console.warn("[pg migrate] spotlight sort_order backfill:", e.message);
   }
 
   try {

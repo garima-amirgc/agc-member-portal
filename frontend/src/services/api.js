@@ -68,6 +68,11 @@ function resolveApiBaseURL() {
       return `https://${renderSibling[1]}.onrender.com`;
     }
 
+    /** Custom SPA domain when VITE_API_URL was not baked into the build. */
+    if (hostname === "memberportal.amirgc.com") {
+      return "https://agc-member-portal.onrender.com";
+    }
+
     const isLocal =
       hostname === "localhost" ||
       hostname === "127.0.0.1" ||
@@ -154,6 +159,44 @@ export async function putUserSave(userId, body) {
  * so Vite’s proxy is used. When API is cross-origin (e.g. page on localhost:5173, API on 127.0.0.1:5000),
  * POST to the configured base with `/api/users/...`.
  */
+/** Public auth routes (forgot password, reset, invite) — reliable across SPA proxy and cross-origin API. */
+export function authPublicPath(subpath) {
+  const p = String(subpath || "").replace(/^\//, "");
+  const b = String(getApiBaseURL() || "");
+  if (b === "/api") return `/auth/${p}`;
+  if (/^https?:\/\//i.test(b)) return `/auth/${p}`;
+  return `/api/auth/${p}`;
+}
+
+export async function postRecoverAccess(email) {
+  const path = "/api/auth/recover-access";
+  const body = { email: String(email || "").trim() };
+  const cfg = { timeout: 90000 };
+  if (typeof window !== "undefined") {
+    const pageOrigin = window.location.origin;
+    // Vite dev: always POST via the page origin so `/api` proxies to the backend on :5000.
+    if (import.meta.env.DEV) {
+      const { data } = await api.post(path, body, { ...cfg, baseURL: pageOrigin });
+      return data;
+    }
+    const base = String(getApiBaseURL() || "");
+    let crossOriginApi = false;
+    if (/^https?:\/\//i.test(base)) {
+      try {
+        crossOriginApi = new URL(base).origin !== pageOrigin;
+      } catch {
+        crossOriginApi = false;
+      }
+    }
+    if (!crossOriginApi) {
+      const { data } = await api.post(path, body, { ...cfg, baseURL: pageOrigin });
+      return data;
+    }
+  }
+  const { data } = await api.post(authPublicPath("recover-access"), body, cfg);
+  return data;
+}
+
 export async function postUsersResendInvite(userId) {
   const id = encodeURIComponent(String(userId));
   const path = `/api/users/${id}/resend-invite`;

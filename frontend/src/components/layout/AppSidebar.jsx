@@ -3,8 +3,10 @@ import { useMemo, useState } from "react";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../../constants/branding";
 import { useAuth } from "../../context/AuthContext";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
+import { adminNavGroupLabel } from "../../constants/adminNavGroups";
 import { isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
 import { IconChevron, IconHelp, IconSearch, IconSparkle } from "./SidebarIcons";
+import { SidebarAdminGroupDropdown } from "./AdminNavGroupDropdown";
 
 function NavItem({ to, end, icon: Icon, label, desc }) {
   const sub = desc?.trim();
@@ -78,7 +80,7 @@ function NavSection({ title, defaultOpen, children }) {
 
 export default function AppSidebar() {
   const { user } = useAuth();
-  const { mainItems, adminItems, homeTo } = usePortalNavItems(user);
+  const { mainItems, adminGroups, homeTo } = usePortalNavItems(user);
   const universityOnly = isFacilityUniversityOnlyPortal(user);
   const [query, setQuery] = useState("");
 
@@ -86,11 +88,22 @@ export default function AppSidebar() {
   const match = (item) =>
     !q ||
     item.label.toLowerCase().includes(q) ||
-    (item.desc && String(item.desc).toLowerCase().includes(q));
+    (item.desc && String(item.desc).toLowerCase().includes(q)) ||
+    (item.group && adminNavGroupLabel(item.group).toLowerCase().includes(q));
 
   const filteredMain = mainItems.filter(match);
-  const filteredAdmin = adminItems.filter(match);
-  const showAdminSection = filteredAdmin.length > 0 || (user?.role === "Admin" && !q);
+  const filteredAdminGroups = useMemo(
+    () =>
+      adminGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(match),
+        }))
+        .filter((group) => group.items.length > 0),
+    [adminGroups, q],
+  );
+  const filteredAdminCount = filteredAdminGroups.reduce((sum, group) => sum + group.items.length, 0);
+  const showAdminSection = filteredAdminCount > 0 || (user?.role === "Admin" && !q);
 
   if (!user) return null;
 
@@ -131,13 +144,17 @@ export default function AppSidebar() {
 
         {showAdminSection ? (
           <NavSection title="Administration" defaultOpen>
-            {filteredAdmin.map((item) => (
-              <NavItem key={item.to} {...item} />
+            {filteredAdminGroups.map((group) => (
+              <SidebarAdminGroupDropdown key={group.key} label={group.label} forceOpen={!!q}>
+                {group.items.map((item) => (
+                  <NavItem key={item.to} {...item} />
+                ))}
+              </SidebarAdminGroupDropdown>
             ))}
           </NavSection>
         ) : null}
 
-        {q && !filteredMain.length && !(showAdminSection && filteredAdmin.length) ? (
+        {q && !filteredMain.length && !(showAdminSection && filteredAdminCount) ? (
           <p className="px-2 py-4 text-center text-sm text-white/80">No matches</p>
         ) : null}
       </nav>

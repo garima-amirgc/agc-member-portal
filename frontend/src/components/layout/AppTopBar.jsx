@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { PAGE_GUTTER_X } from "../../constants/pageLayout";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
+import { TopBarAdminGroupDropdown } from "./AdminNavGroupDropdown";
 import { resolvePublicMediaUrl } from "../../utils/mediaUrl";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
 
@@ -56,7 +57,7 @@ function TopBarNavLink({ item, onNavigate }) {
 export default function AppTopBar({ darkMode, setDarkMode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { mainItems, adminItems } = usePortalNavItems(user);
+  const { mainItems, adminGroups } = usePortalNavItems(user);
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -147,14 +148,18 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
                     />
                   ))}
                 </div>
-                {adminItems.length > 0 ? (
+                {adminGroups.length > 0 ? (
                   <>
                     <p className="px-4 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-[#5c5f66] dark:text-white/55">
                       Administration
                     </p>
                     <div className="border-b border-[#0B3EAF]/10 pb-2 dark:border-white/10">
-                      {adminItems.map((item) => (
-                        <TopBarNavLink key={item.to} item={item} onNavigate={closeMenu} />
+                      {adminGroups.map((group) => (
+                        <TopBarAdminGroupDropdown key={group.key} label={group.label}>
+                          {group.items.map((item) => (
+                            <TopBarNavLink key={item.to} item={item} onNavigate={closeMenu} />
+                          ))}
+                        </TopBarAdminGroupDropdown>
                       ))}
                     </div>
                   </>

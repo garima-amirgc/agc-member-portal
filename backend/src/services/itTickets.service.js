@@ -286,51 +286,33 @@ async function updateTicketStatus(itUserId, ticketId, status) {
 }
 
 async function notifyItStaffNewTicket(ticketRow, creator, assignee) {
-  const primary = assignee?.email ? [{ email: assignee.email, name: assignee.name }] : [];
-
-  const others = await db
-    .prepare(
-      `
-      SELECT DISTINCT u.email, u.name FROM users u
-      INNER JOIN user_departments ud ON ud.user_id = u.id AND ud.department = 'IT'
-      WHERE u.email IS NOT NULL AND TRIM(u.email) <> ''
-        AND u.id <> ?
-      `
-    )
-    .all(assignee?.id ?? 0);
-
-  const recipients = [...primary, ...others];
-  if (recipients.length === 0) {
-    console.log("[IT_TICKET] No IT users with email on file — skip mail");
+  if (!assignee?.email || !String(assignee.email).trim()) {
+    console.log("[IT_TICKET] Assignee has no email on file — skip mail");
     return { notified: 0, skipped: true };
   }
 
   const creatorDepartment = await normalizeDept(creator);
   const attachmentList = parseAttachmentsRow(ticketRow.attachments);
 
-  const results = await Promise.all(
-    recipients.map((u) =>
-      email.sendITTicketCreatedEmail({
-        to: u.email,
-        itName: u.name,
-        assigneeName: assignee?.name,
-        creatorName: creator?.name,
-        creatorEmail: creator?.email,
-        creatorDepartment,
-        ticketId: ticketRow.id,
-        title: ticketRow.title,
-        description: ticketRow.description,
-        priority: ticketRow.priority,
-        attachments: attachmentList,
-      })
-    )
-  );
+  const result = await email.sendITTicketCreatedEmail({
+    to: assignee.email,
+    itName: assignee.name,
+    assigneeName: assignee.name,
+    creatorName: creator?.name,
+    creatorEmail: creator?.email,
+    creatorDepartment,
+    ticketId: ticketRow.id,
+    title: ticketRow.title,
+    description: ticketRow.description,
+    priority: ticketRow.priority,
+    attachments: attachmentList,
+  });
 
-  const sent = results.filter((r) => r.sent).length;
-  return { notified: recipients.length, sent };
+  return { notified: 1, sent: result.sent ? 1 : 0 };
 }
 
-async function updateTicketByOwner(userId, ticketId, body) {
+async function updateTicketByOwner(actor, ticketId, body) {
+  const userId = actor?.id;
   const id = Number(ticketId);
   if (!Number.isFinite(id) || id < 1) {
     const e = new Error("Invalid ticket id");
@@ -344,8 +326,12 @@ async function updateTicketByOwner(userId, ticketId, body) {
     e.statusCode = 404;
     throw e;
   }
-  if (Number(row.user_id) !== Number(userId)) {
-    const e = new Error("You can only edit your own tickets");
+
+  const isOwner = Number(row.user_id) === Number(userId);
+  const isIt = userId != null && (await userDeptSvc.hasDepartment(userId, "IT"));
+  const isAdmin = canonicalRole(actor?.role) === ROLES.ADMIN;
+  if (!isOwner && !isIt && !isAdmin) {
+    const e = new Error("You cannot edit this ticket");
     e.statusCode = 403;
     throw e;
   }
@@ -390,7 +376,59 @@ async function updateTicketByOwner(userId, ticketId, body) {
     )
     .run(title, description, priority, assigneeId, attachmentsJson, id);
 
-  return getTicketById(id);
+  const updated = await getTicketById(id);
+  try {
+    await notifyTicketUpdated(updated, actor);
+  } catch (err) {
+    console.error("[IT_TICKET] Update email notify failed:", err?.message || err);
+  }
+  return updated;
+}
+
+async function notifyTicketUpdated(ticketRow, editor) {
+  const attachmentList = parseAttachmentsRow(ticketRow?.attachments);
+  const creatorDepartment = await normalizeDept({ id: ticketRow?.user_id, department: ticketRow?.user_department });
+
+  const recipients = [];
+  const seen = new Set();
+  const add = (email, name) => {
+    const e = String(email || "").trim();
+    if (!e) return;
+    const key = e.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    recipients.push({ email: e, name: name || "" });
+  };
+
+  add(ticketRow?.assignee_email, ticketRow?.assignee_name);
+  add(ticketRow?.user_email, ticketRow?.user_name);
+
+  if (recipients.length === 0) {
+    console.log("[IT_TICKET] No recipients for update email — skip mail");
+    return { notified: 0, skipped: true };
+  }
+
+  const results = await Promise.all(
+    recipients.map((r) =>
+      email.sendITTicketUpdatedEmail({
+        to: r.email,
+        recipientName: r.name,
+        editorName: editor?.name,
+        assigneeName: ticketRow?.assignee_name,
+        creatorName: ticketRow?.user_name,
+        creatorEmail: ticketRow?.user_email,
+        creatorDepartment,
+        ticketId: ticketRow.id,
+        title: ticketRow.title,
+        description: ticketRow.description,
+        priority: ticketRow.priority,
+        attachments: attachmentList,
+      })
+    )
+  );
+
+  const sent = results.filter((r) => r.sent).length;
+  return { notified: recipients.length, sent };
 }
 
 async function deleteTicket(actor, ticketId) {

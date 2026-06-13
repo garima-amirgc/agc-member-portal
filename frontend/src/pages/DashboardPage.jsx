@@ -11,9 +11,21 @@ import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 import { splitUpcomingForHome } from "../utils/upcomingFeedSplit";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { hasAdminGrant } from "../utils/adminAccess";
-import { isSupervisor } from "../utils/supervisorAccess";
 import { userHasDepartment } from "../utils/userDepts";
 import ItTicketsAssigneeWidget from "../components/ItTicketsAssigneeWidget";
+import EmployeeOfMonthCard from "../components/EmployeeOfMonthCard";
+import LeadershipUpdateCard from "../components/LeadershipUpdateCard";
+import NewHireCard from "../components/NewHireCard";
+import CustomerWinCard from "../components/CustomerWinCard";
+import CommunityInvolvementCard from "../components/CommunityInvolvementCard";
+import { COMMUNITY_INVOLVEMENT_FEED, CUSTOMER_WINS_FEED, NEW_HIRES_FEED } from "../constants/spotlightFeedConfig";
+
+function parseSpotlightFeedEntries(data) {
+  if (Array.isArray(data)) {
+    return data.filter((item) => item?.title);
+  }
+  return data?.title ? [data] : [];
+}
 
 function CelebrationMiniCard({ item, onClick, kind = "birthday" }) {
   const fullName = String(item?.name || "").trim();
@@ -74,8 +86,8 @@ function CelebrationMiniCard({ item, onClick, kind = "birthday" }) {
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const canLearningAdmin = hasAdminGrant(user, ADMIN_GRANT_KEYS.LEARNING_ADMIN);
   const canReports = user?.role === "Admin" || hasAdminGrant(user, ADMIN_GRANT_KEYS.REPORTS);
+  const canManageSpotlightFeeds = hasAdminGrant(user, ADMIN_GRANT_KEYS.UPCOMING);
   const isIT = userHasDepartment(user, "IT");
   const [upcoming, setUpcoming] = useState([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
@@ -90,6 +102,20 @@ export default function DashboardPage() {
   const { openCelebration } = useCelebration();
   const [topVisitors, setTopVisitors] = useState([]);
   const [topVisitorsLoading, setTopVisitorsLoading] = useState(false);
+  const [employeeOfMonthEntries, setEmployeeOfMonthEntries] = useState([]);
+  const [employeeOfMonthLoading, setEmployeeOfMonthLoading] = useState(true);
+  const [leadershipUpdateEntries, setLeadershipUpdateEntries] = useState([]);
+  const [leadershipUpdateLoading, setLeadershipUpdateLoading] = useState(true);
+  const [newHireEntries, setNewHireEntries] = useState([]);
+  const [newHireLoading, setNewHireLoading] = useState(true);
+  const [customerWinEntries, setCustomerWinEntries] = useState([]);
+  const [customerWinLoading, setCustomerWinLoading] = useState(true);
+  const [communityInvolvementEntries, setCommunityInvolvementEntries] = useState([]);
+  const [communityInvolvementLoading, setCommunityInvolvementLoading] = useState(true);
+  const [bottomRowOrder, setBottomRowOrder] = useState([
+    NEW_HIRES_FEED.widgetKey,
+    CUSTOMER_WINS_FEED.widgetKey,
+  ]);
 
   const loadUpcoming = useCallback(async () => {
     setUpcomingLoading(true);
@@ -137,6 +163,172 @@ export default function DashboardPage() {
   useEffect(() => {
     loadBirthdays();
   }, [loadBirthdays]);
+
+  const loadEmployeeOfMonth = useCallback(async () => {
+    setEmployeeOfMonthLoading(true);
+    try {
+      const { data } = await api.get("/employee-of-month/current");
+      const rows = Array.isArray(data)
+        ? data.filter((item) => item?.employee?.name)
+        : data?.employee?.name
+          ? [data]
+          : [];
+      setEmployeeOfMonthEntries(rows);
+    } catch (err) {
+      console.warn("Employee of the Month failed:", err.response?.status, err.response?.data ?? err.message);
+      setEmployeeOfMonthEntries([]);
+    } finally {
+      setEmployeeOfMonthLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadEmployeeOfMonth();
+  }, [loadEmployeeOfMonth]);
+
+  const loadLeadershipUpdate = useCallback(async () => {
+    setLeadershipUpdateLoading(true);
+    try {
+      const { data } = await api.get("/leadership-updates/current");
+      setLeadershipUpdateEntries(parseSpotlightFeedEntries(data));
+    } catch (err) {
+      console.warn("Leadership update failed:", err.response?.status, err.response?.data ?? err.message);
+      setLeadershipUpdateEntries([]);
+    } finally {
+      setLeadershipUpdateLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLeadershipUpdate();
+  }, [loadLeadershipUpdate]);
+
+  const loadNewHire = useCallback(async () => {
+    setNewHireLoading(true);
+    try {
+      const { data } = await api.get("/new-hires/current");
+      setNewHireEntries(parseSpotlightFeedEntries(data));
+    } catch (err) {
+      console.warn("New hire failed:", err.response?.status, err.response?.data ?? err.message);
+      setNewHireEntries([]);
+    } finally {
+      setNewHireLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNewHire();
+  }, [loadNewHire]);
+
+  const loadCustomerWin = useCallback(async () => {
+    setCustomerWinLoading(true);
+    try {
+      const { data } = await api.get("/customer-wins/current");
+      setCustomerWinEntries(parseSpotlightFeedEntries(data));
+    } catch (err) {
+      console.warn("Customer win failed:", err.response?.status, err.response?.data ?? err.message);
+      setCustomerWinEntries([]);
+    } finally {
+      setCustomerWinLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCustomerWin();
+  }, [loadCustomerWin]);
+
+  const loadCommunityInvolvement = useCallback(async () => {
+    setCommunityInvolvementLoading(true);
+    try {
+      const { data } = await api.get("/community-involvement/current");
+      setCommunityInvolvementEntries(parseSpotlightFeedEntries(data));
+    } catch (err) {
+      console.warn("Community involvement failed:", err.response?.status, err.response?.data ?? err.message);
+      setCommunityInvolvementEntries([]);
+    } finally {
+      setCommunityInvolvementLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCommunityInvolvement();
+  }, [loadCommunityInvolvement]);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("/home-spotlight/layout")
+      .then(({ data }) => {
+        if (!alive) return;
+        const order = Array.isArray(data?.order) ? data.order : [];
+        const allowed = [
+          NEW_HIRES_FEED.widgetKey,
+          CUSTOMER_WINS_FEED.widgetKey,
+          COMMUNITY_INVOLVEMENT_FEED.widgetKey,
+        ];
+        const normalized = [];
+        const seen = new Set();
+        for (const key of order) {
+          const k = String(key || "").trim();
+          if (!allowed.includes(k) || seen.has(k)) continue;
+          seen.add(k);
+          normalized.push(k);
+        }
+        for (const key of allowed) {
+          if (!seen.has(key)) normalized.push(key);
+        }
+        setBottomRowOrder(normalized);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setBottomRowOrder([NEW_HIRES_FEED.widgetKey, CUSTOMER_WINS_FEED.widgetKey, COMMUNITY_INVOLVEMENT_FEED.widgetKey]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const bottomRowWidgets = useMemo(() => {
+    const map = {
+      [NEW_HIRES_FEED.widgetKey]: (
+        <NewHireCard
+          key={NEW_HIRES_FEED.widgetKey}
+          entries={newHireEntries}
+          loading={newHireLoading}
+          compact
+          canManage={canManageSpotlightFeeds}
+        />
+      ),
+      [CUSTOMER_WINS_FEED.widgetKey]: (
+        <CustomerWinCard
+          key={CUSTOMER_WINS_FEED.widgetKey}
+          entries={customerWinEntries}
+          loading={customerWinLoading}
+          compact
+          canManage={canManageSpotlightFeeds}
+        />
+      ),
+      [COMMUNITY_INVOLVEMENT_FEED.widgetKey]: (
+        <CommunityInvolvementCard
+          key={COMMUNITY_INVOLVEMENT_FEED.widgetKey}
+          entries={communityInvolvementEntries}
+          loading={communityInvolvementLoading}
+          compact
+          canManage={canManageSpotlightFeeds}
+        />
+      ),
+    };
+    return bottomRowOrder.map((key) => map[key]).filter(Boolean);
+  }, [
+    bottomRowOrder,
+    newHireEntries,
+    newHireLoading,
+    customerWinEntries,
+    customerWinLoading,
+    communityInvolvementEntries,
+    communityInvolvementLoading,
+    canManageSpotlightFeeds,
+  ]);
 
   // Lightweight per-session portal visit tracking.
   useEffect(() => {
@@ -207,7 +399,7 @@ export default function DashboardPage() {
 
             {isIT ? <ItTicketsAssigneeWidget /> : null}
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-6">
               <div className="card">
                 <h2 className="mb-2 text-lg font-semibold">Your role</h2>
                 <p className="text-sm text-[#000000] dark:text-white/90">
@@ -217,51 +409,27 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="card">
-                <h2 className="mb-2 text-lg font-semibold">Quick links</h2>
-                <div className="space-y-2 text-sm">
-                  <Link
-                    className="block rounded-portal border border-transparent px-2 py-1.5 font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:bg-[rgba(167,211,68,0.12)] hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF] dark:hover:bg-[rgba(11,62,175,0.2)]"
-                    to="/facilities"
-                  >
-                    AGC University
-                  </Link>
-                  <Link
-                    className="block rounded-portal border border-transparent px-2 py-1.5 font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:bg-[rgba(167,211,68,0.12)] hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF] dark:hover:bg-[rgba(11,62,175,0.2)]"
-                    to="/employee-engagement-calendar"
-                  >
-                    Employee engagement calendar
-                  </Link>
-                  <Link
-                    className="block rounded-portal border border-transparent px-2 py-1.5 font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:bg-[rgba(167,211,68,0.12)] hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF] dark:hover:bg-[rgba(11,62,175,0.2)]"
-                    to="/it-tickets"
-                  >
-                    IT Ticket
-                  </Link>
-                  <Link
-                    className="block rounded-portal border border-transparent px-2 py-1.5 font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:bg-[rgba(167,211,68,0.12)] hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF] dark:hover:bg-[rgba(11,62,175,0.2)]"
-                    to="/profile"
-                  >
-                    Profile & leave requests
-                  </Link>
-                  {canLearningAdmin && (
-                    <Link
-                      className="block rounded-portal border border-transparent px-2 py-1.5 font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:bg-[rgba(167,211,68,0.12)] hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF] dark:hover:bg-[rgba(11,62,175,0.2)]"
-                      to="/admin"
-                    >
-                      Learning admin
-                    </Link>
-                  )}
-                  {isSupervisor(user) && (
-                    <Link
-                      className="block rounded-portal border border-transparent px-2 py-1.5 font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:bg-[rgba(167,211,68,0.12)] hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF] dark:hover:bg-[rgba(11,62,175,0.2)]"
-                      to="/manager"
-                    >
-                      My team
-                    </Link>
-                  )}
-                </div>
+              <div className="grid gap-6 md:grid-cols-2">
+                {employeeOfMonthLoading || employeeOfMonthEntries.length > 0 ? (
+                  <EmployeeOfMonthCard
+                    entries={employeeOfMonthEntries}
+                    loading={employeeOfMonthLoading}
+                    compact
+                  />
+                ) : (
+                  <div className="hidden md:block" aria-hidden />
+                )}
+                <LeadershipUpdateCard
+                  entries={leadershipUpdateEntries}
+                  loading={leadershipUpdateLoading}
+                  compact
+                  canManage={canManageSpotlightFeeds}
+                />
               </div>
+
+              <hr className="border-slate-200 dark:border-slate-700" />
+
+              <div className="grid gap-6 md:grid-cols-2">{bottomRowWidgets}</div>
             </div>
 
             {canReports ? (

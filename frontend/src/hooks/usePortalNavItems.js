@@ -11,6 +11,7 @@ import {
   IconUsers,
 } from "../components/layout/SidebarIcons";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
+import { buildAdminNavGroups } from "../constants/adminNavGroups";
 import { hasAdminGrant } from "../utils/adminAccess";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../utils/facilityUniversityOnly";
 import { isSupervisor } from "../utils/supervisorAccess";
@@ -30,6 +31,7 @@ export function usePortalNavItems(user) {
           { to: "/it-tickets", icon: IconTicket, label: "IT Ticket" },
         ],
         adminItems: [],
+        adminGroups: [],
         homeTo: home,
       };
     }
@@ -97,41 +99,35 @@ export function usePortalNavItems(user) {
           label: "Calendar",
           desc: "Add holidays / activities",
           grantKey: ADMIN_GRANT_KEYS.ENGAGEMENT_CALENDAR,
+          group: "hr",
         },
         {
-          to: "/admin/upcoming",
-          icon: IconCalendar,
-          label: "Manage upcoming",
-          grantKey: ADMIN_GRANT_KEYS.UPCOMING,
-        },
-        {
-          to: "/users",
+          to: "/admin/employee-of-month",
           icon: IconUsers,
-          label: "Users",
-          grantKey: ADMIN_GRANT_KEYS.USERS,
+          label: "Employee of the Month",
+          grantKey: ADMIN_GRANT_KEYS.UPCOMING,
+          group: "hr",
         },
         {
-          to: "/admin",
-          icon: IconCog,
-          label: "Learning admin",
-          end: true,
-          grantKey: ADMIN_GRANT_KEYS.LEARNING_ADMIN,
+          to: "/admin/leadership-updates",
+          icon: IconUsers,
+          label: "Leadership updates",
+          grantKey: ADMIN_GRANT_KEYS.UPCOMING,
+          group: "hr",
         },
         {
-          to: "/admin/reports",
-          icon: IconChart,
-          label: "Manage reports",
-          desc: "Add Power BI embeds",
-          end: true,
-          grantKey: ADMIN_GRANT_KEYS.REPORTS,
+          to: "/admin/new-hires",
+          icon: IconUsers,
+          label: "New hires",
+          grantKey: ADMIN_GRANT_KEYS.UPCOMING,
+          group: "hr",
         },
         {
-          to: "/admin/system",
-          icon: IconCog,
-          label: "System status",
-          desc: "Health & metrics",
-          end: true,
-          grantKey: ADMIN_GRANT_KEYS.SYSTEM,
+          to: "/admin/community-involvement",
+          icon: IconUsers,
+          label: "Community involvement",
+          grantKey: ADMIN_GRANT_KEYS.UPCOMING,
+          group: "hr",
         },
         {
           to: "/admin/polls",
@@ -140,6 +136,54 @@ export function usePortalNavItems(user) {
           desc: "Popup surveys",
           end: true,
           grantKey: ADMIN_GRANT_KEYS.FEEDBACK_POLLS,
+          group: "hr",
+        },
+        {
+          to: "/admin/upcoming",
+          icon: IconCalendar,
+          label: "Manage upcoming",
+          grantKey: ADMIN_GRANT_KEYS.UPCOMING,
+          group: "social",
+        },
+        {
+          to: "/admin/customer-wins",
+          icon: IconUsers,
+          label: "Customer wins",
+          grantKey: ADMIN_GRANT_KEYS.UPCOMING,
+          group: "sales",
+        },
+        {
+          to: "/users",
+          icon: IconUsers,
+          label: "Users",
+          grantKey: ADMIN_GRANT_KEYS.USERS,
+          group: "it",
+        },
+        {
+          to: "/admin/reports",
+          icon: IconChart,
+          label: "Manage reports",
+          desc: "Add Power BI embeds",
+          end: true,
+          grantKey: ADMIN_GRANT_KEYS.REPORTS,
+          group: "it",
+        },
+        {
+          to: "/admin/system",
+          icon: IconCog,
+          label: "System status",
+          desc: "Health & metrics",
+          end: true,
+          grantKey: ADMIN_GRANT_KEYS.SYSTEM,
+          group: "it",
+        },
+        {
+          to: "/admin",
+          icon: IconCog,
+          label: "Learning admin",
+          end: true,
+          grantKey: ADMIN_GRANT_KEYS.LEARNING_ADMIN,
+          group: "uofagc",
         },
       ];
       for (const item of candidates) {
@@ -152,6 +196,11 @@ export function usePortalNavItems(user) {
 
     const homeTo = "/";
 
-    return { mainItems: main, adminItems: admin, homeTo };
+    return {
+      mainItems: main,
+      adminItems: admin,
+      adminGroups: buildAdminNavGroups(admin),
+      homeTo,
+    };
   }, [role, user]);
 }

@@ -143,9 +143,12 @@ export default function FacilityCoursesPage() {
       await Promise.all(
         RESOURCE_CARDS.map(async (c) => {
           try {
-            const [videosRes, docsRes] = await Promise.allSettled([
+            const [videosRes, docsRes, reportsRes] = await Promise.allSettled([
               api.get(`/resources/facility/${facilityNorm}/category/${c.key}`),
               api.get(`/resources/facility/${facilityNorm}/category/${c.key}/documents`),
+              c.key === "it"
+                ? api.get(`/resources/facility/${facilityNorm}/category/${c.key}/reports`)
+                : Promise.resolve({ data: { reports: [] } }),
             ]);
             const videos =
               videosRes.status === "fulfilled" && Array.isArray(videosRes.value?.data?.videos)
@@ -155,7 +158,16 @@ export default function FacilityCoursesPage() {
               docsRes.status === "fulfilled" && Array.isArray(docsRes.value?.data?.documents)
                 ? docsRes.value.data.documents
                 : [];
-            out[c.key] = { videos: videos.length, docs: docs.length, total: videos.length + docs.length };
+            const reports =
+              reportsRes.status === "fulfilled" && Array.isArray(reportsRes.value?.data?.reports)
+                ? reportsRes.value.data.reports
+                : [];
+            out[c.key] = {
+              videos: videos.length,
+              docs: docs.length,
+              reports: reports.length,
+              total: videos.length + docs.length + reports.length,
+            };
           } catch {
             out[c.key] = { videos: 0, docs: 0, total: 0 };
           }

@@ -1,17 +1,20 @@
 import axios from "axios";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AuthSplitLayout, { AUTH_FORM_CARD, AuthHeroAccentBars } from "../components/layout/AuthSplitLayout";
 import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../constants/branding";
-import api from "../services/api";
+import { postRecoverAccess } from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
 /** Shared focus ring for accent inputs */
 const inputWrapFocus = "focus-within:ring-2 focus-within:ring-brand-blue/25 dark:focus-within:ring-brand-green/20";
 
 export default function ForgotPasswordPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [devHint, setDevHint] = useState("");
+  const [devLink, setDevLink] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -19,10 +22,17 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError("");
     setMessage("");
+    setDevHint("");
+    setDevLink("");
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/recover-access", { email: email.trim() });
-      setMessage(data?.message || "If this address is registered, check your email.");
+      const data = await postRecoverAccess(email.trim());
+      setMessage(
+        data?.message ||
+          "If this address is registered, we've sent instructions to your inbox. Please allow a few minutes for delivery."
+      );
+      if (data?.dev_hint) setDevHint(String(data.dev_hint));
+      if (data?.dev_link) setDevLink(String(data.dev_link));
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
@@ -52,7 +62,7 @@ export default function ForgotPasswordPage() {
               ACCOUNT HELP
             </h1>
             <p className="max-w-prose text-pretty text-sm leading-relaxed text-white/88 sm:text-[15px]">
-              Resend your setup link or reset your password. If the email is registered, we’ll send instructions to your inbox.
+              Resend your setup link or reset your password. If the email is registered, we’ll send instructions to your inbox. Delivery can take a few minutes.
             </p>
           </div>
         </div>
@@ -62,7 +72,7 @@ export default function ForgotPasswordPage() {
       <form className={AUTH_FORM_CARD} onSubmit={onSubmit}>
             <h2 className="font-sans text-2xl font-bold tracking-tight text-brand-blue dark:text-brand-green">Forgot password</h2>
             <p className="mt-3 text-sm leading-relaxed text-[#5c5f66] dark:text-stone-400">
-              Enter your work email.
+              Enter the work email on your account. If nothing arrives after several minutes, contact your administrator.
             </p>
 
             {error ? (
@@ -71,8 +81,38 @@ export default function ForgotPasswordPage() {
               </div>
             ) : null}
             {message ? (
-              <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
-                {message}
+              <div className="mt-5 space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+                <p>{message}</p>
+                {devHint ? (
+                  <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-100">{devHint}</p>
+                ) : null}
+                {devLink ? (
+                  <div className="rounded-lg border border-blue-200 bg-white/80 p-3 dark:border-blue-900 dark:bg-stone-900/50">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-blue dark:text-brand-green">
+                      Local dev — open reset link
+                    </p>
+                    <p className="mt-1 break-all text-xs text-stone-600 dark:text-stone-300">{devLink}</p>
+                    <button
+                      type="button"
+                      className="btn-primary mt-3 h-10 w-full text-sm"
+                      onClick={() => {
+                        try {
+                          const path = new URL(devLink).pathname + new URL(devLink).search;
+                          navigate(path || "/reset-password");
+                        } catch {
+                          navigate("/reset-password");
+                        }
+                      }}
+                    >
+                      {devLink.includes("/invite?") ? "Continue to set up password" : "Continue to reset password"}
+                    </button>
+                  </div>
+                ) : null}
+                <p className="text-xs leading-relaxed text-emerald-800/90 dark:text-emerald-200/90">
+                  Look for an email titled{" "}
+                  <span className="font-medium">“Set up your AGC Member Portal account”</span> or{" "}
+                  <span className="font-medium">“Reset your AGC Member Portal password”</span> from Member Portal.
+                </p>
               </div>
             ) : null}
 
