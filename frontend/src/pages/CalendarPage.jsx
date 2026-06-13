@@ -2,25 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import PageHeader from "../components/PageHeader";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import api from "../services/api";
-
-function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
-function ymd(y, m1, d) {
-  return `${y}-${pad2(m1)}-${pad2(d)}`;
-}
-
-function monthWindow(year, month0) {
-  const start = new Date(year, month0, 1);
-  const end = new Date(year, month0 + 1, 0);
-  return {
-    from: ymd(year, month0 + 1, 1),
-    to: ymd(year, month0 + 1, end.getDate()),
-    daysInMonth: end.getDate(),
-    firstDow: start.getDay(), // 0..6
-  };
-}
+import { monthWindow, ymd } from "../utils/calendarDate";
 
 function spansDay(ev, dayYmd) {
   const s = String(ev?.start_date || "").trim();

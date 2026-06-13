@@ -3,23 +3,7 @@ import PageHeader from "../components/PageHeader";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
-
-function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
-function ymd(y, m1, d) {
-  return `${y}-${pad2(m1)}-${pad2(d)}`;
-}
-
-function monthWindow(year, month0) {
-  const start = new Date(year, month0, 1);
-  const end = new Date(year, month0 + 1, 0);
-  return {
-    from: ymd(year, month0 + 1, 1),
-    to: ymd(year, month0 + 1, end.getDate()),
-  };
-}
+import { monthWindow, ymd } from "../utils/calendarDate";
 
 const EMPTY = { title: "", description: "", kind: "holiday", start_date: "", end_date: "", color: "" };
 

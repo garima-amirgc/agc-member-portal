@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import PageHeader from "../components/PageHeader";
 import DashboardAssignmentNotice from "../components/DashboardAssignmentNotice";
 import { PAGE_SHELL } from "../constants/pageLayout";
+import { ADMIN_FIELD_INPUT, ADMIN_FIELD_LABEL } from "../constants/adminFormStyles";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
@@ -10,9 +11,8 @@ import HomeSpotlightOrderPanel from "../components/HomeSpotlightOrderPanel";
 
 const UPLOAD_IMAGE_TIMEOUT_MS = 3 * 60 * 1000;
 
-const fieldLabel = "mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400";
-const fieldInput =
-  "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/15 dark:border-slate-600 dark:bg-slate-800 dark:focus:border-brand-green dark:focus:ring-brand-green/20";
+const fieldLabel = ADMIN_FIELD_LABEL;
+const fieldInput = ADMIN_FIELD_INPUT;
 
 function emptyForm() {
   return {

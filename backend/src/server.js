@@ -149,63 +149,46 @@ async function start() {
   app.get("/api/users/manager/team-overview", authRequired, managerTeamOverviewHandler);
   app.get("/users/manager/team-overview", authRequired, managerTeamOverviewHandler);
 
-  const api = express.Router();
-  api.use("/auth", authRoutes);
-  api.use("/users", userRoutes);
-  api.use("/courses", courseRoutes);
-  api.use("/lessons", lessonRoutes);
-  api.use("/assignments", assignmentRoutes);
-  api.use("/notifications", notificationsRoutes);
-  api.use("/upcoming", upcomingRoutes);
-  api.use("/employee-of-month", employeeOfMonthRoutes);
-  api.use("/leadership-updates", leadershipUpdatesRoutes);
-  api.use("/new-hires", newHiresRoutes);
-  api.use("/customer-wins", customerWinsRoutes);
-  api.use("/community-involvement", communityInvolvementRoutes);
-  api.use("/company-content", companyContentRoutes);
-  api.use("/home-spotlight", homeSpotlightRoutes);
-  api.use("/birthdays", birthdaysRoutes);
-  api.use("/tickets", ticketsRoutes);
-  api.use("/upload", uploadRoutes);
-  api.use("/avatar", avatarRoutes);
-  api.use("/leave-requests", leaveRequestsRoutes);
-  api.use("/resources", resourcesRoutes);
-  api.use("/reports", reportsRoutes);
-  api.use("/admin", adminRoutes);
-  api.use("/admin", adminPollsRoutes);
-  api.use("/engagement-calendar", engagementCalendarRoutes);
-  api.use("/calendar", calendarRoutes);
-  api.use("/polls", pollsRoutes);
-  api.use("/help", helpRoutes);
-  app.use("/api", api);
+  const routeMounts = [
+    ["/auth", authRoutes],
+    ["/users", userRoutes],
+    ["/courses", courseRoutes],
+    ["/lessons", lessonRoutes],
+    ["/assignments", assignmentRoutes],
+    ["/notifications", notificationsRoutes],
+    ["/upcoming", upcomingRoutes],
+    ["/employee-of-month", employeeOfMonthRoutes],
+    ["/leadership-updates", leadershipUpdatesRoutes],
+    ["/new-hires", newHiresRoutes],
+    ["/customer-wins", customerWinsRoutes],
+    ["/community-involvement", communityInvolvementRoutes],
+    ["/company-content", companyContentRoutes],
+    ["/home-spotlight", homeSpotlightRoutes],
+    ["/birthdays", birthdaysRoutes],
+    ["/tickets", ticketsRoutes],
+    ["/upload", uploadRoutes],
+    ["/avatar", avatarRoutes],
+    ["/leave-requests", leaveRequestsRoutes],
+    ["/resources", resourcesRoutes],
+    ["/reports", reportsRoutes],
+    ["/admin", adminRoutes],
+    ["/admin", adminPollsRoutes],
+    ["/engagement-calendar", engagementCalendarRoutes],
+    ["/calendar", calendarRoutes],
+    ["/polls", pollsRoutes],
+    ["/help", helpRoutes],
+  ];
 
-  app.use("/auth", authRoutes);
-  app.use("/users", userRoutes);
-  app.use("/courses", courseRoutes);
-  app.use("/lessons", lessonRoutes);
-  app.use("/assignments", assignmentRoutes);
-  app.use("/notifications", notificationsRoutes);
-  app.use("/upcoming", upcomingRoutes);
-  app.use("/employee-of-month", employeeOfMonthRoutes);
-  app.use("/leadership-updates", leadershipUpdatesRoutes);
-  app.use("/new-hires", newHiresRoutes);
-  app.use("/customer-wins", customerWinsRoutes);
-  app.use("/community-involvement", communityInvolvementRoutes);
-  app.use("/company-content", companyContentRoutes);
-  app.use("/home-spotlight", homeSpotlightRoutes);
-  app.use("/birthdays", birthdaysRoutes);
-  app.use("/tickets", ticketsRoutes);
-  app.use("/upload", uploadRoutes);
-  app.use("/avatar", avatarRoutes);
-  app.use("/leave-requests", leaveRequestsRoutes);
-  app.use("/resources", resourcesRoutes);
-  app.use("/reports", reportsRoutes);
-  app.use("/admin", adminRoutes);
-  app.use("/admin", adminPollsRoutes);
-  app.use("/engagement-calendar", engagementCalendarRoutes);
-  app.use("/calendar", calendarRoutes);
-  app.use("/polls", pollsRoutes);
-  app.use("/help", helpRoutes);
+  function mountRoutes(router) {
+    for (const [mountPath, routeModule] of routeMounts) {
+      router.use(mountPath, routeModule);
+    }
+  }
+
+  const api = express.Router();
+  mountRoutes(api);
+  app.use("/api", api);
+  mountRoutes(app);
 
   const seedAdminFlag = String(process.env.SEED_DEFAULT_ADMIN ?? "1").toLowerCase();
   const allowDefaultAdmin =

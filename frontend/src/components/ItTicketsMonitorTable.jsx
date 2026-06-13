@@ -251,15 +251,13 @@ export default function ItTicketsMonitorTable({
       <div className="relative border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] text-white">
         <div className="relative flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
-                {isIT || isAdmin ? "IT ticket board" : "Your tickets"}
+            <div className="it-ticket-board-header">
+              <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
+                {isIT || isAdmin ? "IT Ticket Board" : "Your tickets"}
               </h2>
-              <p className="mt-1 text-sm text-white/75">
-                {isIT || isAdmin
-                  ? "Triage, assign, and resolve support requests."
-                  : "Track the status of your submitted requests."}
-              </p>
+              {!(isIT || isAdmin) ? (
+                <p className="mt-1 text-sm text-white/75">Track the status of your submitted requests.</p>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-2">
