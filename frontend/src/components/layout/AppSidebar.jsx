@@ -109,7 +109,7 @@ export default function AppSidebar() {
   if (!user) return null;
 
   return (
-    <aside className="agc-sidebar-shell z-20 hidden w-[248px] shrink-0 flex-col border-r border-black/10 lg:sticky lg:top-0 lg:flex lg:h-dvh">
+    <aside className="agc-sidebar-shell z-20 hidden shrink-0 flex-col border-r border-black/10 lg:sticky lg:top-0 lg:flex lg:h-dvh">
       <div className="border-b border-black/10 px-3 py-4 dark:border-white/15">
         <NavLink
           to={homeTo}

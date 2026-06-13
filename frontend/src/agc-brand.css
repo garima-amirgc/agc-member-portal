@@ -15,6 +15,7 @@
   --agc-white: #ffffff;
   --agc-surface: #eef2fb;
   --agc-surface-2: #f7f9fe;
+  --agc-sidebar-width: 248px;
 }
 
 body {
@@ -45,6 +46,10 @@ html.dark .agc-app-shell > .agc-main-column {
 
 /* Sidebar — #0B3EAF (light & dark) */
 .agc-sidebar-shell {
+  width: var(--agc-sidebar-width) !important;
+  min-width: var(--agc-sidebar-width);
+  max-width: var(--agc-sidebar-width);
+  flex: 0 0 var(--agc-sidebar-width);
   background-color: var(--agc-blue) !important;
   border-color: rgba(0, 0, 0, 0.08) !important;
   box-shadow: 4px 0 28px rgba(11, 62, 175, 0.25) !important;
