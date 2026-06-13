@@ -70,6 +70,7 @@ async function start() {
   const newHiresRoutes = require("./routes/newHires.routes");
   const customerWinsRoutes = require("./routes/customerWins.routes");
   const communityInvolvementRoutes = require("./routes/communityInvolvement.routes");
+  const companyContentRoutes = require("./routes/companyContent.routes");
   const homeSpotlightRoutes = require("./routes/homeSpotlight.routes");
   const birthdaysRoutes = require("./routes/birthdays.routes");
   const ticketsRoutes = require("./routes/tickets.routes");
@@ -161,6 +162,7 @@ async function start() {
   api.use("/new-hires", newHiresRoutes);
   api.use("/customer-wins", customerWinsRoutes);
   api.use("/community-involvement", communityInvolvementRoutes);
+  api.use("/company-content", companyContentRoutes);
   api.use("/home-spotlight", homeSpotlightRoutes);
   api.use("/birthdays", birthdaysRoutes);
   api.use("/tickets", ticketsRoutes);
@@ -189,6 +191,7 @@ async function start() {
   app.use("/new-hires", newHiresRoutes);
   app.use("/customer-wins", customerWinsRoutes);
   app.use("/community-involvement", communityInvolvementRoutes);
+  app.use("/company-content", companyContentRoutes);
   app.use("/home-spotlight", homeSpotlightRoutes);
   app.use("/birthdays", birthdaysRoutes);
   app.use("/tickets", ticketsRoutes);

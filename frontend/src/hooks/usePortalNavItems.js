@@ -12,7 +12,7 @@ import {
 } from "../components/layout/SidebarIcons";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { buildAdminNavGroups } from "../constants/adminNavGroups";
-import { hasAdminGrant } from "../utils/adminAccess";
+import { ABOUT_COMPANY_NAV_ITEMS } from "../constants/companyContentConfig";import { hasAdminGrant } from "../utils/adminAccess";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../utils/facilityUniversityOnly";
 import { isSupervisor } from "../utils/supervisorAccess";
 
@@ -32,6 +32,7 @@ export function usePortalNavItems(user) {
         ],
         adminItems: [],
         adminGroups: [],
+        aboutCompanyItems: [],
         homeTo: home,
       };
     }
@@ -130,6 +131,13 @@ export function usePortalNavItems(user) {
           group: "hr",
         },
         {
+          to: "/admin/about-company",
+          icon: IconBuilding,
+          label: "About Company",
+          grantKey: ADMIN_GRANT_KEYS.COMPANY_CONTENT,
+          group: "hr",
+        },
+        {
           to: "/admin/polls",
           icon: IconCog,
           label: "Feedback & polls",
@@ -194,10 +202,16 @@ export function usePortalNavItems(user) {
       }
     }
 
+    const aboutCompanyItems = ABOUT_COMPANY_NAV_ITEMS.map((item) => ({
+      ...item,
+      icon: IconBuilding,
+    }));
+
     const homeTo = "/";
 
     return {
       mainItems: main,
+      aboutCompanyItems,
       adminItems: admin,
       adminGroups: buildAdminNavGroups(admin),
       homeTo,

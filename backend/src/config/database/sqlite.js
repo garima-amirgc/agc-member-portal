@@ -318,6 +318,22 @@ const SCHEMA = `
     FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
   );
 
+  CREATE TABLE IF NOT EXISTS company_content_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    section TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    file_url TEXT,
+    link_url TEXT,
+    published INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+    file_uploaded_at TEXT,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
   -- Admin-managed events shown on facility pages (Upcoming).
   CREATE TABLE IF NOT EXISTS facility_upcoming (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -875,6 +891,27 @@ async function initDb() {
         created_by INTEGER,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+  } catch {
+    /* ignore */
+  }
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS company_content_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        section TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        file_url TEXT,
+        link_url TEXT,
+        published INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT,
+        file_uploaded_at TEXT,
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
       );
     `);

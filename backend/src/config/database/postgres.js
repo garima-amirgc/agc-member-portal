@@ -215,6 +215,21 @@ CREATE TABLE IF NOT EXISTS community_involvement (
   updated_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS company_content_items (
+  id SERIAL PRIMARY KEY,
+  section TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  file_url TEXT,
+  link_url TEXT,
+  published INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ,
+  file_uploaded_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS birthday_list (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -490,6 +505,20 @@ async function migrateColumns(client) {
       created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS company_content_items (
+      id SERIAL PRIMARY KEY,
+      section TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      file_url TEXT,
+      link_url TEXT,
+      published INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ,
+      file_uploaded_at TIMESTAMPTZ
     )`,
     `CREATE TABLE IF NOT EXISTS resource_report_links (
       id SERIAL PRIMARY KEY,

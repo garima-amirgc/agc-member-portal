@@ -9,6 +9,7 @@ const ADMIN_GRANT_KEYS = Object.freeze({
   REPORTS: "reports",
   SYSTEM: "system",
   FEEDBACK_POLLS: "feedback_polls",
+  COMPANY_CONTENT: "company_content",
 });
 
 const ALL_ADMIN_GRANT_KEYS = Object.freeze(Object.values(ADMIN_GRANT_KEYS));

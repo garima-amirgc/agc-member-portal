@@ -57,7 +57,7 @@ function TopBarNavLink({ item, onNavigate }) {
 export default function AppTopBar({ darkMode, setDarkMode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { mainItems, adminGroups } = usePortalNavItems(user);
+  const { mainItems, adminGroups, aboutCompanyItems } = usePortalNavItems(user);
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -148,6 +148,18 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
                     />
                   ))}
                 </div>
+                {aboutCompanyItems.length > 0 ? (
+                  <>
+                    <p className="px-4 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-[#5c5f66] dark:text-white/55">
+                      About Company
+                    </p>
+                    <div className="pb-1">
+                      {aboutCompanyItems.map((item) => (
+                        <TopBarNavLink key={item.to} item={item} onNavigate={closeMenu} />
+                      ))}
+                    </div>
+                  </>
+                ) : null}
                 {adminGroups.length > 0 ? (
                   <>
                     <p className="px-4 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-[#5c5f66] dark:text-white/55">

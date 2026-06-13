@@ -4,7 +4,7 @@ const fs = require("fs");
 const multer = require("multer");
 const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
-const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
+const { ADMIN_GRANT_KEYS, hasAdminGrant } = require("../config/adminGrants");
 const {
   getPublicVideoUrl,
   getPublicDocumentUrl,
@@ -90,6 +90,16 @@ const ticketAttachmentUpload = multer({
 
 const router = express.Router();
 
+function requireDocumentUploadGrant(req, res, next) {
+  if (
+    hasAdminGrant(req.user, ADMIN_GRANT_KEYS.LEARNING_ADMIN) ||
+    hasAdminGrant(req.user, ADMIN_GRANT_KEYS.COMPANY_CONTENT)
+  ) {
+    return next();
+  }
+  return res.status(403).json({ message: "Forbidden" });
+}
+
 function removeTempFile(localPath) {
   try {
     if (localPath && fs.existsSync(localPath)) fs.unlinkSync(localPath);
@@ -146,7 +156,7 @@ router.post(
 router.post(
   "/presign/document",
   authRequired,
-  requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN),
+  requireDocumentUploadGrant,
   async (req, res) => {
     if (!isUploadStorageEnabled()) {
       return res.json({ direct: false });
@@ -220,7 +230,7 @@ router.post(
 router.post(
   "/document",
   authRequired,
-  requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN),
+  requireDocumentUploadGrant,
   upload.single("file"),
   async (req, res) => {
     if (!req.file) {

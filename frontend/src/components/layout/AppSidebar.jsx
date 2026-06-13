@@ -80,7 +80,7 @@ function NavSection({ title, defaultOpen, children }) {
 
 export default function AppSidebar() {
   const { user } = useAuth();
-  const { mainItems, adminGroups, homeTo } = usePortalNavItems(user);
+  const { mainItems, adminGroups, aboutCompanyItems, homeTo } = usePortalNavItems(user);
   const universityOnly = isFacilityUniversityOnlyPortal(user);
   const [query, setQuery] = useState("");
 
@@ -92,6 +92,7 @@ export default function AppSidebar() {
     (item.group && adminNavGroupLabel(item.group).toLowerCase().includes(q));
 
   const filteredMain = mainItems.filter(match);
+  const filteredAboutCompany = aboutCompanyItems.filter(match);
   const filteredAdminGroups = useMemo(
     () =>
       adminGroups
@@ -141,6 +142,14 @@ export default function AppSidebar() {
             <NavItem key={item.to + (item.end ? "-e" : "")} {...item} />
           ))}
         </div>
+
+        {filteredAboutCompany.length > 0 ? (
+          <NavSection title="About Company" defaultOpen={!!q}>
+            {filteredAboutCompany.map((item) => (
+              <NavItem key={item.to} {...item} />
+            ))}
+          </NavSection>
+        ) : null}
 
         {showAdminSection ? (
           <NavSection title="Administration" defaultOpen>

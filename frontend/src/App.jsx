@@ -28,6 +28,8 @@ import AdminCustomerWinsPage from "./pages/AdminCustomerWinsPage";
 import CommunityInvolvementPage from "./pages/CommunityInvolvementPage";
 import CommunityInvolvementDetailPage from "./pages/CommunityInvolvementDetailPage";
 import AdminCommunityInvolvementPage from "./pages/AdminCommunityInvolvementPage";
+import AdminAboutCompanyPage from "./pages/AdminAboutCompanyPage";
+import AboutCompanyPage from "./pages/AboutCompanyPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import CoursePlayerPage from "./pages/CoursePlayerPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
@@ -123,6 +125,7 @@ export default function App() {
         <Route path="customer-wins/:id" element={<CustomerWinDetailPage />} />
         <Route path="community-involvement" element={<CommunityInvolvementPage />} />
         <Route path="community-involvement/:id" element={<CommunityInvolvementDetailPage />} />
+        <Route path="about-company/:section" element={<AboutCompanyPage />} />
         <Route
           path="users"
           element={
@@ -225,6 +228,14 @@ export default function App() {
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
               <AdminCommunityInvolvementPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/about-company"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.COMPANY_CONTENT}>
+              <AdminAboutCompanyPage />
             </ProtectedRoute>
           }
         />
