@@ -14,6 +14,20 @@
       href="https://fonts.googleapis.com/css2?family=Aboreto&family=Inter:wght@400;500;600;700&family=Marcellus&family=Roboto:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <!-- Critical sidebar width — applies even if an old cached stylesheet loads -->
+    <style>
+      :root {
+        --agc-sidebar-width: 248px;
+      }
+      @media (min-width: 1024px) {
+        .agc-sidebar-shell {
+          width: 248px !important;
+          min-width: 248px !important;
+          max-width: 248px !important;
+          flex: 0 0 248px !important;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
