@@ -1,5 +1,17 @@
+import { execSync } from "node:child_process";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+
+function resolveBuildId() {
+  if (process.env.RENDER_GIT_COMMIT) {
+    return process.env.RENDER_GIT_COMMIT.slice(0, 7);
+  }
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+  } catch {
+    return "dev";
+  }
+}
 
 /** Prefer 127.0.0.1 so the proxy matches the API (Windows `localhost` can hit ::1 while Node listens on IPv4). */
 /**
@@ -25,6 +37,9 @@ const backendProxy = {
 };
 
 export default defineConfig({
+  define: {
+    __APP_BUILD_ID__: JSON.stringify(resolveBuildId()),
+  },
   plugins: [react()],
   server: {
     port: 5173,

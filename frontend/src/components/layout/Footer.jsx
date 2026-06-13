@@ -14,6 +14,11 @@ export default function Footer() {
           ·
         </span>
         All rights reserved.
+        {__APP_BUILD_ID__ && __APP_BUILD_ID__ !== "dev" ? (
+          <span className="ml-1.5 text-[10px] font-normal opacity-45" title="Deployed UI build">
+            · {__APP_BUILD_ID__}
+          </span>
+        ) : null}
       </div>
     </footer>
   );
