@@ -8,7 +8,7 @@ import { isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOn
 import { IconChevron, IconHelp, IconSearch, IconSparkle } from "./SidebarIcons";
 import { SidebarAdminGroupDropdown } from "./AdminNavGroupDropdown";
 
-const SIDEBAR_WIDTH_PX = 248;
+const SIDEBAR_WIDTH_PX = 220;
 const sidebarShellStyle = {
   width: SIDEBAR_WIDTH_PX,
   minWidth: SIDEBAR_WIDTH_PX,
