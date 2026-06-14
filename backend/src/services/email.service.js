@@ -545,7 +545,7 @@ async function sendITTicketResolvedEmail({
  * Invite link for first-time password setup (admin-created users).
  */
 async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
-  if (!to) return { skipped: true };
+  if (!to) return { skipped: true, reason: "Missing recipient email address." };
   const subject = `Set up your ${APP_MAIL_BRAND} account`;
   const rawUrl = String(setupUrl || "").trim();
   const text = [
@@ -606,7 +606,10 @@ async function deliverAccountInviteEmail({ to, name, setupUrl, validDays }) {
   }
   try {
     const mail = await sendAccountInviteEmail({ to, name, setupUrl, validDays });
-    if (mail.sent) return { email_sent: true };
+    if (mail.sent) return { email_sent: true, messageId: mail.messageId };
+    if (mail.skipped) {
+      return { email_sent: false, email_error: mail.reason || SMTP_NOT_CONFIGURED_MSG };
+    }
     return { email_sent: false, email_error: mail.reason || SMTP_NOT_CONFIGURED_MSG };
   } catch (err) {
     const msg = String(err?.message || err).slice(0, 300);

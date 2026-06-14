@@ -17,6 +17,8 @@ const EMPTY_USER = {
   name: "",
   email: "",
   password: "",
+  /** When false (default), backend sends invite email — avoids browser autofill on a visible password field. */
+  setPasswordManually: false,
   role: "Employee",
   business_units: ["AGC"],
   manager_id: "",
@@ -104,7 +106,7 @@ export default function AdminUsersSection({ className = "card" }) {
       const canGrant = canManageAdminGrants(actor);
 
       const mid = form.manager_id ? Number(form.manager_id) : null;
-      const pw = form.password.trim();
+      const sendInvite = !form.setPasswordManually;
       const payload = {
         name: form.name.trim(),
         email: form.email.trim(),
@@ -113,8 +115,16 @@ export default function AdminUsersSection({ className = "card" }) {
         manager_id: mid != null && Number.isFinite(mid) && mid > 0 ? mid : null,
         designation: String(form.designation || "").trim(),
         departments: form.departments,
+        send_invite: sendInvite,
       };
-      if (pw) payload.password = pw;
+      if (form.setPasswordManually) {
+        const pw = form.password.trim();
+        if (!pw) {
+          window.alert('Enter a password, or turn off "Set password now" to email an invite link instead.');
+          return;
+        }
+        payload.password = pw;
+      }
       if (canGrant) {
         if (isAdminRole(form.role)) {
           if (!form.admin_full_access) {
@@ -153,10 +163,12 @@ export default function AdminUsersSection({ className = "card" }) {
             }\n\nCopy the setup link from the banner below.`
           );
         }
-      } else if (!payload.password) {
-        window.alert("User created. Leave the password blank to email an invite link automatically.");
+      } else if (payload.send_invite) {
+        window.alert(
+          "User created, but no invite link was generated. Refresh the page and try again, or use Resend invite on the user row."
+        );
       } else {
-        window.alert("User created with the password you set (no invite email is sent when a password is provided).");
+        window.alert("User created with the password you set. No invite email was sent.");
       }
       await load();
     } catch (err) {
@@ -491,14 +503,35 @@ export default function AdminUsersSection({ className = "card" }) {
               value={form.designation}
               onChange={(e) => setForm({ ...form, designation: e.target.value })}
             />
-            <input
-              className="w-full rounded border p-2 dark:bg-slate-700"
-              placeholder="Password (optional)"
-              type="password"
-              autoComplete="new-password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              By default we email a setup link to the new user. Only set a password yourself if you do not want an invite email.
+            </p>
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={form.setPasswordManually}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    setPasswordManually: e.target.checked,
+                    password: e.target.checked ? form.password : "",
+                  })
+                }
+              />
+              <span>Set password now (no invite email)</span>
+            </label>
+            {form.setPasswordManually ? (
+              <input
+                className="w-full rounded border p-2 dark:bg-slate-700"
+                placeholder="Password (min 10 chars, letter + number)"
+                type="password"
+                autoComplete="off"
+                name="agc-admin-set-password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
+            ) : null}
             <select
               className="w-full rounded border p-2 dark:bg-slate-700"
               value={form.role}

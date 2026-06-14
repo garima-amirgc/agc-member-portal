@@ -402,7 +402,17 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
       : [];
 
   const passwordTrim = password != null ? String(password).trim() : "";
-  const useInvite = !passwordTrim;
+  const sendInviteFlag = req.body?.send_invite;
+  const inviteRequested =
+    sendInviteFlag === true ||
+    sendInviteFlag === "true" ||
+    (sendInviteFlag !== false && sendInviteFlag !== "false" && !passwordTrim);
+  const useInvite = inviteRequested && !passwordTrim;
+  if (inviteRequested && passwordTrim) {
+    return res.status(400).json({
+      message: "Choose either an invite email or a password — not both. Clear the password or turn off invite.",
+    });
+  }
 
   if (!name || !email || !role || businessUnits.length === 0) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -519,6 +529,11 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
         setupUrl,
         validDays: inviteSvc.INVITE_DAYS,
       });
+      console.log(
+        `[users] create user invite email to ${String(email).trim()} sent=${mail.email_sent === true}${
+          mail.email_error ? ` error=${mail.email_error}` : ""
+        }`
+      );
       return res.status(201).json({
         id: userId,
         invite: true,
