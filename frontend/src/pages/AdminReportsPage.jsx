@@ -63,7 +63,7 @@ export default function AdminReportsPage() {
       setRows([]);
     }
     try {
-      const usersRes = await api.get("/users");
+      const usersRes = await api.get("/reports/admin/access-users");
       setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
     } catch {
       setUsers([]);
@@ -281,7 +281,11 @@ export default function AdminReportsPage() {
                 />
                 <div className="mt-3 max-h-48 overflow-auto rounded border border-slate-200 bg-white/50 p-2 dark:border-slate-700 dark:bg-slate-900/20">
                   {filteredUsers.length === 0 ? (
-                    <div className="p-2 text-xs text-slate-500 dark:text-slate-400">No users match.</div>
+                    <div className="p-2 text-xs text-slate-500 dark:text-slate-400">
+                      {users.length === 0 && !loading
+                        ? "No users loaded. Refresh the page or confirm you have Manage reports access."
+                        : "No users match."}
+                    </div>
                   ) : (
                     <div className="space-y-1">
                       {filteredUsers.map((u) => {
@@ -483,7 +487,11 @@ export default function AdminReportsPage() {
                       />
                       <div className="mt-3 max-h-48 overflow-auto rounded border border-slate-200 bg-white/50 p-2 dark:border-slate-700 dark:bg-slate-900/20">
                         {filteredEditUsers.length === 0 ? (
-                          <div className="p-2 text-xs text-slate-500 dark:text-slate-400">No users match.</div>
+                          <div className="p-2 text-xs text-slate-500 dark:text-slate-400">
+                            {users.length === 0 && !loading
+                              ? "No users loaded. Refresh the page or confirm you have Manage reports access."
+                              : "No users match."}
+                          </div>
                         ) : (
                           <div className="space-y-1">
                             {filteredEditUsers.map((u) => {

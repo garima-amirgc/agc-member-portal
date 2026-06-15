@@ -164,6 +164,24 @@ router.get("/admin/all", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (_re
   }
 });
 
+/** Admin: minimal user list for report access-control picker (Reports grant only — not full Users admin). */
+router.get("/admin/access-users", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (_req, res) => {
+  try {
+    const rows = await db
+      .prepare("SELECT id, name, email FROM users ORDER BY name ASC, id ASC")
+      .all();
+    const out = (rows || []).map((r) => ({
+      id: Number(r.id),
+      name: String(r.name || "").trim(),
+      email: String(r.email || "").trim(),
+    }));
+    return res.json(out);
+  } catch (e) {
+    console.error("[reports] GET /admin/access-users:", e);
+    return res.status(500).json({ message: "Could not load users for access control" });
+  }
+});
+
 /** Admin: top member portal visitors (dashboard usage). */
 router.get("/admin/top-portal-visitors", async (req, res) => {
   const canView =
