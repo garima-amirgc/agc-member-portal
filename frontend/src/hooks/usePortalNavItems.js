@@ -12,9 +12,9 @@ import {
 } from "../components/layout/SidebarIcons";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { buildAdminNavGroups } from "../constants/adminNavGroups";
-import { ABOUT_COMPANY_NAV_ITEMS } from "../constants/companyContentConfig";import { hasAdminGrant } from "../utils/adminAccess";
+import { ABOUT_COMPANY_NAV_ITEMS } from "../constants/companyContentConfig";
+import { hasAdminGrant } from "../utils/adminAccess";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../utils/facilityUniversityOnly";
-import { isSupervisor } from "../utils/supervisorAccess";
 
 /**
  * Same main/admin nav items and home link target as the sidebar (role-aware).
@@ -49,13 +49,11 @@ export function usePortalNavItems(user) {
       label: "Home",
     });
 
-    if (isSupervisor(user)) {
-      main.push({
-        to: "/manager",
-        icon: IconTeam,
-        label: "My team",
-      });
-    }
+    main.push({
+      to: "/team",
+      icon: IconTeam,
+      label: "Team",
+    });
 
     main.push(
       {

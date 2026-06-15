@@ -1,5 +1,14 @@
 export const COMPANY_CONTENT_SECTIONS = Object.freeze([
   {
+    key: "about",
+    label: "About the company",
+    route: "/about-company/about",
+    pageTitle: "About the company",
+    pageIntro: "",
+    adminLabel: "About page forms",
+    isAboutPage: true,
+  },
+  {
     key: "policy",
     label: "Company policy",
     route: "/about-company/policy",
@@ -31,15 +40,6 @@ export const COMPANY_CONTENT_SECTIONS = Object.freeze([
     showFile: true,
     showLink: false,
     showDescription: false,
-  },
-  {
-    key: "about",
-    label: "About the company",
-    route: "/about-company/about",
-    pageTitle: "About the company",
-    pageIntro: "Learn about Amir Group of Companies and access additional forms.",
-    adminLabel: "About page forms",
-    isAboutPage: true,
   },
   {
     key: "policy_changes",

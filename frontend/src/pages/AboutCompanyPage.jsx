@@ -98,7 +98,7 @@ function AboutCompanyAboutPage() {
 
   return (
     <div className={PAGE_SHELL}>
-      <PageHeader title="About the company" subtitle="Learn about Amir Group of Companies and access additional forms." />
+      <PageHeader title="About the company" />
       {error ? <p className="mb-4 text-sm text-[#E02B20]">{error}</p> : null}
       {loading ? (
         <p className="text-sm text-slate-600 dark:text-slate-300">Loading…</p>

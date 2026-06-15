@@ -38,6 +38,7 @@ import HelpPage from "./pages/HelpPage";
 import FacilitiesPage from "./pages/FacilitiesPage";
 import FacilityCoursesPage from "./pages/FacilityCoursesPage";
 import ManagerDashboardPage from "./pages/ManagerDashboardPage";
+import TeamPage from "./pages/TeamPage";
 import ResourcesCategoryPage from "./pages/ResourcesCategoryPage";
 import ResourceVideoPage from "./pages/ResourceVideoPage";
 import ResourceDocumentPage from "./pages/ResourceDocumentPage";
@@ -247,6 +248,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="team" element={<TeamPage />} />
         <Route
           path="manager"
           element={

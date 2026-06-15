@@ -61,15 +61,9 @@ function DirectReportColumn({ person }) {
   return (
     <div className="flex min-w-[10rem] max-w-[220px] flex-1 flex-col items-center sm:min-w-[12rem] sm:flex-none">
       <div className="h-4 w-0.5 shrink-0 bg-slate-300 dark:bg-slate-600" aria-hidden />
-      <HierarchyNode node={person} variant="report" topManagerStyle={false} levelHint="Direct report · same level" />
+      <HierarchyNode node={person} variant="report" topManagerStyle={false} levelHint="Direct report" />
       {subs.length > 0 && (
         <div className="mt-1 flex w-full flex-col items-center border-t border-dashed border-slate-300/90 pt-2 dark:border-slate-600">
-          <p className="mb-1 max-w-full px-1 text-center text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Reports to {person.name.split(/\s+/)[0] || person.name}
-            <span className="mt-0.5 block font-normal normal-case tracking-normal text-slate-400 dark:text-slate-500">
-              (next level down)
-            </span>
-          </p>
           {subs.map((sub) => (
             <div key={sub.id} className="flex flex-col items-center">
               <VerticalConnector />
@@ -92,39 +86,13 @@ function DirectReportsRow({ reports, supervisorName }) {
         role="group"
         aria-label={`Direct reports to ${supervisorName}`}
       >
-        <span className="mb-1 rounded-full bg-brand-blue-soft px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-blue dark:bg-white/10 dark:text-brand-green">
-          Direct reports — same level
-        </span>
         <div className="h-0.5 w-full shrink-0 bg-slate-400 dark:bg-slate-500" aria-hidden />
-        <p className="mt-1.5 max-w-lg text-center text-[11px] text-slate-500 dark:text-slate-400">
-          Everyone on this row reports directly to {supervisorName}. They are peers, not above or below each other.
-        </p>
       </div>
       <div className="mx-auto mt-2 flex w-full flex-row flex-wrap items-start justify-center gap-x-4 gap-y-4 rounded-2xl border border-dashed border-brand-blue/25 bg-brand-blue-soft/30 px-3 py-4 dark:border-brand-green/20 dark:bg-white/5">
         {reports.map((emp) => (
           <DirectReportColumn key={emp.id} person={emp} />
         ))}
       </div>
-    </div>
-  );
-}
-
-function HierarchyLegend() {
-  return (
-    <div className="mt-6 flex w-full max-w-2xl flex-col gap-2 rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 text-[11px] text-slate-600 dark:border-slate-600 dark:bg-slate-800/40 dark:text-slate-300">
-      <div className="font-semibold text-slate-700 dark:text-slate-200">How to read this chart</div>
-      <ul className="list-inside list-disc space-y-1">
-        <li>
-          <strong>One vertical line</strong> between cards = different levels (e.g. you above your team).
-        </li>
-        <li>
-          <strong>One horizontal line</strong> with several people on it = <strong>same level</strong> (all report to the
-          person above that line).
-        </li>
-        <li>
-          Someone shown <strong>under another employee</strong> (not on your row) reports to that employee, not to you.
-        </li>
-      </ul>
     </div>
   );
 }
@@ -151,11 +119,7 @@ export default function ReportingHierarchyTree({ hierarchy, currentUserId }) {
 
   return (
     <section className="card overflow-x-auto">
-      <h2 className="mb-1 text-lg font-semibold text-slate-900 dark:text-slate-100">Reporting hierarchy</h2>
-      <p className="mb-6 text-sm text-slate-600 dark:text-slate-400">
-        Follow the lines: vertical = different level; horizontal row under you = everyone at the same level reporting
-        to you.
-      </p>
+      <h2 className="mb-6 text-lg font-semibold text-slate-900 dark:text-slate-100">Reporting hierarchy</h2>
 
       <div className="flex min-w-[280px] flex-col items-center pb-2">
         {ancestors.map((node, i) => (
@@ -165,7 +129,7 @@ export default function ReportingHierarchyTree({ hierarchy, currentUserId }) {
               node={node}
               variant="manager"
               topManagerStyle={i === 0}
-              levelHint={i === 0 ? "Top of your line" : "Supervisor"}
+              levelHint="Supervisor"
             />
           </Fragment>
         ))}
@@ -179,8 +143,6 @@ export default function ReportingHierarchyTree({ hierarchy, currentUserId }) {
 
         <DirectReportsRow reports={directReports} supervisorName={supervisorLabel} />
 
-        <HierarchyLegend />
-
         {ancestors.length === 0 && !selfNode && directReports.length === 0 && (
           <p className="mt-4 max-w-md text-center text-sm text-slate-500 dark:text-slate-400">
             No reporting line is set yet. Ask an admin to assign who you report to.
@@ -189,8 +151,7 @@ export default function ReportingHierarchyTree({ hierarchy, currentUserId }) {
 
         {selfNode && ancestors.length === 0 && directReports.length === 0 && (
           <p className="mt-4 max-w-md text-center text-sm text-slate-500 dark:text-slate-400">
-            No one is assigned to report to you yet. When people are added under you in Administration, they appear on
-            the shared row below your card.
+            No one is assigned to report to you yet.
           </p>
         )}
       </div>
