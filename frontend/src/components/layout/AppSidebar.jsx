@@ -5,10 +5,10 @@ import { useAuth } from "../../context/AuthContext";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
 import { adminNavGroupLabel } from "../../constants/adminNavGroups";
 import { isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
-import { IconChevron, IconHelp, IconSearch, IconSparkle } from "./SidebarIcons";
+import { IconBuilding, IconChevron, IconHelp, IconSearch, IconSparkle } from "./SidebarIcons";
 import { SidebarAdminGroupDropdown } from "./AdminNavGroupDropdown";
 
-const SIDEBAR_WIDTH_PX = 220;
+const SIDEBAR_WIDTH_PX = 200;
 const sidebarShellStyle = {
   width: SIDEBAR_WIDTH_PX,
   minWidth: SIDEBAR_WIDTH_PX,
@@ -64,18 +64,19 @@ function NavItem({ to, end, icon: Icon, label, desc }) {
   );
 }
 
-function NavSection({ title, defaultOpen, children }) {
+function NavSection({ title, icon: Icon, defaultOpen, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="mt-1">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-portal px-3 py-2.5 text-left text-sm font-semibold text-white transition hover:bg-black/10 dark:hover:bg-white/10"
+        className="flex w-full items-center gap-3 rounded-portal px-3 py-2.5 text-left text-sm font-semibold text-white transition hover:bg-black/10 dark:hover:bg-white/10"
         aria-expanded={open}
       >
-        <span>{title}</span>
-        <IconChevron open={open} className="h-4 w-4 text-white/80" />
+        {Icon ? <Icon className="h-5 w-5 shrink-0 text-white/90" aria-hidden /> : null}
+        <span className="min-w-0 flex-1">{title}</span>
+        <IconChevron open={open} className="h-4 w-4 shrink-0 text-white/80" />
       </button>
       {open ? (
         <div className="mt-1 space-y-0.5 border-l-2 border-white/35 pl-3 dark:border-white/25">
@@ -155,7 +156,7 @@ export default function AppSidebar() {
         </div>
 
         {filteredAboutCompany.length > 0 ? (
-          <NavSection title="About Company" defaultOpen={!!q}>
+          <NavSection title="About Company" icon={IconBuilding} defaultOpen={!!q}>
             {filteredAboutCompany.map((item) => (
               <NavItem key={item.to} {...item} />
             ))}
