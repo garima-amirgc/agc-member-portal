@@ -8,9 +8,9 @@ export default function ManagerTeamGraph({ managerName, team }) {
 
   return (
     <div className="card overflow-x-auto">
-      <h2 className="mb-4 text-lg font-semibold">Team overview</h2>
+      <h2 className="mb-4 text-lg font-semibold">University learning progress</h2>
       <p className="mb-6 text-sm text-slate-600 dark:text-slate-400">
-        Your direct reports and average course progress (graph view).
+        Your direct reports and average course progress.
       </p>
 
       <div className="flex min-w-[280px] flex-col items-center pb-2">

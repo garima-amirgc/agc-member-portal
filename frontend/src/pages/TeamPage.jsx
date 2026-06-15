@@ -1,18 +1,55 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import api from "../services/api";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import LeaveRequestPanel from "../components/LeaveRequestPanel";
 import ManagerEmployeeManagement from "../components/ManagerEmployeeManagement";
+import ManagerTrainingNotifications from "../components/ManagerTrainingNotifications";
 import ReportingHierarchyTree from "../components/ReportingHierarchyTree";
 import { useAuth } from "../context/AuthContext";
+import { managerInboxWithTeamJson } from "../services/leaveClient";
 import { isSupervisor } from "../utils/supervisorAccess";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
 export default function TeamPage() {
   const { user } = useAuth();
   const [me, setMe] = useState(null);
+  const [team, setTeam] = useState([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamError, setTeamError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const showSupervisorTools = isSupervisor(user) || isSupervisor(me);
+  const hasDirectReportsInHierarchy = useMemo(() => {
+    const raw = me?.reporting_hierarchy?.direct_reports;
+    return Array.isArray(raw) && raw.length > 0;
+  }, [me]);
+  const showLearningSections = showSupervisorTools || hasDirectReportsInHierarchy;
+
+  const reloadProfile = useCallback(async () => {
+    try {
+      const res = await api.get("/users/me");
+      setMe(res.data);
+    } catch (e) {
+      setError(friendlyErrorMessage(e, "Failed to load team"));
+    }
+  }, []);
+
+  const reloadTeam = useCallback(async () => {
+    if (!showLearningSections) return;
+    setTeamLoading(true);
+    setTeamError("");
+    try {
+      const { team: teamData, teamError } = await managerInboxWithTeamJson();
+      setTeam(Array.isArray(teamData) ? teamData : []);
+      if (teamError) setTeamError(teamError);
+    } catch (e) {
+      setTeamError(friendlyErrorMessage(e, "Failed to load team progress"));
+      setTeam([]);
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [showLearningSections]);
 
   useEffect(() => {
     if (!user) return;
@@ -29,6 +66,36 @@ export default function TeamPage() {
       }
     })();
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !showLearningSections) {
+      setTeam([]);
+      setTeamError("");
+      setTeamLoading(false);
+      return;
+    }
+    reloadTeam();
+  }, [user?.id, showLearningSections, reloadTeam]);
+
+  useEffect(() => {
+    const refresh = () => {
+      reloadProfile();
+      reloadTeam();
+    };
+    window.addEventListener("agc-training-progress", refresh);
+    window.addEventListener("agc-training-complete", refresh);
+    return () => {
+      window.removeEventListener("agc-training-progress", refresh);
+      window.removeEventListener("agc-training-complete", refresh);
+    };
+  }, [reloadProfile, reloadTeam]);
+
+  const selfTraining = useMemo(
+    () => ({
+      training_summary: me?.training_summary ?? { avgProgress: 0, total: 0, completed: 0, allComplete: false },
+    }),
+    [me]
+  );
 
   if (loading) {
     return (
@@ -60,9 +127,27 @@ export default function TeamPage() {
         <h1 className="mb-6 text-2xl font-bold">Team</h1>
       </section>
 
-      <ReportingHierarchyTree hierarchy={me.reporting_hierarchy} currentUserId={me.id} />
+      <ReportingHierarchyTree
+        hierarchy={me.reporting_hierarchy}
+        currentUserId={me.id}
+        team={team}
+        selfTraining={selfTraining}
+      />
 
-      {isSupervisor(user) ? <ManagerEmployeeManagement /> : null}
+      {showLearningSections ? (
+        <div className="space-y-6">
+          {teamLoading && (
+            <p className="text-sm text-slate-500 dark:text-slate-400">Loading course completion…</p>
+          )}
+          {teamError && (
+            <div className="rounded bg-rose-100 p-3 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+              {teamError}
+            </div>
+          )}
+          <ManagerEmployeeManagement />
+          <ManagerTrainingNotifications />
+        </div>
+      ) : null}
 
       {user?.role !== "Admin" ? (
         <details className="group card rounded-portal border border-stone-200/90 p-4 open:ring-1 open:ring-brand-blue/20 dark:border-stone-700 dark:open:ring-brand-blue/30">

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import api from "../services/api";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import { leaveJson, managerInboxWithTeamJson } from "../services/leaveClient";
 import { useAuth } from "../context/AuthContext";
 import ManagerLeaveCalendar from "../components/ManagerLeaveCalendar";
 import ManagerTeamGraph from "../components/ManagerTeamGraph";
+import ManagerTrainingNotifications from "../components/ManagerTrainingNotifications";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
 const leaveStatusClass = {
@@ -15,28 +15,12 @@ const leaveStatusClass = {
 
 export default function ManagerDashboardPage() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState([]);
   const [leaveInbox, setLeaveInbox] = useState([]);
   const [team, setTeam] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [leaveLoading, setLeaveLoading] = useState(true);
   const [teamLoading, setTeamLoading] = useState(true);
-  const [error, setError] = useState("");
   const [leaveError, setLeaveError] = useState("");
   const [teamError, setTeamError] = useState("");
-
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await api.get("/notifications/me");
-      setNotifications(res.data);
-    } catch (e) {
-      setError(friendlyErrorMessage(e, "Failed to load notifications"));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadManagerSection = async () => {
     setLeaveLoading(true);
@@ -61,21 +45,8 @@ export default function ManagerDashboardPage() {
   };
 
   useEffect(() => {
-    load();
     loadManagerSection();
   }, []);
-
-  const dismiss = async (id, kind = "course") => {
-    try {
-      const qs = kind === "all_training" ? "?kind=all_training" : "";
-      await api.post(`/notifications/${id}/dismiss${qs}`);
-      setNotifications((prev) =>
-        prev.filter((n) => !(n.id === id && (n.notification_kind || "course") === kind))
-      );
-    } catch (e) {
-      setError(friendlyErrorMessage(e, "Failed to dismiss"));
-    }
-  };
 
   const decideLeave = async (id, status) => {
     try {
@@ -158,54 +129,7 @@ export default function ManagerDashboardPage() {
         </div>
       </div>
 
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">Training notifications</h2>
-        <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
-          Course completions and all-training milestones. Persistent until dismissed.
-        </p>
-      </section>
-
-      {loading && <div className="card p-4">Loading notifications...</div>}
-      {error && <div className="rounded bg-rose-100 p-2 text-rose-700">{error}</div>}
-
-      {!loading && !error && notifications.length === 0 && (
-        <section className="card border-dashed text-slate-600 dark:text-slate-400">
-          <p>No active notifications.</p>
-        </section>
-      )}
-
-      {!loading && !error && notifications.length > 0 && (
-        <section className="space-y-3">
-          {notifications.map((n) => {
-            const isAllTraining = n.notification_kind === "all_training";
-            return (
-              <div
-                key={`${n.notification_kind || "course"}-${n.id}`}
-                className={`card flex items-start justify-between gap-3 ${isAllTraining ? "border-emerald-300/50 dark:border-emerald-700/40" : ""}`}
-              >
-                <div>
-                  <div className="text-sm text-slate-500">
-                    {isAllTraining ? `${n.employee_name} completed all assigned training` : `${n.employee_name} completed`}
-                  </div>
-                  <div className="mt-1 font-semibold">{n.course_name || n.course_title}</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {n.created_at ? new Date(n.created_at).toLocaleString() : ""}
-                  </div>
-                </div>
-                <div>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => dismiss(n.id, n.notification_kind || "course")}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </section>
-      )}
+      <ManagerTrainingNotifications />
     </main>
   );
 }

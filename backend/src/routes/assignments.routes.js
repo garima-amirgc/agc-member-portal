@@ -117,11 +117,11 @@ router.post("/:id/progress", async (req, res) => {
       courseId: course?.id,
       courseTitle: course?.title || "Unknown course",
     });
-
-    const allTraining = await maybeNotifyAllTrainingComplete(assignment.user_id);
-    allTrainingComplete = allTraining.allComplete;
-    allTrainingJustNotified = allTraining.notified;
   }
+
+  const allTraining = await maybeNotifyAllTrainingComplete(assignment.user_id);
+  allTrainingComplete = allTraining.allComplete;
+  allTrainingJustNotified = allTraining.notified;
 
   let message = "Progress updated";
   if (status === "completed") {

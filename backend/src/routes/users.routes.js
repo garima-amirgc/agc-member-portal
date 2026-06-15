@@ -8,6 +8,7 @@ const { mergeFacilityAccess } = require("../utils/businessUnitCodes");
 const leaveSvc = require("../services/leaveRequests.service");
 const managerTeamSvc = require("../services/managerTeam.service");
 const { buildReportingHierarchy } = require("../services/reportingHierarchy.service");
+const { getTrainingSummary } = require("../services/trainingCompletion.service");
 const { hasDirectReports, resolveReportsToId } = require("../services/supervisor.service");
 const { supervisorRequired } = require("../middleware/supervisorRequired");
 const { managerLeaveInboxWithTeam } = require("../handlers/managerInbox.handler");
@@ -105,6 +106,7 @@ router.get("/me", async (req, res) => {
   const reporting_hierarchy = await buildReportingHierarchy(req.user.id);
   const departments = await userDeptSvc.listForUser(req.user.id);
   const has_direct_reports = await hasDirectReports(req.user.id);
+  const training_summary = await getTrainingSummary(req.user.id);
 
   const { admin_grants: rawAg, ...rest } = user;
   const adminGrantsOut = parseAdminGrantsColumn(rawAg);
@@ -118,6 +120,7 @@ router.get("/me", async (req, res) => {
     departments,
     reporting_hierarchy,
     has_direct_reports,
+    training_summary,
   });
 });
 

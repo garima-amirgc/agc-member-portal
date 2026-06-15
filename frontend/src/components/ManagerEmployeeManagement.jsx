@@ -61,9 +61,9 @@ export default function ManagerEmployeeManagement() {
     <section className="card border-stone-200/90 dark:border-stone-600">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Employee management</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Team learning details</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Direct reports, their leave requests, and course progress. Assign employees to you as manager in Admin.
+            Direct reports, leave requests, and university course progress.
           </p>
         </div>
         <Link
@@ -192,7 +192,7 @@ export default function ManagerEmployeeManagement() {
 
                 <div>
                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Course progress
+                    University courses
                   </h4>
                   {assigns.length === 0 ? (
                     <p className="text-sm text-slate-500 dark:text-slate-400">No assigned courses.</p>

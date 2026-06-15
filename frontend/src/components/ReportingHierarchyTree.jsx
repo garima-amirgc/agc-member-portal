@@ -1,4 +1,5 @@
 import { Fragment, useMemo } from "react";
+import ProgressBar from "./ProgressBar";
 
 /** Drop leading Admins when a Manager (or you) still remains — line manager stays visually on top. */
 function chainForDisplay(chain) {
@@ -9,10 +10,21 @@ function chainForDisplay(chain) {
   return c;
 }
 
-function HierarchyNode({ node, variant, topManagerStyle, levelHint }) {
+function trainingStats(teamMember) {
+  const summary = teamMember?.training_summary;
+  const assigns = teamMember?.assignments || [];
+  const avg =
+    summary?.avgProgress ??
+    (assigns.length === 0 ? 0 : Math.round(assigns.reduce((s, a) => s + (a.progress ?? 0), 0) / assigns.length));
+  return { avg: Math.min(100, Math.max(0, Math.round(avg))) };
+}
+
+function HierarchyNode({ node, variant, topManagerStyle, levelHint, training, showTraining = false }) {
   const isYou = variant === "you";
   const isReport = variant === "report";
   const isSupervisor = variant === "manager";
+  const showProgress = showTraining || isYou || isReport;
+  const stats = showProgress ? trainingStats(training) : null;
 
   return (
     <div
@@ -40,6 +52,12 @@ function HierarchyNode({ node, variant, topManagerStyle, levelHint }) {
       {node.business_unit && (
         <div className="mt-1.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">{node.business_unit}</div>
       )}
+      {stats ? (
+        <div className="mt-3">
+          <div className="mb-1 text-xs font-semibold text-slate-700 dark:text-slate-200">{stats.avg}%</div>
+          <ProgressBar value={stats.avg} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -56,12 +74,18 @@ function VerticalConnector({ tall }) {
 }
 
 /** One direct report column: person on the shared row; their own reports hang below only them. */
-function DirectReportColumn({ person }) {
+function DirectReportColumn({ person, teamMember }) {
   const subs = Array.isArray(person.direct_reports) ? person.direct_reports : [];
   return (
     <div className="flex min-w-[10rem] max-w-[220px] flex-1 flex-col items-center sm:min-w-[12rem] sm:flex-none">
       <div className="h-4 w-0.5 shrink-0 bg-slate-300 dark:bg-slate-600" aria-hidden />
-      <HierarchyNode node={person} variant="report" topManagerStyle={false} levelHint="Direct report" />
+      <HierarchyNode
+        node={person}
+        variant="report"
+        topManagerStyle={false}
+        levelHint="Direct report"
+        training={teamMember ?? { training_summary: { avgProgress: 0 } }}
+      />
       {subs.length > 0 && (
         <div className="mt-1 flex w-full flex-col items-center border-t border-dashed border-slate-300/90 pt-2 dark:border-slate-600">
           {subs.map((sub) => (
@@ -76,7 +100,7 @@ function DirectReportColumn({ person }) {
   );
 }
 
-function DirectReportsRow({ reports, supervisorName }) {
+function DirectReportsRow({ reports, supervisorName, teamById }) {
   if (!reports.length) return null;
   return (
     <div className="mt-1 w-full max-w-5xl">
@@ -90,7 +114,7 @@ function DirectReportsRow({ reports, supervisorName }) {
       </div>
       <div className="mx-auto mt-2 flex w-full flex-row flex-wrap items-start justify-center gap-x-4 gap-y-4 rounded-2xl border border-dashed border-brand-blue/25 bg-brand-blue-soft/30 px-3 py-4 dark:border-brand-green/20 dark:bg-white/5">
         {reports.map((emp) => (
-          <DirectReportColumn key={emp.id} person={emp} />
+          <DirectReportColumn key={emp.id} person={emp} teamMember={teamById.get(emp.id)} />
         ))}
       </div>
     </div>
@@ -100,10 +124,17 @@ function DirectReportsRow({ reports, supervisorName }) {
 /**
  * People above you (vertical), then you, then every direct report on one shared row (siblings).
  */
-export default function ReportingHierarchyTree({ hierarchy, currentUserId }) {
+export default function ReportingHierarchyTree({ hierarchy, currentUserId, team = [], selfTraining = null }) {
   const rawChain = Array.isArray(hierarchy?.chain) ? hierarchy.chain : [];
   const chain = useMemo(() => chainForDisplay(rawChain), [rawChain]);
   const rawDirect = Array.isArray(hierarchy?.direct_reports) ? hierarchy.direct_reports : [];
+  const teamById = useMemo(() => {
+    const map = new Map();
+    for (const member of team) {
+      if (member?.id != null) map.set(member.id, member);
+    }
+    return map;
+  }, [team]);
 
   const directReports = useMemo(() => {
     const ancestorIds = new Set(chain.filter((n) => n.id !== currentUserId).map((n) => n.id));
@@ -137,11 +168,17 @@ export default function ReportingHierarchyTree({ hierarchy, currentUserId }) {
         {selfNode && (
           <>
             {ancestors.length > 0 && <VerticalConnector tall />}
-            <HierarchyNode node={selfNode} variant="you" topManagerStyle={false} levelHint="You" />
+            <HierarchyNode
+              node={selfNode}
+              variant="you"
+              topManagerStyle={false}
+              levelHint="You"
+              training={selfTraining}
+            />
           </>
         )}
 
-        <DirectReportsRow reports={directReports} supervisorName={supervisorLabel} />
+        <DirectReportsRow reports={directReports} supervisorName={supervisorLabel} teamById={teamById} />
 
         {ancestors.length === 0 && !selfNode && directReports.length === 0 && (
           <p className="mt-4 max-w-md text-center text-sm text-slate-500 dark:text-slate-400">

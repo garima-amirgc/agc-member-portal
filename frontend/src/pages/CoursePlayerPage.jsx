@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import api from "../services/api";
+import { dispatchTrainingComplete, dispatchTrainingProgressUpdated } from "../utils/trainingProgressEvents";
 import { PAGE_PADDING } from "../constants/pageLayout";
 
 export default function CoursePlayerPage() {
@@ -32,12 +32,9 @@ export default function CoursePlayerPage() {
     });
     setToast(data.message);
     setToastKind(data.all_training_just_notified ? "all_complete" : "progress");
+    dispatchTrainingProgressUpdated();
     if (data.all_training_just_notified) {
-      try {
-        window.dispatchEvent(new CustomEvent("agc-training-complete"));
-      } catch {
-        /* ignore */
-      }
+      dispatchTrainingComplete();
     }
     setTimeout(() => {
       setToast("");

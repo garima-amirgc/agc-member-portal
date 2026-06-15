@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../services/api";
+import { dispatchTrainingComplete, dispatchTrainingProgressUpdated } from "../utils/trainingProgressEvents";
 
 /** @returns {{ resource_kind: 'lesson'|'document', resource_id: number } | null} */
 export function parseResourceItemId(id) {
@@ -60,11 +61,9 @@ export function useResourceProgress(facilityNorm, categoryKey, enabled = true) {
         completed: completedVal,
       });
       if (res.data?.all_training_just_notified) {
-        try {
-          window.dispatchEvent(new CustomEvent("agc-training-complete"));
-        } catch {
-          /* ignore */
-        }
+        dispatchTrainingComplete();
+      } else if (completedVal) {
+        dispatchTrainingProgressUpdated();
       }
       setCompleted((prev) => {
         const next = new Set(prev);
