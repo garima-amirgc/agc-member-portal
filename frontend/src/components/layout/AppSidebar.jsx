@@ -24,7 +24,7 @@ function NavItem({ to, end, icon: Icon, label, desc }) {
       end={end}
       className={({ isActive }) =>
         [
-          "group relative flex items-start gap-3 rounded-portal px-3 py-2.5 pl-3.5 transition",
+          "group relative flex items-start gap-2.5 rounded-portal px-2.5 py-2 pl-3 transition",
           isActive
             ? "agc-nav-active"
             : "text-white hover:bg-black/10 dark:text-white dark:hover:bg-white/10",
@@ -41,16 +41,16 @@ function NavItem({ to, end, icon: Icon, label, desc }) {
           ) : null}
           <Icon
             className={[
-              "mt-0.5 h-5 w-5 shrink-0 transition",
+              "mt-0.5 h-4 w-4 shrink-0 transition",
               isActive ? "text-inherit" : "text-white/90 dark:text-white/90",
             ].join(" ")}
           />
           <div className="min-w-0">
-            <div className="text-sm font-semibold leading-tight">{label}</div>
+            <div className="text-xs font-semibold leading-tight">{label}</div>
             {sub ? (
               <div
                 className={[
-                  "mt-0.5 text-xs leading-snug",
+                  "mt-0.5 text-[11px] leading-snug",
                   isActive ? "text-black/70 dark:text-black/70" : "text-white/75 dark:text-white/75",
                 ].join(" ")}
               >
@@ -71,12 +71,12 @@ function NavSection({ title, icon: Icon, defaultOpen, children }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 rounded-portal px-3 py-2.5 text-left text-sm font-semibold text-white transition hover:bg-black/10 dark:hover:bg-white/10"
+        className="flex w-full items-center gap-2.5 rounded-portal px-2.5 py-2 text-left text-xs font-semibold text-white transition hover:bg-black/10 dark:hover:bg-white/10"
         aria-expanded={open}
       >
-        {Icon ? <Icon className="h-5 w-5 shrink-0 text-white/90" aria-hidden /> : null}
+        {Icon ? <Icon className="h-4 w-4 shrink-0 text-white/90" aria-hidden /> : null}
         <span className="min-w-0 flex-1">{title}</span>
-        <IconChevron open={open} className="h-4 w-4 shrink-0 text-white/80" />
+        <IconChevron open={open} className="h-3.5 w-3.5 shrink-0 text-white/80" />
       </button>
       {open ? (
         <div className="mt-1 space-y-0.5 border-l-2 border-white/35 pl-3 dark:border-white/25">
@@ -132,7 +132,7 @@ export default function AppSidebar() {
             alt="AMIR Group of Companies"
             className="h-auto w-[168px] max-w-full shrink-0 object-contain object-center drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]"
           />
-          <div className="text-base font-bold leading-tight tracking-tight text-white">{APP_DISPLAY_NAME}</div>
+          <div className="text-sm font-bold leading-tight tracking-tight text-white">{APP_DISPLAY_NAME}</div>
         </NavLink>
 
         <label className="relative mt-4 block">
@@ -176,7 +176,7 @@ export default function AppSidebar() {
         ) : null}
 
         {q && !filteredMain.length && !(showAdminSection && filteredAdminCount) ? (
-          <p className="px-2 py-4 text-center text-sm text-white/80">No matches</p>
+          <p className="px-2 py-4 text-center text-xs text-white/80">No matches</p>
         ) : null}
       </nav>
 
@@ -185,13 +185,13 @@ export default function AppSidebar() {
           <>
             <button
               type="button"
-              className="group relative flex w-full items-center gap-3 rounded-portal px-3 py-2 text-sm font-semibold text-white transition hover:bg-black/10 hover:shadow-[0_10px_30px_rgba(0,0,0,0.18)] active:scale-[0.99] dark:hover:bg-white/10"
+              className="group relative flex w-full items-center gap-2.5 rounded-portal px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-black/10 hover:shadow-[0_10px_30px_rgba(0,0,0,0.18)] active:scale-[0.99] dark:hover:bg-white/10"
               onClick={() => {
                 window.dispatchEvent(new Event("agc:whats-new"));
               }}
             >
               <span className="relative">
-                <IconSparkle className="h-5 w-5 text-white transition-transform duration-300 group-hover:scale-[1.08]" />
+                <IconSparkle className="h-4 w-4 text-white transition-transform duration-300 group-hover:scale-[1.08]" />
                 <span
                   aria-hidden
                   className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 rounded-full bg-[#A7D344] shadow-[0_0_0_2px_rgba(255,255,255,0.25)]"
@@ -205,7 +205,7 @@ export default function AppSidebar() {
                 What's new
                 <span
                   aria-hidden
-                  className="ml-2 inline-flex items-center rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white/90 ring-1 ring-white/20 transition group-hover:bg-white/20"
+                  className="ml-1.5 inline-flex items-center rounded-full bg-white/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-white/90 ring-1 ring-white/20 transition group-hover:bg-white/20"
                 >
                   NEW
                 </span>
@@ -213,9 +213,9 @@ export default function AppSidebar() {
             </button>
             <NavLink
               to="/help"
-              className="flex items-center gap-3 rounded-portal px-3 py-2 text-sm font-medium text-white hover:bg-black/10 dark:hover:bg-white/10"
+              className="flex items-center gap-2.5 rounded-portal px-2.5 py-2 text-xs font-medium text-white hover:bg-black/10 dark:hover:bg-white/10"
             >
-              <IconHelp className="h-5 w-5 text-white" />
+              <IconHelp className="h-4 w-4 text-white" />
               Help
             </NavLink>
           </>

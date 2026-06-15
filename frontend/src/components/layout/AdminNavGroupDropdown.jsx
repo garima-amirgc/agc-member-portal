@@ -10,7 +10,7 @@ export function SidebarAdminGroupDropdown({ label, forceOpen = false, children }
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-portal px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-white/85 transition hover:bg-black/10 dark:hover:bg-white/10"
+        className="flex w-full items-center justify-between rounded-portal px-2.5 py-1.5 text-left text-[11px] font-bold uppercase tracking-wide text-white/85 transition hover:bg-black/10 dark:hover:bg-white/10"
         aria-expanded={isOpen}
       >
         <span>{label}</span>

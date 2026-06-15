@@ -11,7 +11,7 @@ import {
   SpotlightFeedReadMoreLink,
   SPOTLIGHT_FEED_CARD_MIN_H,
 } from "./SpotlightFeedCardParts";
-import { formatSpotlightFeedDate, spotlightFeedNeedsReadMore } from "../utils/spotlightFeedDisplay";
+import { formatSpotlightFeedDate, spotlightFeedNeedsReadMore, SPOTLIGHT_FEED_HOME_DESC_MIN_H, SPOTLIGHT_FEED_HOME_LINE_CLAMP } from "../utils/spotlightFeedDisplay";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 import { useSpotlightCarousel } from "../hooks/useSpotlightCarousel";
 import SpotlightCardSlider from "./SpotlightCardSlider";
@@ -24,13 +24,13 @@ function normalizeSpotlightEntries(entry, entries) {
   return [];
 }
 
-function CardFooter({ feed, entryId, description, stableLayout = false }) {
+function CardFooter({ feed, description, stableLayout = false }) {
   const needsMore = spotlightFeedNeedsReadMore(description);
   if (stableLayout) {
     return (
       <SpotlightFeedCardFooter className="gap-4">
         <div className="min-h-[1.25rem] w-full text-right">
-          {needsMore ? <SpotlightFeedReadMoreLink feed={feed} entryId={entryId} /> : null}
+          {needsMore ? <SpotlightFeedReadMoreLink feed={feed} /> : null}
         </div>
         <SpotlightFeedPastLink feed={feed} />
       </SpotlightFeedCardFooter>
@@ -39,7 +39,7 @@ function CardFooter({ feed, entryId, description, stableLayout = false }) {
 
   return (
     <SpotlightFeedCardFooter className="gap-4">
-      {needsMore ? <SpotlightFeedReadMoreLink feed={feed} entryId={entryId} /> : null}
+      {needsMore ? <SpotlightFeedReadMoreLink feed={feed} /> : null}
       <SpotlightFeedPastLink feed={feed} />
     </SpotlightFeedCardFooter>
   );
@@ -125,7 +125,7 @@ function CompactSlideBody({ feed, entry, stableLayout = false }) {
             <p className="line-clamp-2 min-h-[3rem] text-base font-bold text-slate-900 dark:text-white">{title}</p>
           </div>
         </div>
-        <p className="line-clamp-3 min-h-[4.875rem] text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+        <p className={`${SPOTLIGHT_FEED_HOME_LINE_CLAMP} ${SPOTLIGHT_FEED_HOME_DESC_MIN_H} text-sm leading-relaxed text-slate-700 dark:text-slate-300`}>
           {description || "\u00A0"}
         </p>
       </>
@@ -229,12 +229,12 @@ export default function SpotlightFeedCard({ feed, entry, entries, loading, compa
             >
               <CompactSlideBody feed={feed} entry={current} stableLayout />
             </SpotlightCardSlider>
-            <CardFooter feed={feed} entryId={current.id} description={description} stableLayout />
+            <CardFooter feed={feed} description={description} stableLayout />
           </>
         ) : (
           <>
             <CompactSlideBody feed={feed} entry={current} />
-            <CardFooter feed={feed} entryId={current.id} description={description} />
+            <CardFooter feed={feed} description={description} />
           </>
         )}
       </CompactCardShell>
@@ -262,7 +262,7 @@ export default function SpotlightFeedCard({ feed, entry, entries, loading, compa
         >
           <FullSlideBody feed={feed} entry={current} />
         </SpotlightCardSlider>
-        <CardFooter feed={feed} entryId={current.id} description={description} />
+        <CardFooter feed={feed} description={description} />
       </EmployeeOfMonthCardShell>
     );
   }
@@ -295,7 +295,7 @@ export default function SpotlightFeedCard({ feed, entry, entries, loading, compa
           </div>
         </div>
       </div>
-      <CardFooter feed={feed} entryId={current.id} description={description} />
+      <CardFooter feed={feed} description={description} />
     </EmployeeOfMonthCardShell>
   );
 }

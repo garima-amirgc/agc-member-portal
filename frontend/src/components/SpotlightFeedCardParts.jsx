@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import {
   SPOTLIGHT_FEED_CARD_MIN_H,
   SPOTLIGHT_FEED_GRID_CARD_MIN_H,
+  SPOTLIGHT_FEED_HOME_DESC_MIN_H,
+  SPOTLIGHT_FEED_HOME_LINE_CLAMP,
   spotlightFeedDetailPath,
   spotlightFeedNeedsReadMore,
 } from "../utils/spotlightFeedDisplay";
@@ -17,10 +19,11 @@ export function SpotlightFeedPastLink({ feed }) {
   );
 }
 
-export function SpotlightFeedReadMoreLink({ feed, entryId, className = linkClass }) {
-  if (entryId == null) return null;
+export function SpotlightFeedReadMoreLink({ feed, entryId, className = linkClass, toDetail = false }) {
+  const to =
+    toDetail && entryId != null ? spotlightFeedDetailPath(feed, entryId) : feed.archivePath;
   return (
-    <Link to={spotlightFeedDetailPath(feed, entryId)} className={className}>
+    <Link to={to} className={className}>
       Read more
     </Link>
   );
@@ -30,7 +33,7 @@ export function SpotlightFeedDescription({
   description,
   feed,
   entryId,
-  lineClampClass = "line-clamp-3",
+  lineClampClass = SPOTLIGHT_FEED_HOME_LINE_CLAMP,
   showReadMore = true,
 }) {
   const text = String(description || "").trim();
@@ -41,9 +44,9 @@ export function SpotlightFeedDescription({
   return (
     <div>
       <p className={`text-sm leading-relaxed text-slate-700 dark:text-slate-300 ${lineClampClass}`}>{text}</p>
-      {showReadMore && needsMore && entryId != null ? (
+      {showReadMore && needsMore ? (
         <div className="mt-2">
-          <SpotlightFeedReadMoreLink feed={feed} entryId={entryId} />
+          <SpotlightFeedReadMoreLink feed={feed} />
         </div>
       ) : null}
     </div>

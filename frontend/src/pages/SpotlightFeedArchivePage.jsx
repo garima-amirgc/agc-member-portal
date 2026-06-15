@@ -54,7 +54,7 @@ function HistoryRow({ feed, entry }) {
       </div>
       {spotlightFeedNeedsReadMore(description) ? (
         <SpotlightFeedCardFooter>
-          <SpotlightFeedReadMoreLink feed={feed} entryId={entry.id} />
+          <SpotlightFeedReadMoreLink feed={feed} entryId={entry.id} toDetail />
         </SpotlightFeedCardFooter>
       ) : null}
     </EmployeeOfMonthCardShell>

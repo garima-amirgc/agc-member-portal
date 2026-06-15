@@ -6,21 +6,42 @@ import {
 } from "./EmployeeOfMonthCardDecor";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 
-import { SPOTLIGHT_FEED_CARD_MIN_H } from "../utils/spotlightFeedDisplay";
+import { SPOTLIGHT_FEED_CARD_MIN_H, SPOTLIGHT_FEED_HOME_DESC_MIN_H, SPOTLIGHT_FEED_HOME_LINE_CLAMP, spotlightFeedNeedsReadMore } from "../utils/spotlightFeedDisplay";
 
 const AUTO_ROTATE_MS = 6000;
 /** Fixed slide viewport — keeps card height stable while rotating. */
 const COMPACT_SLIDE_HEIGHT = "h-[12.25rem]";
 
+const EOM_HISTORY_PATH = "/employee-of-month/history";
+
 function HistoryLink() {
   return (
-    <div className="mt-3 flex justify-end">
-      <Link
-        to="/employee-of-month/history"
-        className="text-[11px] font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF]"
-      >
-        Past winners
-      </Link>
+    <Link
+      to={EOM_HISTORY_PATH}
+      className="text-[11px] font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF]"
+    >
+      Past winners
+    </Link>
+  );
+}
+
+function ReadMoreHistoryLink() {
+  return (
+    <Link
+      to={EOM_HISTORY_PATH}
+      className="text-[11px] font-bold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 transition hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF]"
+    >
+      Read more
+    </Link>
+  );
+}
+
+function CardFooterLinks({ citation }) {
+  const needsMore = spotlightFeedNeedsReadMore(citation);
+  return (
+    <div className="mt-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1 pt-3">
+      {needsMore ? <ReadMoreHistoryLink /> : null}
+      <HistoryLink />
     </div>
   );
 }
@@ -96,7 +117,7 @@ function EmployeeSlideBody({ entry, compact, stableLayout = false }) {
               </p>
             </div>
           </div>
-          <p className="line-clamp-3 min-h-[4.875rem] text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+          <p className={`${SPOTLIGHT_FEED_HOME_LINE_CLAMP} ${SPOTLIGHT_FEED_HOME_DESC_MIN_H} text-sm leading-relaxed text-slate-700 dark:text-slate-300`}>
             {citation || "\u00A0"}
           </p>
         </>
@@ -122,7 +143,7 @@ function EmployeeSlideBody({ entry, compact, stableLayout = false }) {
           </div>
         </div>
         {citation ? (
-          <p className="line-clamp-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{citation}</p>
+          <p className={`${SPOTLIGHT_FEED_HOME_LINE_CLAMP} text-sm leading-relaxed text-slate-700 dark:text-slate-300`}>{citation}</p>
         ) : null}
       </>
     );
@@ -143,7 +164,7 @@ function EmployeeSlideBody({ entry, compact, stableLayout = false }) {
             {[department, facility].filter(Boolean).join(" · ")}
           </p>
           {citation ? (
-            <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{citation}</p>
+            <p className={`mt-3 ${SPOTLIGHT_FEED_HOME_LINE_CLAMP} text-sm leading-relaxed text-slate-700 dark:text-slate-300`}>{citation}</p>
           ) : null}
         </div>
       </div>
@@ -296,9 +317,7 @@ export default function EmployeeOfMonthCard({ entry, entries, loading, compact =
             <SlidePagination count={list.length} activeIndex={safeIndex} onSelect={setActiveIndex} />
           </div>
 
-          <div className="mt-auto pt-3">
-            <HistoryLink />
-          </div>
+          <CardFooterLinks citation={String(current.citation || "").trim()} />
         </div>
       </div>
     );
@@ -323,7 +342,7 @@ export default function EmployeeOfMonthCard({ entry, entries, loading, compact =
         <EmployeeOfMonthSlider list={list} activeIndex={safeIndex} onChange={setActiveIndex} compact={false} />
 
         <SlidePagination count={list.length} activeIndex={safeIndex} onSelect={setActiveIndex} />
-        <HistoryLink />
+        <CardFooterLinks citation={String(current.citation || "").trim()} />
       </div>
     </div>
   );
