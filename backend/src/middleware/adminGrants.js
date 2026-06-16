@@ -1,4 +1,4 @@
-const { hasAdminGrant } = require("../config/adminGrants");
+const { hasAdminGrant, hasAnyAdminGrant } = require("../config/adminGrants");
 
 function requireAdminGrant(grantKey) {
   return (req, res, next) => {
@@ -10,4 +10,14 @@ function requireAdminGrant(grantKey) {
   };
 }
 
-module.exports = { requireAdminGrant };
+function requireAdminGrantAny(...grantKeys) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    if (!hasAnyAdminGrant(req.user, grantKeys)) {
+      return res.status(403).json({ message: "You do not have access to this administration area." });
+    }
+    return next();
+  };
+}
+
+module.exports = { requireAdminGrant, requireAdminGrantAny };

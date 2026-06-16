@@ -810,6 +810,8 @@ async function initDb() {
         def.defaultDataJson(),
       ]);
     }
+    const { migrateLegacyUpcomingGrantKey } = require("../../config/adminGrants");
+    await migrateLegacyUpcomingGrantKey(db);
   } finally {
     client.release();
   }

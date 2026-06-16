@@ -3,8 +3,8 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const { authRequired } = require("../middleware/auth");
-const { requireAdminGrant } = require("../middleware/adminGrants");
-const { ADMIN_GRANT_KEYS, hasAdminGrant } = require("../config/adminGrants");
+const { requireAdminGrant, requireAdminGrantAny } = require("../middleware/adminGrants");
+const { ADMIN_GRANT_KEYS, SPOTLIGHT_ADMIN_GRANT_KEYS, hasAdminGrant } = require("../config/adminGrants");
 const {
   getPublicVideoUrl,
   getPublicDocumentUrl,
@@ -344,7 +344,7 @@ router.post(
 router.post(
   "/upcoming-image",
   authRequired,
-  requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING),
+  requireAdminGrantAny(...SPOTLIGHT_ADMIN_GRANT_KEYS, ADMIN_GRANT_KEYS.UPCOMING_EVENTS),
   uploadImage.single("image"),
   async (req, res) => {
     if (!req.file) {

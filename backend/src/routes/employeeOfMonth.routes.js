@@ -287,7 +287,7 @@ router.get("/history", authRequired, async (_req, res) => {
   }
 });
 
-router.get("/user-picker", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (_req, res) => {
+router.get("/user-picker", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH), async (_req, res) => {
   try {
     const rows = await db
       .prepare(
@@ -303,7 +303,7 @@ router.get("/user-picker", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCO
   }
 });
 
-router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (_req, res) => {
+router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH), async (_req, res) => {
   try {
     const rows = await db
       .prepare(`${SELECT_WITH_USER} ORDER BY ${MONTH_ORDER}`)
@@ -315,7 +315,7 @@ router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), asyn
   }
 });
 
-router.post("/:id/move", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.post("/:id/move", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH), async (req, res) => {
   try {
     await moveEmployeeOfMonthEntry(req.params.id, req.body?.direction);
     const rows = await db.prepare(`${SELECT_WITH_USER} ORDER BY ${MONTH_ORDER}`).all();
@@ -327,7 +327,7 @@ router.post("/:id/move", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMI
   }
 });
 
-router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH), async (req, res) => {
   try {
     const employee = parseEmployee(req.body);
     if (employee.error) return res.status(400).json({ message: employee.error });
@@ -385,7 +385,7 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), asy
   }
 });
 
-router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "Invalid id." });
@@ -448,7 +448,7 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), a
   }
 });
 
-router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "Invalid id." });

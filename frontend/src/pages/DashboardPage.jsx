@@ -87,7 +87,10 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const canViewTopVisitors = isFullAdmin(user) || user?.is_full_admin === true;
-  const canManageSpotlightFeeds = hasAdminGrant(user, ADMIN_GRANT_KEYS.UPCOMING);
+  const canManageLeadershipUpdates = hasAdminGrant(user, ADMIN_GRANT_KEYS.LEADERSHIP_UPDATES);
+  const canManageNewHires = hasAdminGrant(user, ADMIN_GRANT_KEYS.NEW_HIRES);
+  const canManageCustomerWins = hasAdminGrant(user, ADMIN_GRANT_KEYS.CUSTOMER_WINS);
+  const canManageCommunityInvolvement = hasAdminGrant(user, ADMIN_GRANT_KEYS.COMMUNITY_INVOLVEMENT);
   const isIT = userHasDepartment(user, "IT");
   const [upcoming, setUpcoming] = useState([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
@@ -258,7 +261,7 @@ export default function DashboardPage() {
           entries={newHireEntries}
           loading={newHireLoading}
           compact
-          canManage={canManageSpotlightFeeds}
+          canManage={canManageNewHires}
         />
       ),
       [CUSTOMER_WINS_FEED.widgetKey]: (
@@ -267,7 +270,7 @@ export default function DashboardPage() {
           entries={customerWinEntries}
           loading={customerWinLoading}
           compact
-          canManage={canManageSpotlightFeeds}
+          canManage={canManageCustomerWins}
         />
       ),
       [COMMUNITY_INVOLVEMENT_FEED.widgetKey]: (
@@ -276,7 +279,7 @@ export default function DashboardPage() {
           entries={communityInvolvementEntries}
           loading={communityInvolvementLoading}
           compact
-          canManage={canManageSpotlightFeeds}
+          canManage={canManageCommunityInvolvement}
         />
       ),
     };
@@ -289,7 +292,9 @@ export default function DashboardPage() {
     customerWinLoading,
     communityInvolvementEntries,
     communityInvolvementLoading,
-    canManageSpotlightFeeds,
+    canManageNewHires,
+    canManageCustomerWins,
+    canManageCommunityInvolvement,
   ]);
 
   // Lightweight per-session portal visit tracking.
@@ -385,7 +390,7 @@ export default function DashboardPage() {
                   entries={leadershipUpdateEntries}
                   loading={leadershipUpdateLoading}
                   compact
-                  canManage={canManageSpotlightFeeds}
+                  canManage={canManageLeadershipUpdates}
                 />
               </div>
 

@@ -3,7 +3,8 @@ import api, { postUsersResendInvite, putUserSave } from "../services/api";
 import { DEPARTMENTS } from "../constants/departments";
 import { formatDepartments } from "../utils/userDepts";
 import { useAuth } from "../context/AuthContext";
-import { ADMIN_GRANT_OPTIONS } from "../constants/adminGrants";
+import AdminGrantCheckboxGroups from "./AdminGrantCheckboxGroups";
+import { normalizeAdminGrantsForUi } from "../constants/adminGrants";
 import { canManageAdminGrants } from "../utils/adminAccess";
 
 /** Match backend `canonicalRole` so grant payloads use the correct Admin branch even if API casing/labels vary. */
@@ -238,11 +239,11 @@ export default function AdminUsersSection({ className = "card" }) {
 
   const normalizeGrantsFromApi = (v) => {
     if (v == null) return [];
-    if (Array.isArray(v)) return v.filter(Boolean);
+    if (Array.isArray(v)) return normalizeAdminGrantsForUi(v);
     if (typeof v === "string") {
       try {
         const p = JSON.parse(v);
-        return Array.isArray(p) ? p.filter(Boolean) : [];
+        return Array.isArray(p) ? normalizeAdminGrantsForUi(p) : [];
       } catch {
         return [];
       }
@@ -586,31 +587,19 @@ export default function AdminUsersSection({ className = "card" }) {
                     <p className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
                       Administration areas
                     </p>
-                    <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-                      {ADMIN_GRANT_OPTIONS.map((opt) => {
-                        const checked = (form.admin_grants || []).includes(opt.key);
-                        return (
-                          <label key={opt.key} className="flex cursor-pointer items-start gap-2 text-xs">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5"
-                              checked={checked}
-                              onChange={() => {
-                                setForm((prev) => {
-                                  const s = new Set(prev.admin_grants || []);
-                                  if (s.has(opt.key)) s.delete(opt.key);
-                                  else s.add(opt.key);
-                                  const next = Array.from(s);
-                                  formGrantsSnapshotRef.current = [...next];
-                                  return { ...prev, admin_grants: next };
-                                });
-                              }}
-                            />
-                            <span>{opt.label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
+                    <AdminGrantCheckboxGroups
+                      selectedKeys={form.admin_grants || []}
+                      onToggle={(key) => {
+                        setForm((prev) => {
+                          const s = new Set(prev.admin_grants || []);
+                          if (s.has(key)) s.delete(key);
+                          else s.add(key);
+                          const next = Array.from(s);
+                          formGrantsSnapshotRef.current = [...next];
+                          return { ...prev, admin_grants: next };
+                        });
+                      }}
+                    />
                   </div>
                 ) : null}
               </div>
@@ -619,30 +608,20 @@ export default function AdminUsersSection({ className = "card" }) {
             {!isAdminRole(form.role) && canManageAdminGrants(me) ? (
               <div className="rounded border border-slate-200 p-3 dark:border-slate-600">
                 <p className="text-sm font-medium">Optional administration access</p>
-                <div className="mt-3 max-h-48 space-y-2 overflow-y-auto pr-1">
-                  {ADMIN_GRANT_OPTIONS.map((opt) => {
-                    const checked = (form.admin_grants || []).includes(opt.key);
-                    return (
-                      <label key={opt.key} className="flex cursor-pointer items-start gap-2 text-xs">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5"
-                          checked={checked}
-                          onChange={() => {
-                            setForm((prev) => {
-                              const s = new Set(prev.admin_grants || []);
-                              if (s.has(opt.key)) s.delete(opt.key);
-                              else s.add(opt.key);
-                              const next = Array.from(s);
-                              formGrantsSnapshotRef.current = [...next];
-                              return { ...prev, admin_grants: next };
-                            });
-                          }}
-                        />
-                        <span>{opt.label}</span>
-                      </label>
-                    );
-                  })}
+                <div className="mt-3">
+                <AdminGrantCheckboxGroups
+                  selectedKeys={form.admin_grants || []}
+                  onToggle={(key) => {
+                    setForm((prev) => {
+                      const s = new Set(prev.admin_grants || []);
+                      if (s.has(key)) s.delete(key);
+                      else s.add(key);
+                      const next = Array.from(s);
+                      formGrantsSnapshotRef.current = [...next];
+                      return { ...prev, admin_grants: next };
+                    });
+                  }}
+                />
                 </div>
               </div>
             ) : null}
@@ -977,30 +956,20 @@ export default function AdminUsersSection({ className = "card" }) {
                       <p className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
                         Administration areas
                       </p>
-                      <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
-                        {ADMIN_GRANT_OPTIONS.map((opt) => {
-                          const checked = (editing.admin_grants || []).includes(opt.key);
-                          return (
-                            <label key={opt.key} className="flex cursor-pointer items-start gap-2 text-xs">
-                              <input
-                                type="checkbox"
-                                className="mt-0.5"
-                                checked={checked}
-                                onChange={() => {
-                                  setEditing((prev) => {
-                                    if (!prev) return prev;
-                                    const s = new Set(prev.admin_grants || []);
-                                    if (s.has(opt.key)) s.delete(opt.key);
-                                    else s.add(opt.key);
-                                    return { ...prev, admin_grants: Array.from(s) };
-                                  });
-                                }}
-                              />
-                              <span>{opt.label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
+                      <AdminGrantCheckboxGroups
+                        selectedKeys={editing.admin_grants || []}
+                        onToggle={(key) => {
+                          setEditing((prev) => {
+                            if (!prev) return prev;
+                            const s = new Set(prev.admin_grants || []);
+                            if (s.has(key)) s.delete(key);
+                            else s.add(key);
+                            const next = Array.from(s);
+                            editGrantsSnapshotRef.current = [...next];
+                            return { ...prev, admin_grants: next };
+                          });
+                        }}
+                      />
                     </div>
                   ) : null}
                 </div>
@@ -1009,31 +978,21 @@ export default function AdminUsersSection({ className = "card" }) {
               {!isAdminRole(editing.role) && canManageAdminGrants(me) ? (
                 <div className="rounded border border-slate-200 p-3 dark:border-slate-600">
                   <p className="text-sm font-medium">Optional administration access</p>
-                  <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
-                    {ADMIN_GRANT_OPTIONS.map((opt) => {
-                      const checked = (editing.admin_grants || []).includes(opt.key);
-                      return (
-                        <label key={opt.key} className="flex cursor-pointer items-start gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5"
-                            checked={checked}
-                            onChange={() => {
-                              setEditing((prev) => {
-                                if (!prev) return prev;
-                                const s = new Set(prev.admin_grants || []);
-                                if (s.has(opt.key)) s.delete(opt.key);
-                                else s.add(opt.key);
-                                const next = Array.from(s);
-                                editGrantsSnapshotRef.current = [...next];
-                                return { ...prev, admin_grants: next };
-                              });
-                            }}
-                          />
-                          <span>{opt.label}</span>
-                        </label>
-                      );
-                    })}
+                  <div className="mt-3">
+                  <AdminGrantCheckboxGroups
+                    selectedKeys={editing.admin_grants || []}
+                    onToggle={(key) => {
+                      setEditing((prev) => {
+                        if (!prev) return prev;
+                        const s = new Set(prev.admin_grants || []);
+                        if (s.has(key)) s.delete(key);
+                        else s.add(key);
+                        const next = Array.from(s);
+                        editGrantsSnapshotRef.current = [...next];
+                        return { ...prev, admin_grants: next };
+                      });
+                    }}
+                  />
                   </div>
                 </div>
               ) : null}

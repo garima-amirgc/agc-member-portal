@@ -98,7 +98,7 @@ router.get("/", authRequired, async (req, res) => {
   const raw = req.query.business_unit;
   const bu = Array.isArray(raw) ? raw[0] : raw;
 
-  if (!bu && (req.user.role === ROLES.ADMIN || hasAdminGrant(req.user, ADMIN_GRANT_KEYS.UPCOMING))) {
+  if (!bu && (req.user.role === ROLES.ADMIN || hasAdminGrant(req.user, ADMIN_GRANT_KEYS.UPCOMING_EVENTS))) {
     const rows = isPostgres
       ? (await getPool().query(`SELECT * FROM facility_upcoming ORDER BY ${ORDER_PG}`)).rows
       : await db.prepare(`SELECT * FROM facility_upcoming ORDER BY ${ORDER_SQLITE}`).all();
@@ -197,7 +197,7 @@ function resolveBusinessUnitsFromBody(body) {
   return [];
 }
 
-router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENTS), async (req, res) => {
   const { title, detail, start_at, end_at, published, image_url, show_from_at, event_at } = req.body;
   if (!title || typeof title !== "string") {
     return res.status(400).json({ message: "title is required" });
@@ -260,7 +260,7 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), asy
   return res.status(201).json({ created: [shaped], count: 1 });
 });
 
-router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENTS), async (req, res) => {
   const existing = await db.prepare("SELECT * FROM facility_upcoming WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ message: "Not found" });
 
@@ -344,7 +344,7 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), a
   return res.json(shapeUpcomingRow(row));
 });
 
-router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENTS), async (req, res) => {
   const existing = await db.prepare("SELECT * FROM facility_upcoming WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ message: "Not found" });
   if (existing.image_url) {

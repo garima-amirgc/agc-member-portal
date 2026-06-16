@@ -72,7 +72,7 @@ router.get("/history", authRequired, async (_req, res) => {
   }
 });
 
-router.post("/:id/move", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.post("/:id/move", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.NEW_HIRES), async (req, res) => {
   try {
     await moveSpotlightEntry(db, TABLE, req.params.id, req.body?.direction);
     const rows = await db.prepare(`SELECT * FROM ${TABLE} ORDER BY sort_order ASC, created_at DESC, id DESC`).all();
@@ -97,7 +97,7 @@ router.get("/:id", authRequired, async (req, res) => {
   }
 });
 
-router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (_req, res) => {
+router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.NEW_HIRES), async (_req, res) => {
   try {
     const rows = await db.prepare(`SELECT * FROM ${TABLE} ORDER BY sort_order ASC, created_at DESC, id DESC`).all();
     return res.json(rows.map(shapeRow));
@@ -107,7 +107,7 @@ router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), asyn
   }
 });
 
-router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.NEW_HIRES), async (req, res) => {
   try {
     const title = String(req.body?.title || "").trim();
     if (!title) return res.status(400).json({ message: "Name is required." });
@@ -134,7 +134,7 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), asy
   }
 });
 
-router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.NEW_HIRES), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "Invalid id." });
@@ -175,7 +175,7 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), a
   }
 });
 
-router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING), async (req, res) => {
+router.delete("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.NEW_HIRES), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "Invalid id." });

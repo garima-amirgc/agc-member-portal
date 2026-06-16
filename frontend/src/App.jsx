@@ -187,7 +187,7 @@ export default function App() {
         <Route
           path="admin/upcoming"
           element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING_EVENTS}>
               <AdminUpcomingPage />
             </ProtectedRoute>
           }
@@ -195,7 +195,7 @@ export default function App() {
         <Route
           path="admin/employee-of-month"
           element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH}>
               <AdminEmployeeOfMonthPage />
             </ProtectedRoute>
           }
@@ -203,7 +203,7 @@ export default function App() {
         <Route
           path="admin/leadership-updates"
           element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.LEADERSHIP_UPDATES}>
               <AdminLeadershipUpdatesPage />
             </ProtectedRoute>
           }
@@ -211,7 +211,7 @@ export default function App() {
         <Route
           path="admin/new-hires"
           element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.NEW_HIRES}>
               <AdminNewHiresPage />
             </ProtectedRoute>
           }
@@ -219,7 +219,7 @@ export default function App() {
         <Route
           path="admin/customer-wins"
           element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.CUSTOMER_WINS}>
               <AdminCustomerWinsPage />
             </ProtectedRoute>
           }
@@ -227,7 +227,7 @@ export default function App() {
         <Route
           path="admin/community-involvement"
           element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.UPCOMING}>
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.COMMUNITY_INVOLVEMENT}>
               <AdminCommunityInvolvementPage />
             </ProtectedRoute>
           }

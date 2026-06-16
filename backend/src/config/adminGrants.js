@@ -3,7 +3,14 @@ const { ROLES, canonicalRole } = require("./constants");
 /** Keys for scoped administration areas (stored in users.admin_grants as JSON array). */
 const ADMIN_GRANT_KEYS = Object.freeze({
   ENGAGEMENT_CALENDAR: "engagement_calendar",
+  /** @deprecated Stored on older accounts — treated as {@link ADMIN_GRANT_KEYS.UPCOMING_EVENTS} only. */
   UPCOMING: "upcoming",
+  UPCOMING_EVENTS: "upcoming_events",
+  EMPLOYEE_OF_MONTH: "employee_of_month",
+  LEADERSHIP_UPDATES: "leadership_updates",
+  NEW_HIRES: "new_hires",
+  CUSTOMER_WINS: "customer_wins",
+  COMMUNITY_INVOLVEMENT: "community_involvement",
   USERS: "users",
   LEARNING_ADMIN: "learning_admin",
   REPORTS: "reports",
@@ -11,6 +18,14 @@ const ADMIN_GRANT_KEYS = Object.freeze({
   FEEDBACK_POLLS: "feedback_polls",
   COMPANY_CONTENT: "company_content",
 });
+
+const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
+  ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH,
+  ADMIN_GRANT_KEYS.LEADERSHIP_UPDATES,
+  ADMIN_GRANT_KEYS.NEW_HIRES,
+  ADMIN_GRANT_KEYS.CUSTOMER_WINS,
+  ADMIN_GRANT_KEYS.COMMUNITY_INVOLVEMENT,
+]);
 
 const ALL_ADMIN_GRANT_KEYS = Object.freeze(Object.values(ADMIN_GRANT_KEYS));
 
@@ -62,17 +77,58 @@ function isFullAdminUser(reqUser) {
   return false;
 }
 
-/** Super-admin (Admin + no list) has every area; any other user needs the key in `adminGrants`. */
+function _grantList(reqUser) {
+  const g = reqUser?.adminGrants;
+  return Array.isArray(g) ? g : [];
+}
+
+/** Super-admin (Admin + no list) has every area; granular keys only show when explicitly granted. */
 function hasAdminGrant(reqUser, grantKey) {
   if (!reqUser || !grantKey) return false;
   const role = canonicalRole(reqUser.role);
-  if (role !== ROLES.ADMIN) {
+  const grants = _grantList(reqUser);
+
+  if (role === ROLES.ADMIN) {
     const g = reqUser.adminGrants;
-    return Array.isArray(g) && g.includes(grantKey);
+    if (g == null || (Array.isArray(g) && g.length === 0)) return true;
+    if (grants.includes(grantKey)) return true;
+    if (
+      grantKey === ADMIN_GRANT_KEYS.UPCOMING_EVENTS &&
+      grants.includes(ADMIN_GRANT_KEYS.UPCOMING)
+    ) {
+      return true;
+    }
+    return false;
   }
-  const g = reqUser.adminGrants;
-  if (g == null || (Array.isArray(g) && g.length === 0)) return true;
-  return Array.isArray(g) && g.includes(grantKey);
+
+  if (grants.includes(grantKey)) return true;
+  if (grantKey === ADMIN_GRANT_KEYS.UPCOMING_EVENTS && grants.includes(ADMIN_GRANT_KEYS.UPCOMING)) {
+    return true;
+  }
+  return false;
+}
+
+function hasAnyAdminGrant(reqUser, grantKeys) {
+  if (!Array.isArray(grantKeys) || grantKeys.length === 0) return false;
+  return grantKeys.some((k) => hasAdminGrant(reqUser, k));
+}
+
+/**
+ * Normalize grant keys on save: legacy `upcoming` becomes `upcoming_events`.
+ * @param {string[]} keys
+ */
+function normalizeGrantKeysForSave(keys) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of keys) {
+    let k = String(raw || "").trim();
+    if (k === ADMIN_GRANT_KEYS.UPCOMING) k = ADMIN_GRANT_KEYS.UPCOMING_EVENTS;
+    if (!ALL_ADMIN_GRANT_KEYS.includes(k) || seen.has(k)) continue;
+    seen.add(k);
+    out.push(k);
+  }
+  out.sort();
+  return out;
 }
 
 /**
@@ -97,27 +153,44 @@ function sanitizeAdminGrantsPayload(value, opts = {}) {
     }
     return { db: null };
   }
-  const seen = new Set();
-  const out = [];
-  for (const x of value) {
-    const k = String(x || "").trim();
-    if (!ALL_ADMIN_GRANT_KEYS.includes(k)) {
-      return { error: `Unknown administration permission: ${k}` };
-    }
-    if (!seen.has(k)) {
-      seen.add(k);
-      out.push(k);
+  const normalized = normalizeGrantKeysForSave(value);
+  if (normalized.length === 0) {
+    return { error: "admin_grants must include at least one valid permission key" };
+  }
+  for (const k of normalized) {
+    if (k === ADMIN_GRANT_KEYS.UPCOMING) {
+      return { error: "Use upcoming_events instead of the deprecated upcoming permission key." };
     }
   }
-  out.sort();
-  return { db: JSON.stringify(out) };
+  return { db: JSON.stringify(normalized) };
+}
+
+/**
+ * One-time data fix: replace stored legacy `upcoming` with `upcoming_events`.
+ * Does not add spotlight permissions — those must be assigned explicitly.
+ */
+async function migrateLegacyUpcomingGrantKey(db) {
+  const rows = await db.prepare(
+    "SELECT id, admin_grants FROM users WHERE admin_grants IS NOT NULL AND admin_grants LIKE '%upcoming%'"
+  ).all();
+  for (const row of rows) {
+    const grants = parseAdminGrantsColumn(row.admin_grants);
+    if (!Array.isArray(grants) || !grants.includes(ADMIN_GRANT_KEYS.UPCOMING)) continue;
+    const next = normalizeGrantKeysForSave(grants);
+    if (JSON.stringify(next) === JSON.stringify(grants)) continue;
+    await db.prepare("UPDATE users SET admin_grants = ? WHERE id = ?").run(JSON.stringify(next), row.id);
+  }
 }
 
 module.exports = {
   ADMIN_GRANT_KEYS,
+  SPOTLIGHT_ADMIN_GRANT_KEYS,
   ALL_ADMIN_GRANT_KEYS,
   parseAdminGrantsColumn,
   isFullAdminUser,
   hasAdminGrant,
+  hasAnyAdminGrant,
+  normalizeGrantKeysForSave,
   sanitizeAdminGrantsPayload,
+  migrateLegacyUpcomingGrantKey,
 };

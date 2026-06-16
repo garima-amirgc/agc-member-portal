@@ -1160,6 +1160,13 @@ async function initDb() {
     console.error("[db] engagement_calendar seed:", e.message || e);
   }
 
+  try {
+    const { migrateLegacyUpcomingGrantKey } = require("../../config/adminGrants");
+    await migrateLegacyUpcomingGrantKey(db);
+  } catch (e) {
+    console.error("[db] admin_grants upcoming migration:", e.message || e);
+  }
+
   persist();
 }
 
