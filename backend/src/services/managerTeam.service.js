@@ -1,14 +1,31 @@
 const { db } = require("../config/db");
-const { buildReportingHierarchy } = require("./reportingHierarchy.service");
 const { getTrainingSummary } = require("./trainingCompletion.service");
+
+/** Manager chain ids above this user (lightweight; avoids full hierarchy build). */
+async function getAncestorIds(userId) {
+  const ancestorIds = new Set();
+  let id = userId;
+  const seen = new Set();
+
+  while (id != null && !seen.has(id)) {
+    seen.add(id);
+    const row = await db.prepare("SELECT manager_id FROM users WHERE id = ?").get(id);
+    if (!row) break;
+    const mgr = row.manager_id;
+    if (mgr == null) break;
+    ancestorIds.add(mgr);
+    id = mgr;
+  }
+
+  return ancestorIds;
+}
 
 /**
  * @param {number} managerUserId
  * @returns {Promise<Array<object>>}
  */
 async function getTeamOverview(managerUserId) {
-  const { chain } = await buildReportingHierarchy(managerUserId);
-  const ancestorIds = new Set(chain.slice(0, -1).map((n) => n.id));
+  const ancestorIds = await getAncestorIds(managerUserId);
 
   const rows = await db
     .prepare(
@@ -34,28 +51,29 @@ async function getTeamOverview(managerUserId) {
      ORDER BY c.title COLLATE NOCASE ASC`
   );
 
-  const out = [];
-  for (const emp of employees) {
-    const facilities = (await facStmt.all(emp.id)).map((r) => r.business_unit);
-    const effectiveFacilities =
-      facilities.length > 0
-        ? facilities
-        : emp.business_unit
-          ? [emp.business_unit]
-          : [];
-    const allAssignments = await assignAllStmt.all(emp.id);
-    const facilitySet = new Set(effectiveFacilities);
-    const assignments = allAssignments.filter((a) => facilitySet.has(a.course_business_unit));
-    const training_summary = await getTrainingSummary(emp.id);
-    out.push({
-      ...emp,
-      facilities: effectiveFacilities,
-      leave_requests: await leaveStmt.all(emp.id),
-      assignments,
-      training_summary,
-    });
-  }
-  return out;
+  return Promise.all(
+    employees.map(async (emp) => {
+      const facilities = (await facStmt.all(emp.id)).map((r) => r.business_unit);
+      const effectiveFacilities =
+        facilities.length > 0 ? facilities : emp.business_unit ? [emp.business_unit] : [];
+      const facilitySet = new Set(effectiveFacilities);
+
+      const [allAssignments, leave_requests, training_summary] = await Promise.all([
+        assignAllStmt.all(emp.id),
+        leaveStmt.all(emp.id),
+        getTrainingSummary(emp.id),
+      ]);
+      const assignments = allAssignments.filter((a) => facilitySet.has(a.course_business_unit));
+
+      return {
+        ...emp,
+        facilities: effectiveFacilities,
+        leave_requests,
+        assignments,
+        training_summary,
+      };
+    })
+  );
 }
 
-module.exports = { getTeamOverview };
+module.exports = { getTeamOverview, getAncestorIds };

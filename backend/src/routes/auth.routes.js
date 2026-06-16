@@ -26,6 +26,7 @@ async function authResponseUser(userRow, departments, dept) {
 }
 const leaveSvc = require("../services/leaveRequests.service");
 const managerTeamSvc = require("../services/managerTeam.service");
+const { getTrainingSummary } = require("../services/trainingCompletion.service");
 const { managerLeaveInboxWithTeam } = require("../handlers/managerInbox.handler");
 const { supervisorRequired } = require("../middleware/supervisorRequired");
 const { hasDirectReports } = require("../services/supervisor.service");
@@ -447,7 +448,12 @@ router.patch("/manager-leave-requests/:id", authRequired, supervisorRequired, as
 
 router.get("/manager-team-overview", authRequired, supervisorRequired, async (req, res) => {
   try {
-    return res.json(await managerTeamSvc.getTeamOverview(req.user.id));
+    const team = await managerTeamSvc.getTeamOverview(req.user.id);
+    const includeSelf =
+      req.query.include_self_training === "true" || req.query.include_self_training === "1";
+    if (!includeSelf) return res.json(team);
+    const self_training_summary = await getTrainingSummary(req.user.id);
+    return res.json({ team, self_training_summary });
   } catch (e) {
     return res.status(500).json({ message: e.message || "Server error" });
   }

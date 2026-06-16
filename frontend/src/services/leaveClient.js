@@ -128,6 +128,30 @@ export async function managerTeamJson() {
   throw lastErr || new Error("Could not load team overview.");
 }
 
+/** Team page: direct reports + current user training (skips leave inbox). */
+export async function managerTeamWithSelfJson() {
+  const paths = ["/auth/manager-team-overview", "/users/manager/team-overview"];
+  let lastErr = null;
+  for (const path of paths) {
+    try {
+      const { data } = await api.get(path, { params: { include_self_training: "true" } });
+      if (Array.isArray(data)) {
+        return { team: data, self_training_summary: null, teamError: "" };
+      }
+      return {
+        team: Array.isArray(data?.team) ? data.team : [],
+        self_training_summary: data?.self_training_summary ?? null,
+        teamError: "",
+      };
+    } catch (e) {
+      lastErr = e;
+      const status = e?.response?.status ?? e?.status;
+      if (status !== 404) throw e;
+    }
+  }
+  throw lastErr || new Error("Could not load team overview.");
+}
+
 function normalizeManagerInboxResponse(data) {
   if (data && typeof data === "object" && !Array.isArray(data)) {
     const hasInbox = Array.isArray(data.leave_inbox);

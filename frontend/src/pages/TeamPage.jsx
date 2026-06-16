@@ -6,21 +6,22 @@ import ManagerEmployeeManagement from "../components/ManagerEmployeeManagement";
 import ManagerTrainingNotifications from "../components/ManagerTrainingNotifications";
 import ReportingHierarchyTree from "../components/ReportingHierarchyTree";
 import { useAuth } from "../context/AuthContext";
-import { managerInboxWithTeamJson } from "../services/leaveClient";
-import { USER_ME_TEAM } from "../services/userMeClient";
+import { managerTeamWithSelfJson } from "../services/leaveClient";
+import { USER_ME_TEAM_HIERARCHY } from "../services/userMeClient";
 import { isSupervisor } from "../utils/supervisorAccess";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
 export default function TeamPage() {
   const { user } = useAuth();
   const [me, setMe] = useState(null);
-  const [meRefreshing, setMeRefreshing] = useState(false);
+  const [hierarchyLoading, setHierarchyLoading] = useState(false);
   const [team, setTeam] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamError, setTeamError] = useState("");
   const [error, setError] = useState("");
 
   const profile = me || user;
+  const mayLoadTeamProgress = isSupervisor(user) || isSupervisor(profile);
 
   const showSupervisorTools = isSupervisor(user) || isSupervisor(profile);
   const hasDirectReportsInHierarchy = useMemo(() => {
@@ -29,8 +30,19 @@ export default function TeamPage() {
   }, [profile]);
   const showLearningSections = showSupervisorTools || hasDirectReportsInHierarchy;
 
+  const applyTeamPayload = useCallback((teamData, selfTraining) => {
+    setTeam(Array.isArray(teamData) ? teamData : []);
+    if (selfTraining) {
+      setMe((prev) => {
+        const base = prev || user;
+        if (!base) return prev;
+        return { ...base, training_summary: selfTraining };
+      });
+    }
+  }, [user]);
+
   const reloadTeam = useCallback(async () => {
-    if (!showLearningSections) {
+    if (!mayLoadTeamProgress) {
       setTeam([]);
       setTeamError("");
       setTeamLoading(false);
@@ -39,8 +51,8 @@ export default function TeamPage() {
     setTeamLoading(true);
     setTeamError("");
     try {
-      const { team: teamData, teamError } = await managerInboxWithTeamJson();
-      setTeam(Array.isArray(teamData) ? teamData : []);
+      const { team: teamData, self_training_summary, teamError } = await managerTeamWithSelfJson();
+      applyTeamPayload(teamData, self_training_summary);
       if (teamError) setTeamError(teamError);
     } catch (e) {
       setTeamError(friendlyErrorMessage(e, "Failed to load team progress"));
@@ -48,36 +60,76 @@ export default function TeamPage() {
     } finally {
       setTeamLoading(false);
     }
-  }, [showLearningSections]);
+  }, [mayLoadTeamProgress, applyTeamPayload]);
 
-  const reloadProfile = useCallback(async () => {
-    setMeRefreshing(true);
+  const reloadHierarchy = useCallback(async () => {
+    setHierarchyLoading(true);
     setError("");
     try {
-      const res = await api.get("/users/me", USER_ME_TEAM);
-      setMe(res.data);
+      const res = await api.get("/users/me", USER_ME_TEAM_HIERARCHY);
+      setMe((prev) => ({
+        ...(prev || user || {}),
+        ...res.data,
+        training_summary: prev?.training_summary ?? res.data?.training_summary,
+      }));
     } catch (e) {
       setError(friendlyErrorMessage(e, "Failed to load team"));
     } finally {
-      setMeRefreshing(false);
+      setHierarchyLoading(false);
     }
-  }, []);
+  }, [user]);
+
+  const reloadAll = useCallback(async () => {
+    await Promise.all([reloadHierarchy(), reloadTeam()]);
+  }, [reloadHierarchy, reloadTeam]);
 
   useEffect(() => {
     if (!user) return;
     setMe((prev) => prev ?? user);
-    reloadProfile();
-  }, [user?.id, reloadProfile]);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (!user) return;
-    reloadTeam();
-  }, [user?.id, showLearningSections, reloadTeam]);
+    (async () => {
+      setHierarchyLoading(true);
+      if (mayLoadTeamProgress) setTeamLoading(true);
+      setError("");
+      setTeamError("");
+
+      const hierarchyPromise = api.get("/users/me", USER_ME_TEAM_HIERARCHY);
+      const teamPromise = mayLoadTeamProgress
+        ? managerTeamWithSelfJson()
+        : Promise.resolve({ team: [], self_training_summary: null, teamError: "" });
+
+      try {
+        const [hierarchyRes, teamPayload] = await Promise.all([hierarchyPromise, teamPromise]);
+        if (cancelled) return;
+
+        const hierarchyData = hierarchyRes.data;
+        setMe({
+          ...(user || {}),
+          ...hierarchyData,
+          training_summary: teamPayload.self_training_summary ?? undefined,
+        });
+        setTeam(Array.isArray(teamPayload.team) ? teamPayload.team : []);
+        if (teamPayload.teamError) setTeamError(teamPayload.teamError);
+      } catch (e) {
+        if (cancelled) return;
+        setError(friendlyErrorMessage(e, "Failed to load team"));
+      } finally {
+        if (!cancelled) {
+          setHierarchyLoading(false);
+          setTeamLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, mayLoadTeamProgress]);
 
   useEffect(() => {
     const refresh = () => {
-      reloadProfile();
-      reloadTeam();
+      reloadAll();
     };
     window.addEventListener("agc-training-progress", refresh);
     window.addEventListener("agc-training-complete", refresh);
@@ -85,7 +137,7 @@ export default function TeamPage() {
       window.removeEventListener("agc-training-progress", refresh);
       window.removeEventListener("agc-training-complete", refresh);
     };
-  }, [reloadProfile, reloadTeam]);
+  }, [reloadAll]);
 
   const selfTraining = useMemo(
     () => ({
@@ -102,6 +154,8 @@ export default function TeamPage() {
     );
   }
 
+  const progressLoading = hierarchyLoading || teamLoading;
+
   return (
     <main className={PAGE_SHELL}>
       <section>
@@ -112,8 +166,8 @@ export default function TeamPage() {
         <div className="mb-4 rounded bg-rose-100 p-3 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">{error}</div>
       ) : null}
 
-      {meRefreshing ? (
-        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Updating team progress…</p>
+      {progressLoading ? (
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Loading team progress…</p>
       ) : null}
 
       <ReportingHierarchyTree

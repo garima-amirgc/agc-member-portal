@@ -49,6 +49,18 @@ async function getResourceTrainingSummary(userId) {
     return { total: 0, completed: 0, allComplete: false, avgProgress: 0 };
   }
 
+  const progressRows = await db
+    .prepare(
+      "SELECT business_unit, category, resource_kind, resource_id FROM resource_progress WHERE user_id = ?"
+    )
+    .all(userId);
+  const doneSet = new Set(
+    progressRows.map((r) => {
+      const cat = String(r.category || "").trim().toLowerCase();
+      return `${r.business_unit}|${cat}|${r.resource_kind}|${r.resource_id}`;
+    })
+  );
+
   let total = 0;
   let completed = 0;
 
@@ -65,11 +77,6 @@ async function getResourceTrainingSummary(userId) {
      WHERE business_unit = ?
        AND LOWER(TRIM(COALESCE(category, ''))) = ?`
   );
-  const doneStmt = db.prepare(
-    `SELECT 1 AS ok FROM resource_progress
-     WHERE user_id = ? AND business_unit = ? AND category = ? AND resource_kind = ? AND resource_id = ?
-     LIMIT 1`
-  );
 
   for (const facility of facilities) {
     for (const category of RESOURCE_CATEGORIES) {
@@ -83,8 +90,8 @@ async function getResourceTrainingSummary(userId) {
 
       total += items.length;
       for (const item of items) {
-        const row = await doneStmt.get(userId, facility, category, item.resource_kind, item.resource_id);
-        if (row) completed += 1;
+        const key = `${facility}|${category}|${item.resource_kind}|${item.resource_id}`;
+        if (doneSet.has(key)) completed += 1;
       }
     }
   }
