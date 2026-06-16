@@ -18,10 +18,10 @@ const STATUS_OPTIONS = [
 ];
 
 const TH_BASE =
-  "px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300";
-const TD = "px-4 py-3.5 align-middle";
+  "px-1.5 py-2 text-left text-[9px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300";
+const TD = "px-1.5 py-2 align-middle";
 const BADGE =
-  "inline-flex min-w-[5.5rem] items-center justify-center rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide";
+  "inline-flex max-w-full items-center justify-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase leading-tight tracking-wide";
 
 function vline(isLastColumn) {
   return isLastColumn ? "" : "border-r border-slate-200 dark:border-slate-600/55";
@@ -64,9 +64,9 @@ function tdClass(col, rowIdx, extra = "", isLast = false) {
   return [TD, bodyColBg(col, rowIdx), vline(isLast), extra].filter(Boolean).join(" ");
 }
 
-function statusBadgeLabel(status) {
-  if (status === "closed") return "Completed";
-  if (status === "in_progress") return "In progress";
+function statusBadgeLabel(status, compact = false) {
+  if (status === "closed") return compact ? "Done" : "Completed";
+  if (status === "in_progress") return compact ? "Active" : "In progress";
   return "Open";
 }
 
@@ -135,9 +135,9 @@ function RequesterCell({ ticket, currentUser, compact = false }) {
   const name = ticket?.user_name || "—";
   const [imgFailed, setImgFailed] = useState(false);
   const showImg = img && !imgFailed;
-  const size = compact ? "h-9 w-9" : "h-10 w-10";
+  const size = compact ? "h-7 w-7" : "h-8 w-8";
   return (
-    <div className="flex min-w-0 max-w-full items-center gap-2.5 overflow-hidden">
+    <div className="flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden">
       <div
         className={`${size} shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-[#0B3EAF] to-[#1a5fd4] p-[2px]`}
       >
@@ -150,16 +150,16 @@ function RequesterCell({ ticket, currentUser, compact = false }) {
               onError={() => setImgFailed(true)}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-[rgba(11,62,175,0.08)] text-[10px] font-bold text-[#0B3EAF] dark:bg-[rgba(167,211,68,0.12)] dark:text-[#A7D344]">
+            <div className="flex h-full w-full items-center justify-center bg-[rgba(11,62,175,0.08)] text-[9px] font-bold text-[#0B3EAF] dark:bg-[rgba(167,211,68,0.12)] dark:text-[#A7D344]">
               {initialsFromName(name)}
             </div>
           )}
         </div>
       </div>
       <div className="min-w-0">
-        <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{name}</div>
+        <div className="truncate text-xs font-semibold text-slate-900 dark:text-white">{name}</div>
         {ticket?.user_department ? (
-          <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{ticket.user_department}</div>
+          <div className="truncate text-[10px] text-slate-500 dark:text-slate-400">{ticket.user_department}</div>
         ) : null}
       </div>
     </div>
@@ -169,10 +169,10 @@ function RequesterCell({ ticket, currentUser, compact = false }) {
 function StatPill({ label, value, accent }) {
   return (
     <div
-      className={`flex min-h-[3.75rem] min-w-[4.75rem] flex-col items-center justify-center rounded-lg px-3 py-2 text-center ${accent}`}
+      className={`flex min-h-[3rem] min-w-[3.75rem] flex-col items-center justify-center rounded-md px-2 py-1.5 text-center ${accent}`}
     >
-      <div className="text-xl font-bold leading-none tabular-nums">{value}</div>
-      <div className="mt-1 text-[9px] font-semibold uppercase tracking-wider opacity-90">{label}</div>
+      <div className="text-base font-bold leading-none tabular-nums">{value}</div>
+      <div className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide opacity-90">{label}</div>
     </div>
   );
 }
@@ -180,8 +180,8 @@ function StatPill({ label, value, accent }) {
 function FilterGroup({ label, children }) {
   return (
     <div>
-      <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-white/70">{label}</p>
-      <div className="flex flex-wrap gap-1.5">{children}</div>
+      <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-white/70">{label}</p>
+      <div className="flex flex-wrap gap-1">{children}</div>
     </div>
   );
 }
@@ -247,16 +247,16 @@ export default function ItTicketsMonitorTable({
   }, [tickets]);
 
   return (
-    <section className="card no-title-underline overflow-hidden p-0 shadow-lg ring-1 ring-slate-200/80 dark:ring-white/10">
+    <section className="card no-title-underline min-w-0 overflow-hidden p-0 shadow-lg ring-1 ring-slate-200/80 dark:ring-white/10">
       <div className="relative border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] text-white">
-        <div className="relative flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="it-ticket-board-header">
-              <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
+        <div className="relative flex flex-col gap-4 px-4 py-4 sm:px-5 sm:py-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="it-ticket-board-header min-w-0">
+              <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl">
                 {isIT || isAdmin ? "IT Ticket Board" : "Your tickets"}
               </h2>
               {!(isIT || isAdmin) ? (
-                <p className="mt-1 text-sm text-white/75">Track the status of your submitted requests.</p>
+                <p className="mt-0.5 text-xs text-white/75">Track the status of your submitted requests.</p>
               ) : null}
             </div>
 
@@ -268,7 +268,7 @@ export default function ItTicketsMonitorTable({
             </div>
           </div>
 
-          <div className="grid gap-4 border-t border-white/15 pt-4 sm:grid-cols-2">
+          <div className="grid gap-3 border-t border-white/15 pt-3 sm:grid-cols-2">
             <FilterGroup label="Status">
               {IT_FILTER_TABS.map((tab) => {
                 const count = counts[tab.key] ?? 0;
@@ -281,7 +281,7 @@ export default function ItTicketsMonitorTable({
                     aria-selected={isActive}
                     onClick={() => setFilter(tab.key)}
                     className={[
-                      "rounded-md px-3 py-1.5 text-xs font-semibold transition",
+                      "rounded px-2 py-1 text-[11px] font-semibold transition",
                       isActive ? tab.active : tab.idle,
                     ].join(" ")}
                   >
@@ -303,7 +303,7 @@ export default function ItTicketsMonitorTable({
                     aria-selected={isActive}
                     onClick={() => setTypeFilter(tab.key)}
                     className={[
-                      "rounded-md px-3 py-1.5 text-xs font-semibold transition",
+                      "rounded px-2 py-1 text-[11px] font-semibold transition",
                       isActive ? tab.active : tab.idle,
                     ].join(" ")}
                   >
@@ -335,19 +335,32 @@ export default function ItTicketsMonitorTable({
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse border border-slate-200 text-sm dark:border-slate-600/50">
-            <colgroup>
-              <col style={{ width: "3.25rem" }} />
-              <col style={{ width: "11.5rem" }} />
-              <col style={{ width: "14rem" }} />
-              <col style={{ width: "6.75rem" }} />
-              <col style={{ width: "6.75rem" }} />
-              <col style={{ width: "7.25rem" }} />
-              <col style={{ width: "8.5rem" }} />
-              <col style={{ width: "7.5rem" }} />
-              {showActionsColumn ? <col style={{ width: "11.5rem" }} /> : null}
-            </colgroup>
+        <div className="min-w-0 overflow-hidden">
+          <table className="w-full table-fixed border-collapse border border-slate-200 text-xs dark:border-slate-600/50">
+            {showActionsColumn ? (
+              <colgroup>
+                <col className="w-[4%]" />
+                <col className="w-[13%]" />
+                <col className="w-[19%]" />
+                <col className="w-[8%]" />
+                <col className="w-[8%]" />
+                <col className="w-[9%]" />
+                <col className="w-[11%]" />
+                <col className="w-[10%]" />
+                <col className="w-[18%]" />
+              </colgroup>
+            ) : (
+              <colgroup>
+                <col className="w-[5%]" />
+                <col className="w-[15%]" />
+                <col className="w-[24%]" />
+                <col className="w-[9%]" />
+                <col className="w-[9%]" />
+                <col className="w-[10%]" />
+                <col className="w-[13%]" />
+                <col className="w-[15%]" />
+              </colgroup>
+            )}
             <thead className="sticky top-0 z-10 border-b-2 border-slate-300 backdrop-blur-sm dark:border-slate-600">
               <tr>
                 <th className={thClass("id", "text-center")}>ID</th>
@@ -377,7 +390,7 @@ export default function ItTicketsMonitorTable({
                         <button
                           type="button"
                           className={[
-                            "inline-flex h-8 min-w-[2rem] items-center justify-center gap-0.5 rounded-md text-xs font-bold tabular-nums transition",
+                            "inline-flex h-7 min-w-[1.75rem] items-center justify-center gap-0.5 rounded text-[10px] font-bold tabular-nums transition",
                             expanded
                               ? "bg-[#0B3EAF] text-white dark:bg-[#A7D344] dark:text-[#0a0a0a]"
                               : "bg-slate-100 text-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:bg-white/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]",
@@ -396,49 +409,54 @@ export default function ItTicketsMonitorTable({
                           </span>
                         </button>
                       </td>
-                      <td className={tdClass("requester", rowIdx, "max-w-[11.5rem] overflow-hidden")}>
+                      <td className={tdClass("requester", rowIdx, "overflow-hidden")}>
                         <RequesterCell ticket={t} currentUser={currentUser} compact />
                       </td>
-                      <td className={tdClass("issue", rowIdx, "max-w-[14rem] align-top")}>
+                      <td className={tdClass("issue", rowIdx, "align-top")}>
                         <div className="min-w-0 overflow-hidden">
-                          <div className="truncate font-semibold text-slate-900 dark:text-white" title={issueName}>
+                          <div className="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-900 dark:text-white" title={issueName}>
                             {issueName}
                           </div>
                           {attCount > 0 ? (
-                            <div className="mt-1 inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+                            <div className="mt-0.5 inline-flex rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
                               {attCount} attachment{attCount === 1 ? "" : "s"}
                             </div>
                           ) : null}
                         </div>
                       </td>
                       <td className={tdClass("status", rowIdx)}>
-                        <span className={`${BADGE} ${statusBadgeClass(t.status)}`}>
-                          {statusBadgeLabel(t.status)}
+                        <span className={`${BADGE} ${statusBadgeClass(t.status)}`} title={statusBadgeLabel(t.status)}>
+                          {statusBadgeLabel(t.status, true)}
                         </span>
                       </td>
                       <td className={tdClass("priority", rowIdx)}>
-                        <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`}>
+                        <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`} title={priorityBadgeLabel(t.priority)}>
                           {priorityBadgeLabel(t.priority)}
                         </span>
                       </td>
                       <td className={tdClass("category", rowIdx)}>
                         {typeLabel ? (
-                          <span className={`${BADGE} ${issueTypeBadgeClass(typeLabel)}`}>{typeLabel}</span>
+                          <span
+                            className={`${BADGE} truncate ${issueTypeBadgeClass(typeLabel)}`}
+                            title={typeLabel}
+                          >
+                            {typeLabel}
+                          </span>
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}
                       </td>
-                      <td className={tdClass("assignee", rowIdx, "max-w-[8.5rem] overflow-hidden")}>
-                        <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <td className={tdClass("assignee", rowIdx, "overflow-hidden")}>
+                        <span className="block truncate text-[11px] font-medium text-slate-800 dark:text-slate-200" title={t.assignee_name?.trim() || ""}>
                           {t.assignee_name?.trim() || "—"}
                         </span>
                       </td>
                       <td className={tdClass("submitted", rowIdx, "", lastCol)}>
                         <div className="tabular-nums">
-                          <div className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                          <div className="text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-200">
                             {formatSubmittedDate(t.created_at)}
                           </div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          <div className="text-[9px] leading-tight text-slate-500 dark:text-slate-400">
                             {formatSubmittedTime(t.created_at)}
                           </div>
                         </div>
@@ -446,11 +464,11 @@ export default function ItTicketsMonitorTable({
                       {showActionsColumn ? (
                         <td className={tdClass("actions", rowIdx, "text-right", true)}>
                           {hasRowActions ? (
-                            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <div className="flex flex-wrap items-center justify-end gap-1">
                               {canEdit ? (
                                 <button
                                   type="button"
-                                  className="h-8 whitespace-nowrap rounded-md border border-[#0B3EAF]/25 bg-white px-2.5 text-[11px] font-semibold text-[#0B3EAF] transition hover:bg-[#0B3EAF] hover:text-white dark:border-[#A7D344]/30 dark:bg-[#1a1a1a] dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]"
+                                  className="h-7 whitespace-nowrap rounded border border-[#0B3EAF]/25 bg-white px-1.5 text-[10px] font-semibold text-[#0B3EAF] transition hover:bg-[#0B3EAF] hover:text-white dark:border-[#A7D344]/30 dark:bg-[#1a1a1a] dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]"
                                   onClick={() => onEdit?.(t)}
                                 >
                                   Edit
@@ -459,21 +477,21 @@ export default function ItTicketsMonitorTable({
                               {isIT ? (
                                 <>
                                   <select
-                                    className="h-8 max-w-full rounded-md border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-800 outline-none focus:border-[#0B3EAF] focus:ring-1 focus:ring-[#0B3EAF]/30 dark:border-white/10 dark:bg-[#1a1a1a] dark:text-slate-200"
+                                    className="h-7 min-w-0 max-w-full flex-1 rounded border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-800 outline-none focus:border-[#0B3EAF] focus:ring-1 focus:ring-[#0B3EAF]/30 dark:border-white/10 dark:bg-[#1a1a1a] dark:text-slate-200"
                                     value={t.status}
                                     onChange={(e) => onStatusChange(t.id, e.target.value)}
                                     aria-label={`Status for ticket ${t.id}`}
                                   >
                                     {STATUS_OPTIONS.map((o) => (
                                       <option key={o.value} value={o.value}>
-                                        {o.label}
+                                        {o.value === "closed" ? "Done" : o.value === "in_progress" ? "Active" : o.label}
                                       </option>
                                     ))}
                                   </select>
                                   {t.status !== "closed" ? (
                                     <button
                                       type="button"
-                                      className="h-8 whitespace-nowrap rounded-md bg-emerald-600 px-2.5 text-[11px] font-semibold text-white transition hover:bg-emerald-700"
+                                      className="h-7 whitespace-nowrap rounded bg-emerald-600 px-1.5 text-[10px] font-semibold text-white transition hover:bg-emerald-700"
                                       onClick={() => onStatusChange(t.id, "closed")}
                                     >
                                       Done
@@ -485,10 +503,10 @@ export default function ItTicketsMonitorTable({
                                 <button
                                   type="button"
                                   disabled={deletingId === t.id}
-                                  className="h-8 whitespace-nowrap rounded-md border border-red-200 bg-red-50 px-2.5 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
+                                  className="h-7 whitespace-nowrap rounded border border-red-200 bg-red-50 px-1.5 text-[10px] font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
                                   onClick={() => onDelete?.(t.id)}
                                 >
-                                  {deletingId === t.id ? "Deleting…" : "Delete"}
+                                  {deletingId === t.id ? "…" : "Del"}
                                 </button>
                               ) : null}
                             </div>
@@ -502,9 +520,9 @@ export default function ItTicketsMonitorTable({
                       <tr className="group border-b border-slate-200/80 dark:border-slate-700/50">
                         <td
                           colSpan={colCount}
-                          className={`px-4 py-4 ${bodyColBg("issue", rowIdx)} border-t border-slate-200/60 dark:border-slate-600/40`}
+                          className={`px-3 py-3 ${bodyColBg("issue", rowIdx)} border-t border-slate-200/60 dark:border-slate-600/40`}
                         >
-                          <div className="rounded-lg border border-slate-200 border-l-4 border-l-[#0B3EAF] bg-white px-4 py-4 shadow-sm dark:border-slate-700 dark:border-l-[#5b8fd9] dark:bg-[#1c1c1c]">
+                          <div className="rounded-lg border border-slate-200 border-l-4 border-l-[#0B3EAF] bg-white px-3 py-3 text-xs shadow-sm dark:border-slate-700 dark:border-l-[#5b8fd9] dark:bg-[#1c1c1c]">
                             <div className="grid gap-5 sm:grid-cols-2">
                               <div>
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">
