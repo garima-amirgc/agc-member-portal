@@ -18,8 +18,8 @@ const STATUS_OPTIONS = [
 ];
 
 const TH_BASE =
-  "px-1.5 py-2 text-left text-[9px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300";
-const TD = "px-1.5 py-2 align-middle";
+  "px-1.5 py-3 text-left text-[9px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300";
+const TD = "px-1.5 py-3 align-middle";
 const BADGE =
   "inline-flex max-w-full items-center justify-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase leading-tight tracking-wide";
 
@@ -64,9 +64,9 @@ function tdClass(col, rowIdx, extra = "", isLast = false) {
   return [TD, bodyColBg(col, rowIdx), vline(isLast), extra].filter(Boolean).join(" ");
 }
 
-function statusBadgeLabel(status, compact = false) {
-  if (status === "closed") return compact ? "Done" : "Completed";
-  if (status === "in_progress") return compact ? "Active" : "In progress";
+function statusBadgeLabel(status) {
+  if (status === "closed") return "Completed";
+  if (status === "in_progress") return "In progress";
   return "Open";
 }
 
@@ -117,6 +117,76 @@ function formatSubmittedTime(iso) {
   } catch {
     return "";
   }
+}
+
+const ACTION_BTN =
+  "inline-flex h-8 shrink-0 items-center justify-center px-2.5 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B3EAF]/35 disabled:opacity-50";
+
+function TicketRowActions({
+  ticket,
+  canEdit,
+  isIT,
+  isAdmin,
+  deletingId,
+  onEdit,
+  onStatusChange,
+  onDelete,
+}) {
+  const hasEdit = canEdit;
+  const hasStatus = isIT;
+  const hasDelete = isAdmin;
+  const segmentCount = [hasEdit, hasStatus, hasDelete].filter(Boolean).length;
+  if (segmentCount === 0) return <span className="text-xs text-slate-400">—</span>;
+
+  return (
+    <div
+      className="inline-flex max-w-full items-stretch overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm dark:border-white/10 dark:bg-[#1a1a1a]"
+      role="group"
+      aria-label={`Actions for ticket ${ticket.id}`}
+    >
+      {hasEdit ? (
+        <button
+          type="button"
+          className={`${ACTION_BTN} border-r border-slate-200/90 text-[#0B3EAF] hover:bg-[#0B3EAF]/5 dark:border-white/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/10`}
+          onClick={() => onEdit?.(ticket)}
+        >
+          Edit
+        </button>
+      ) : null}
+      {hasStatus ? (
+        <div className="relative flex min-w-0 items-center border-r border-slate-200/90 dark:border-white/10">
+          <select
+            className="h-8 w-[6.5rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-6 text-[10px] font-semibold text-slate-800 outline-none focus:bg-slate-50 dark:text-slate-200 dark:focus:bg-white/5"
+            value={ticket.status}
+            onChange={(e) => onStatusChange(ticket.id, e.target.value)}
+            aria-label={`Status for ticket ${ticket.id}`}
+          >
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <span
+            className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-slate-400 dark:text-slate-500"
+            aria-hidden
+          >
+            ▾
+          </span>
+        </div>
+      ) : null}
+      {hasDelete ? (
+        <button
+          type="button"
+          disabled={deletingId === ticket.id}
+          className={`${ACTION_BTN} text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40`}
+          onClick={() => onDelete?.(ticket.id)}
+        >
+          {deletingId === ticket.id ? "…" : "Delete"}
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 function parseTicketAttachments(ticket) {
@@ -341,13 +411,13 @@ export default function ItTicketsMonitorTable({
               <colgroup>
                 <col className="w-[4%]" />
                 <col className="w-[13%]" />
-                <col className="w-[19%]" />
+                <col className="w-[20%]" />
                 <col className="w-[8%]" />
                 <col className="w-[8%]" />
                 <col className="w-[9%]" />
                 <col className="w-[11%]" />
                 <col className="w-[10%]" />
-                <col className="w-[18%]" />
+                <col className="w-[16%]" />
               </colgroup>
             ) : (
               <colgroup>
@@ -371,7 +441,7 @@ export default function ItTicketsMonitorTable({
                 <th className={thClass("category")}>Category</th>
                 <th className={thClass("assignee")}>Assignee</th>
                 <th className={thClass("submitted", "", !showActionsColumn)}>Submitted</th>
-                {showActionsColumn ? <th className={thClass("actions", "text-right", true)}>Actions</th> : null}
+                {showActionsColumn ? <th className={thClass("actions", "text-center", true)}>Actions</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
@@ -426,7 +496,7 @@ export default function ItTicketsMonitorTable({
                       </td>
                       <td className={tdClass("status", rowIdx)}>
                         <span className={`${BADGE} ${statusBadgeClass(t.status)}`} title={statusBadgeLabel(t.status)}>
-                          {statusBadgeLabel(t.status, true)}
+                          {statusBadgeLabel(t.status)}
                         </span>
                       </td>
                       <td className={tdClass("priority", rowIdx)}>
@@ -462,53 +532,19 @@ export default function ItTicketsMonitorTable({
                         </div>
                       </td>
                       {showActionsColumn ? (
-                        <td className={tdClass("actions", rowIdx, "text-right", true)}>
+                        <td className={tdClass("actions", rowIdx, "", true)}>
                           {hasRowActions ? (
-                            <div className="flex flex-wrap items-center justify-end gap-1">
-                              {canEdit ? (
-                                <button
-                                  type="button"
-                                  className="h-7 whitespace-nowrap rounded border border-[#0B3EAF]/25 bg-white px-1.5 text-[10px] font-semibold text-[#0B3EAF] transition hover:bg-[#0B3EAF] hover:text-white dark:border-[#A7D344]/30 dark:bg-[#1a1a1a] dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]"
-                                  onClick={() => onEdit?.(t)}
-                                >
-                                  Edit
-                                </button>
-                              ) : null}
-                              {isIT ? (
-                                <>
-                                  <select
-                                    className="h-7 min-w-0 max-w-full flex-1 rounded border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-800 outline-none focus:border-[#0B3EAF] focus:ring-1 focus:ring-[#0B3EAF]/30 dark:border-white/10 dark:bg-[#1a1a1a] dark:text-slate-200"
-                                    value={t.status}
-                                    onChange={(e) => onStatusChange(t.id, e.target.value)}
-                                    aria-label={`Status for ticket ${t.id}`}
-                                  >
-                                    {STATUS_OPTIONS.map((o) => (
-                                      <option key={o.value} value={o.value}>
-                                        {o.value === "closed" ? "Done" : o.value === "in_progress" ? "Active" : o.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  {t.status !== "closed" ? (
-                                    <button
-                                      type="button"
-                                      className="h-7 whitespace-nowrap rounded bg-emerald-600 px-1.5 text-[10px] font-semibold text-white transition hover:bg-emerald-700"
-                                      onClick={() => onStatusChange(t.id, "closed")}
-                                    >
-                                      Done
-                                    </button>
-                                  ) : null}
-                                </>
-                              ) : null}
-                              {isAdmin ? (
-                                <button
-                                  type="button"
-                                  disabled={deletingId === t.id}
-                                  className="h-7 whitespace-nowrap rounded border border-red-200 bg-red-50 px-1.5 text-[10px] font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
-                                  onClick={() => onDelete?.(t.id)}
-                                >
-                                  {deletingId === t.id ? "…" : "Del"}
-                                </button>
-                              ) : null}
+                            <div className="flex justify-end">
+                              <TicketRowActions
+                                ticket={t}
+                                canEdit={canEdit}
+                                isIT={isIT}
+                                isAdmin={isAdmin}
+                                deletingId={deletingId}
+                                onEdit={onEdit}
+                                onStatusChange={onStatusChange}
+                                onDelete={onDelete}
+                              />
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
