@@ -3,10 +3,8 @@ const { db, isPostgres } = require("../config/db");
 const { BUSINESS_UNITS } = require("../config/constants");
 const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
-const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
+const { ADMIN_GRANT_KEYS, isFullAdminUser } = require("../config/adminGrants");
 const portalVisitsSvc = require("../services/portalVisits.service");
-const { ROLES } = require("../config/constants");
-const { hasAdminGrant } = require("../config/adminGrants");
 
 const router = express.Router();
 router.use(authRequired);
@@ -182,11 +180,9 @@ router.get("/admin/access-users", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), a
   }
 });
 
-/** Admin: top member portal visitors (dashboard usage). */
+/** Super admin only: top member portal visitors (dashboard usage). */
 router.get("/admin/top-portal-visitors", async (req, res) => {
-  const canView =
-    req.user?.role === ROLES.ADMIN || hasAdminGrant(req.user, ADMIN_GRANT_KEYS.REPORTS);
-  if (!canView) return res.status(403).json({ message: "Forbidden" });
+  if (!isFullAdminUser(req.user)) return res.status(403).json({ message: "Forbidden" });
   try {
     const days = Number(req.query?.days) || portalVisitsSvc.PORTAL_VISIT_WINDOW_DAYS;
     const out = await portalVisitsSvc.topPortalVisitors(5, days);

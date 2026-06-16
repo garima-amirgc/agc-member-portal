@@ -7,37 +7,35 @@ import ManagerTrainingNotifications from "../components/ManagerTrainingNotificat
 import ReportingHierarchyTree from "../components/ReportingHierarchyTree";
 import { useAuth } from "../context/AuthContext";
 import { managerInboxWithTeamJson } from "../services/leaveClient";
-import { USER_ME_WITH_TRAINING } from "../services/userMeClient";
+import { USER_ME_TEAM } from "../services/userMeClient";
 import { isSupervisor } from "../utils/supervisorAccess";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
 export default function TeamPage() {
   const { user } = useAuth();
   const [me, setMe] = useState(null);
+  const [meRefreshing, setMeRefreshing] = useState(false);
   const [team, setTeam] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamError, setTeamError] = useState("");
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const showSupervisorTools = isSupervisor(user) || isSupervisor(me);
+  const profile = me || user;
+
+  const showSupervisorTools = isSupervisor(user) || isSupervisor(profile);
   const hasDirectReportsInHierarchy = useMemo(() => {
-    const raw = me?.reporting_hierarchy?.direct_reports;
+    const raw = profile?.reporting_hierarchy?.direct_reports;
     return Array.isArray(raw) && raw.length > 0;
-  }, [me]);
+  }, [profile]);
   const showLearningSections = showSupervisorTools || hasDirectReportsInHierarchy;
 
-  const reloadProfile = useCallback(async () => {
-    try {
-      const res = await api.get("/users/me", USER_ME_WITH_TRAINING);
-      setMe(res.data);
-    } catch (e) {
-      setError(friendlyErrorMessage(e, "Failed to load team"));
-    }
-  }, []);
-
   const reloadTeam = useCallback(async () => {
-    if (!showLearningSections) return;
+    if (!showLearningSections) {
+      setTeam([]);
+      setTeamError("");
+      setTeamLoading(false);
+      return;
+    }
     setTeamLoading(true);
     setTeamError("");
     try {
@@ -52,29 +50,27 @@ export default function TeamPage() {
     }
   }, [showLearningSections]);
 
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await api.get("/users/me", USER_ME_WITH_TRAINING);
-        setMe(res.data);
-      } catch (e) {
-        setError(friendlyErrorMessage(e, "Failed to load team"));
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [user]);
+  const reloadProfile = useCallback(async () => {
+    setMeRefreshing(true);
+    setError("");
+    try {
+      const res = await api.get("/users/me", USER_ME_TEAM);
+      setMe(res.data);
+    } catch (e) {
+      setError(friendlyErrorMessage(e, "Failed to load team"));
+    } finally {
+      setMeRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!user || !showLearningSections) {
-      setTeam([]);
-      setTeamError("");
-      setTeamLoading(false);
-      return;
-    }
+    if (!user) return;
+    setMe((prev) => prev ?? user);
+    reloadProfile();
+  }, [user?.id, reloadProfile]);
+
+  useEffect(() => {
+    if (!user) return;
     reloadTeam();
   }, [user?.id, showLearningSections, reloadTeam]);
 
@@ -93,31 +89,15 @@ export default function TeamPage() {
 
   const selfTraining = useMemo(
     () => ({
-      training_summary: me?.training_summary ?? { avgProgress: 0, total: 0, completed: 0, allComplete: false },
+      training_summary: profile?.training_summary ?? { avgProgress: 0, total: 0, completed: 0, allComplete: false },
     }),
-    [me]
+    [profile]
   );
 
-  if (loading) {
+  if (!profile) {
     return (
       <main className={PAGE_SHELL}>
         <div className="card p-4 text-sm text-slate-500">Loading team…</div>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className={PAGE_SHELL}>
-        <div className="rounded bg-rose-100 p-3 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">{error}</div>
-      </main>
-    );
-  }
-
-  if (!me) {
-    return (
-      <main className={PAGE_SHELL}>
-        <div className="card p-4 text-sm text-slate-500">Team information is unavailable.</div>
       </main>
     );
   }
@@ -128,24 +108,29 @@ export default function TeamPage() {
         <h1 className="mb-6 text-2xl font-bold">Team</h1>
       </section>
 
+      {error ? (
+        <div className="mb-4 rounded bg-rose-100 p-3 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">{error}</div>
+      ) : null}
+
+      {meRefreshing ? (
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Updating team progress…</p>
+      ) : null}
+
       <ReportingHierarchyTree
-        hierarchy={me.reporting_hierarchy}
-        currentUserId={me.id}
+        hierarchy={profile.reporting_hierarchy}
+        currentUserId={profile.id}
         team={team}
         selfTraining={selfTraining}
       />
 
       {showLearningSections ? (
         <div className="space-y-6">
-          {teamLoading && (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Loading course completion…</p>
-          )}
-          {teamError && (
-            <div className="rounded bg-rose-100 p-3 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
-              {teamError}
-            </div>
-          )}
-          <ManagerEmployeeManagement />
+          <ManagerEmployeeManagement
+            team={team}
+            loading={teamLoading}
+            error={teamError}
+            onReload={reloadTeam}
+          />
           <ManagerTrainingNotifications />
         </div>
       ) : null}

@@ -84,9 +84,21 @@ function adminUsersListSql() {
       `;
 }
 
+function readMeScope(req) {
+  const s = String(req.query?.scope || "").trim().toLowerCase();
+  if (s === "profile" || s === "session" || s === "team") return s;
+  return "full";
+}
+
 // Logged-in user's profile
 router.get("/me", async (req, res) => {
-  if (canonicalRole(req.user.role) !== ROLES.ADMIN) {
+  const scope = readMeScope(req);
+  const profileOnly = scope === "profile";
+  const sessionOnly = scope === "session";
+  const teamScope = scope === "team";
+  const lightScope = profileOnly || sessionOnly || teamScope;
+
+  if (!lightScope && canonicalRole(req.user.role) !== ROLES.ADMIN) {
     await syncUserAssignmentsForFacilities(req.user.id);
   }
 
@@ -106,12 +118,29 @@ router.get("/me", async (req, res) => {
   const includeTrainingSummary =
     req.query.include_training_summary === "true" || req.query.include_training_summary === "1";
 
-  const [reporting_hierarchy, departments, has_direct_reports, training_summary] = await Promise.all([
-    buildReportingHierarchy(req.user.id),
-    userDeptSvc.listForUser(req.user.id),
-    hasDirectReports(req.user.id),
-    includeTrainingSummary ? getTrainingSummary(req.user.id) : Promise.resolve(undefined),
-  ]);
+  const departments = await userDeptSvc.listForUser(req.user.id);
+
+  let reporting_hierarchy;
+  let has_direct_reports;
+  let training_summary;
+
+  if (profileOnly || sessionOnly) {
+    reporting_hierarchy = undefined;
+    training_summary = undefined;
+    has_direct_reports = sessionOnly ? await hasDirectReports(req.user.id) : undefined;
+  } else if (teamScope) {
+    [reporting_hierarchy, has_direct_reports, training_summary] = await Promise.all([
+      buildReportingHierarchy(req.user.id),
+      hasDirectReports(req.user.id),
+      includeTrainingSummary ? getTrainingSummary(req.user.id) : Promise.resolve(undefined),
+    ]);
+  } else {
+    [reporting_hierarchy, has_direct_reports, training_summary] = await Promise.all([
+      buildReportingHierarchy(req.user.id),
+      hasDirectReports(req.user.id),
+      includeTrainingSummary ? getTrainingSummary(req.user.id) : Promise.resolve(undefined),
+    ]);
+  }
 
   const { admin_grants: rawAg, ...rest } = user;
   const adminGrantsOut = parseAdminGrantsColumn(rawAg);
@@ -123,11 +152,17 @@ router.get("/me", async (req, res) => {
     facility_university_only: Boolean(rest.facility_university_only),
     facilities,
     departments,
-    reporting_hierarchy,
-    has_direct_reports,
   };
-  if (includeTrainingSummary) {
-    payload.training_summary = training_summary;
+  if (!profileOnly) {
+    if (has_direct_reports !== undefined) {
+      payload.has_direct_reports = has_direct_reports;
+    }
+    if (!sessionOnly) {
+      payload.reporting_hierarchy = reporting_hierarchy;
+      if (includeTrainingSummary) {
+        payload.training_summary = training_summary;
+      }
+    }
   }
   return res.json(payload);
 });

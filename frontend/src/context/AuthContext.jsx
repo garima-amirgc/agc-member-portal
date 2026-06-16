@@ -1,18 +1,32 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import api from "../services/api";
+import { USER_ME_FULL, USER_ME_SESSION } from "../services/userMeClient";
 
 const AuthContext = createContext(null);
 
+function readCachedUser() {
+  const cached = localStorage.getItem("user");
+  if (!cached) return null;
+  try {
+    return JSON.parse(cached);
+  } catch {
+    return null;
+  }
+}
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const cached = localStorage.getItem("user");
-    try {
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
+  const [user, setUser] = useState(readCachedUser);
+  const [authReady, setAuthReady] = useState(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return true;
+    return Boolean(readCachedUser());
   });
-  const [authReady, setAuthReady] = useState(() => !localStorage.getItem("token"));
+
+  const persistUser = (data) => {
+    localStorage.setItem("user", JSON.stringify(data));
+    setUser(data);
+    return data;
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -20,14 +34,13 @@ export const AuthProvider = ({ children }) => {
       setAuthReady(true);
       return undefined;
     }
-    // Strict Mode runs effect twice; always unblock UI in `finally` so we never stay on a blank "Connecting" screen.
+
     let stale = false;
     api
-      .get("/users/me")
+      .get("/users/me", USER_ME_SESSION)
       .then(({ data }) => {
         if (stale) return;
-        localStorage.setItem("user", JSON.stringify(data));
-        setUser(data);
+        persistUser(data);
       })
       .catch(() => {
         if (stale) return;
@@ -38,6 +51,7 @@ export const AuthProvider = ({ children }) => {
       .finally(() => {
         setAuthReady(true);
       });
+
     return () => {
       stale = true;
     };
@@ -50,11 +64,8 @@ export const AuthProvider = ({ children }) => {
     const pull = () => {
       if (!localStorage.getItem("token")) return;
       api
-        .get("/users/me")
-        .then(({ data }) => {
-          localStorage.setItem("user", JSON.stringify(data));
-          setUser(data);
-        })
+        .get("/users/me", USER_ME_SESSION)
+        .then(({ data }) => persistUser(data))
         .catch(() => {});
     };
     const onVis = () => {
@@ -77,15 +88,12 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password, rememberMe = false) => {
     const { data } = await api.post("/auth/login", { email, password, rememberMe });
     localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    setUser(data.user);
+    persistUser(data.user);
   };
 
-  const refreshMe = async () => {
-    const { data } = await api.get("/users/me");
-    localStorage.setItem("user", JSON.stringify(data));
-    setUser(data);
-    return data;
+  const refreshMe = async ({ full = false } = {}) => {
+    const { data } = await api.get("/users/me", full ? USER_ME_FULL : USER_ME_SESSION);
+    return persistUser(data);
   };
 
   const logout = () => {
@@ -98,8 +106,7 @@ export const AuthProvider = ({ children }) => {
   const establishSession = (payload) => {
     if (!payload?.token || !payload?.user) return;
     localStorage.setItem("token", payload.token);
-    localStorage.setItem("user", JSON.stringify(payload.user));
-    setUser(payload.user);
+    persistUser(payload.user);
   };
 
   const value = useMemo(() => ({ user, login, logout, refreshMe, establishSession }), [user]);

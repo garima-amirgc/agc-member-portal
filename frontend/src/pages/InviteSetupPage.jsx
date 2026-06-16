@@ -61,17 +61,14 @@ export default function InviteSetupPage() {
     try {
       const { data } = await api.post("/auth/complete-invite", { token, password, rememberMe });
       establishSession(data);
-      let nextUser = null;
+      let nextUser = data?.user || null;
       try {
-        nextUser = await refreshMe();
+        nextUser = JSON.parse(localStorage.getItem("user") || "null") || nextUser;
       } catch {
-        try {
-          nextUser = JSON.parse(localStorage.getItem("user") || "null");
-        } catch {
-          nextUser = null;
-        }
+        /* keep nextUser */
       }
-      navigate(postAuthLandingPath(nextUser || data?.user), { replace: true });
+      navigate(postAuthLandingPath(nextUser), { replace: true });
+      refreshMe().catch(() => {});
     } catch (err) {
       setError(friendlyErrorMessage(err, "Could not save password."));
     } finally {

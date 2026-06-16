@@ -10,30 +10,45 @@ const leaveStatusClass = {
   rejected: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200",
 };
 
-export default function ManagerEmployeeManagement() {
-  const [team, setTeam] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+export default function ManagerEmployeeManagement({
+  team: teamProp,
+  loading: loadingProp,
+  error: errorProp,
+  onReload,
+}) {
+  const [teamLocal, setTeamLocal] = useState([]);
+  const [loadingLocal, setLoadingLocal] = useState(true);
+  const [errorLocal, setErrorLocal] = useState("");
   const [leaveActionErr, setLeaveActionErr] = useState("");
 
+  const managed = teamProp !== undefined;
+  const team = managed ? (Array.isArray(teamProp) ? teamProp : []) : teamLocal;
+  const loading = managed ? Boolean(loadingProp) : loadingLocal;
+  const error = managed ? errorProp || "" : errorLocal;
+
   const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const { team, teamError } = await managerInboxWithTeamJson();
-      setTeam(team);
-      setError(teamError || "");
-    } catch (e) {
-      setError(friendlyErrorMessage(e, "Failed to load team"));
-      setTeam([]);
-    } finally {
-      setLoading(false);
+    if (managed) {
+      if (onReload) await onReload();
+      return;
     }
-  }, []);
+    setLoadingLocal(true);
+    setErrorLocal("");
+    try {
+      const { team: teamData, teamError } = await managerInboxWithTeamJson();
+      setTeamLocal(Array.isArray(teamData) ? teamData : []);
+      setErrorLocal(teamError || "");
+    } catch (e) {
+      setErrorLocal(friendlyErrorMessage(e, "Failed to load team"));
+      setTeamLocal([]);
+    } finally {
+      setLoadingLocal(false);
+    }
+  }, [managed, onReload]);
 
   useEffect(() => {
+    if (managed) return;
     load();
-  }, [load]);
+  }, [managed, load]);
 
   const updateLeaveStatus = async (requestId, status) => {
     setLeaveActionErr("");

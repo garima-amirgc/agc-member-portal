@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import api from "../services/api";
 import { PAGE_PADDING, PAGE_SHELL } from "../constants/pageLayout";
 import { useAuth } from "../context/AuthContext";
+import { USER_ME_PROFILE } from "../services/userMeClient";
 import { formatDepartments } from "../utils/userDepts";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
@@ -92,7 +93,7 @@ export default function ProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const syncFormFromProfile = (profile) => {
+  const syncFormFromProfile = useCallback((profile) => {
     setForm({
       name: profile?.name ?? "",
       email: profile?.email ?? "",
@@ -106,18 +107,31 @@ export default function ProfilePage() {
       join_day: profile?.join_day != null ? String(profile.join_day) : "",
       join_year: profile?.join_year != null ? String(profile.join_year) : "",
     });
-  };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
+    setMe((prev) => prev ?? user);
+    syncFormFromProfile(user);
+
+    let cancelled = false;
     api
-      .get("/users/me")
+      .get("/users/me", USER_ME_PROFILE)
       .then((res) => {
+        if (cancelled) return;
         setMe(res.data);
         syncFormFromProfile(res.data);
+        setError("");
       })
-      .catch((e) => setError(friendlyErrorMessage(e, "Failed to load profile")));
-  }, [user]);
+      .catch((e) => {
+        if (cancelled) return;
+        if (!user) setError(friendlyErrorMessage(e, "Failed to load profile"));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, syncFormFromProfile]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -168,7 +182,7 @@ export default function ProfilePage() {
       });
 
       await refreshMe();
-      const updatedRes = await api.get("/users/me");
+      const updatedRes = await api.get("/users/me", USER_ME_PROFILE);
       setMe(updatedRes.data);
       syncFormFromProfile(updatedRes.data);
 
@@ -192,7 +206,7 @@ export default function ProfilePage() {
       fd.append("avatar", avatarFile);
       await api.post("/avatar/me", fd);
       await refreshMe();
-      const updatedRes = await api.get("/users/me");
+      const updatedRes = await api.get("/users/me", USER_ME_PROFILE);
       setMe(updatedRes.data);
       setSuccess("Profile image updated");
       setAvatarFile(null);
@@ -204,7 +218,7 @@ export default function ProfilePage() {
   };
 
   const startEditing = () => {
-    syncFormFromProfile(me);
+    syncFormFromProfile(profile);
     setAvatarFile(null);
     setError("");
     setSuccess("");
@@ -212,16 +226,20 @@ export default function ProfilePage() {
   };
 
   const cancelEditing = () => {
-    syncFormFromProfile(me);
+    syncFormFromProfile(profile);
     setAvatarFile(null);
     setError("");
     setEditing(false);
   };
 
-  if (!me) return <div className={PAGE_PADDING}>Loading profile…</div>;
+  const profile = me || user;
+  if (!profile) return <div className={PAGE_PADDING}>Loading profile…</div>;
 
-  const avatarUrl = resolvePublicMediaUrl(me.profile_image_url);
-  const facilities = Array.isArray(me.facilities) && me.facilities.length > 0 ? me.facilities : [me.business_unit].filter(Boolean);
+  const avatarUrl = resolvePublicMediaUrl(profile.profile_image_url);
+  const facilities =
+    Array.isArray(profile.facilities) && profile.facilities.length > 0
+      ? profile.facilities
+      : [profile.business_unit].filter(Boolean);
 
   return (
     <main className={PAGE_SHELL}>
@@ -239,14 +257,14 @@ export default function ProfilePage() {
               <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-2xl font-bold">
-                {profileInitials(me.name, me.email)}
+                {profileInitials(profile.name, profile.email)}
               </div>
             )}
           </div>
-          <h2 className="mt-4 text-xl font-bold text-slate-950 dark:text-white">{me.name}</h2>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{me.email}</p>
-          {String(me.designation || "").trim() ? (
-            <p className="mt-1 text-sm font-medium text-[#0B3EAF] dark:text-[#A7D344]">{me.designation}</p>
+          <h2 className="mt-4 text-xl font-bold text-slate-950 dark:text-white">{profile.name}</h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{profile.email}</p>
+          {String(profile.designation || "").trim() ? (
+            <p className="mt-1 text-sm font-medium text-[#0B3EAF] dark:text-[#A7D344]">{profile.designation}</p>
           ) : null}
           {!editing ? (
             <button type="button" className="btn-primary mt-4" onClick={startEditing}>
@@ -256,17 +274,17 @@ export default function ProfilePage() {
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <ProfileDetail label="Role" value={displayValue(me.role)} />
-          <ProfileDetail label="Email" value={displayValue(me.email)} />
-          <ProfileDetail label="Departments" value={displayValue(formatDepartments(me))} />
-          <ProfileDetail label="Designation" value={displayValue(me.designation)} />
-          <ProfileDetail label="Phone" value={displayValue(me.phone)} />
-          <ProfileDetail label="Date of birth" value={birthDateLabel(me.birth_month, me.birth_day)} />
+          <ProfileDetail label="Role" value={displayValue(profile.role)} />
+          <ProfileDetail label="Email" value={displayValue(profile.email)} />
+          <ProfileDetail label="Departments" value={displayValue(formatDepartments(profile))} />
+          <ProfileDetail label="Designation" value={displayValue(profile.designation)} />
+          <ProfileDetail label="Phone" value={displayValue(profile.phone)} />
+          <ProfileDetail label="Date of birth" value={birthDateLabel(profile.birth_month, profile.birth_day)} />
           <ProfileDetail
             label="Date of joining"
-            value={joinDateLabel(me.join_month, me.join_day, me.join_year)}
+            value={joinDateLabel(profile.join_month, profile.join_day, profile.join_year)}
           />
-          <ProfileDetail label="Address" value={displayValue(me.address)} className="sm:col-span-2" />
+          <ProfileDetail label="Address" value={displayValue(profile.address)} className="sm:col-span-2" />
           {facilities.length > 0 ? (
             <ProfileDetail
               label="Facilities"
@@ -289,7 +307,7 @@ export default function ProfilePage() {
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center">{profileInitials(me.name, me.email)}</div>
+                    <div className="flex h-full w-full items-center justify-center">{profileInitials(profile.name, profile.email)}</div>
                   )}
                 </div>
               </div>

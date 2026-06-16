@@ -60,15 +60,12 @@ export default function LoginPage() {
       await login(form.email, form.password, rememberMe);
       let nextUser = null;
       try {
-        nextUser = await refreshMe();
+        nextUser = JSON.parse(localStorage.getItem("user") || "null");
       } catch {
-        try {
-          nextUser = JSON.parse(localStorage.getItem("user") || "null");
-        } catch {
-          nextUser = null;
-        }
+        nextUser = null;
       }
       navigate(postAuthLandingPath(nextUser), { replace: true });
+      refreshMe().catch(() => {});
     } catch (err) {
       if (axios.isAxiosError(err)) {
         if (err.code === "ECONNABORTED") {

@@ -35,6 +35,19 @@ export default function SsoCallbackPage() {
         establishSession({ token, user });
         navigate(postAuthLandingPath(user), { replace: true });
       } catch {
+        const cached = (() => {
+          try {
+            return JSON.parse(localStorage.getItem("user") || "null");
+          } catch {
+            return null;
+          }
+        })();
+        if (cached) {
+          establishSession({ token, user: cached });
+          navigate(postAuthLandingPath(cached), { replace: true });
+          refreshMe().catch(() => {});
+          return;
+        }
         setMessage("Could not load your profile. Try signing in again.");
         localStorage.removeItem("token");
         setTimeout(() => navigate("/login", { replace: true }), 2500);

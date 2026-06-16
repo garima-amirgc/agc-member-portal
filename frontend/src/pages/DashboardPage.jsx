@@ -10,7 +10,7 @@ import { useCelebration } from "../context/CelebrationContext";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 import { splitUpcomingForHome } from "../utils/upcomingFeedSplit";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
-import { hasAdminGrant } from "../utils/adminAccess";
+import { hasAdminGrant, isFullAdmin } from "../utils/adminAccess";
 import { userHasDepartment } from "../utils/userDepts";
 import ItTicketsAssigneeWidget from "../components/ItTicketsAssigneeWidget";
 import EmployeeOfMonthCard from "../components/EmployeeOfMonthCard";
@@ -86,7 +86,7 @@ function CelebrationMiniCard({ item, onClick, kind = "birthday" }) {
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const canReports = user?.role === "Admin" || hasAdminGrant(user, ADMIN_GRANT_KEYS.REPORTS);
+  const canViewTopVisitors = isFullAdmin(user) || user?.is_full_admin === true;
   const canManageSpotlightFeeds = hasAdminGrant(user, ADMIN_GRANT_KEYS.UPCOMING);
   const isIT = userHasDepartment(user, "IT");
   const [upcoming, setUpcoming] = useState([]);
@@ -108,6 +108,15 @@ export default function DashboardPage() {
     NEW_HIRES_FEED.widgetKey,
     CUSTOMER_WINS_FEED.widgetKey,
   ]);
+
+  // Defer assignment sync so login/home stay fast; Facilities also triggers sync via /assignments/me.
+  useEffect(() => {
+    if (!user?.id || user?.role === "Admin") return;
+    const key = "agc_assignment_sync_started";
+    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(key) === "1") return;
+    if (typeof sessionStorage !== "undefined") sessionStorage.setItem(key, "1");
+    api.get("/assignments/me").catch(() => {});
+  }, [user?.id, user?.role]);
 
   const loadHomeFeeds = useCallback(async () => {
     setUpcomingLoading(true);
@@ -307,7 +316,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!canReports) return;
+    if (!canViewTopVisitors) return;
     setTopVisitorsLoading(true);
     api
       .get("/reports/admin/top-portal-visitors", { params: { days: 7 } })
@@ -322,7 +331,7 @@ export default function DashboardPage() {
       })
       .catch(() => setTopVisitors([]))
       .finally(() => setTopVisitorsLoading(false));
-  }, [canReports]);
+  }, [canViewTopVisitors]);
 
   const { todayEvents, upcomingFutureOnly } = useMemo(() => splitUpcomingForHome(upcoming), [upcoming]);
   const birthdayCards = useMemo(() => {
@@ -385,7 +394,7 @@ export default function DashboardPage() {
               <div className="grid gap-6 md:grid-cols-2">{bottomRowWidgets}</div>
             </div>
 
-            {canReports ? (
+            {canViewTopVisitors ? (
               <div className="card">
                 <div className="flex items-start justify-between gap-3">
                   <div>
