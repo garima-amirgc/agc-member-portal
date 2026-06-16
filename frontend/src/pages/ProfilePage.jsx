@@ -135,11 +135,16 @@ export default function ProfilePage() {
     const joinMonthRaw = String(form.join_month ?? "").trim();
     const joinDayRaw = String(form.join_day ?? "").trim();
     const joinYearRaw = String(form.join_year ?? "").trim();
-    const includeJoin = joinMonthRaw !== "" && joinDayRaw !== "" && joinYearRaw !== "";
-    const join_month = includeJoin ? Number(joinMonthRaw) : undefined;
-    const join_day = includeJoin ? Number(joinDayRaw) : undefined;
-    const join_year = includeJoin ? Number(joinYearRaw) : undefined;
-    if (includeJoin && (!Number.isFinite(join_month) || !Number.isFinite(join_day) || !Number.isFinite(join_year))) {
+    const allJoinEmpty = joinMonthRaw === "" && joinDayRaw === "" && joinYearRaw === "";
+    const allJoinFilled = joinMonthRaw !== "" && joinDayRaw !== "" && joinYearRaw !== "";
+    if (!allJoinEmpty && !allJoinFilled) {
+      setError("Date of joining needs month, day, and year — or leave all three blank.");
+      return;
+    }
+    const join_month = allJoinFilled ? Number(joinMonthRaw) : null;
+    const join_day = allJoinFilled ? Number(joinDayRaw) : null;
+    const join_year = allJoinFilled ? Number(joinYearRaw) : null;
+    if (allJoinFilled && (!Number.isFinite(join_month) || !Number.isFinite(join_day) || !Number.isFinite(join_year))) {
       setError("Invalid date of joining. Please select month, day, and year.");
       return;
     }
@@ -156,7 +161,9 @@ export default function ProfilePage() {
         phone: form.phone,
         address: form.address,
         ...(includeDob ? { birth_month, birth_day } : {}),
-        ...(includeJoin ? { join_month, join_day, join_year } : {}),
+        join_month,
+        join_day,
+        join_year,
         ...(form.password ? { password: form.password } : {}),
       });
 

@@ -103,14 +103,19 @@ router.get("/me", async (req, res) => {
     .all(req.user.id);
   const facilities = mergeFacilityAccess(facRows, user.business_unit);
 
-  const reporting_hierarchy = await buildReportingHierarchy(req.user.id);
-  const departments = await userDeptSvc.listForUser(req.user.id);
-  const has_direct_reports = await hasDirectReports(req.user.id);
-  const training_summary = await getTrainingSummary(req.user.id);
+  const includeTrainingSummary =
+    req.query.include_training_summary === "true" || req.query.include_training_summary === "1";
+
+  const [reporting_hierarchy, departments, has_direct_reports, training_summary] = await Promise.all([
+    buildReportingHierarchy(req.user.id),
+    userDeptSvc.listForUser(req.user.id),
+    hasDirectReports(req.user.id),
+    includeTrainingSummary ? getTrainingSummary(req.user.id) : Promise.resolve(undefined),
+  ]);
 
   const { admin_grants: rawAg, ...rest } = user;
   const adminGrantsOut = parseAdminGrantsColumn(rawAg);
-  return res.json({
+  const payload = {
     ...rest,
     role: canonicalRole(rest.role),
     admin_grants: adminGrantsOut,
@@ -120,8 +125,11 @@ router.get("/me", async (req, res) => {
     departments,
     reporting_hierarchy,
     has_direct_reports,
-    training_summary,
-  });
+  };
+  if (includeTrainingSummary) {
+    payload.training_summary = training_summary;
+  }
+  return res.json(payload);
 });
 
 /** Track member portal visit (home/dashboard). */
@@ -166,11 +174,19 @@ router.put("/me", async (req, res) => {
   const providedJoinDay = req.body?.join_day;
   const providedJoinYear = req.body?.join_year;
   const wantsUpdateJoin =
-    providedJoinMonth !== undefined || providedJoinDay !== undefined || providedJoinYear !== undefined;
-  const normalizedJoin = wantsUpdateJoin
-    ? normalizeJoinDate(providedJoinMonth, providedJoinDay, providedJoinYear)
-    : null;
-  if (wantsUpdateJoin && !normalizedJoin) {
+    Object.prototype.hasOwnProperty.call(req.body, "join_month") ||
+    Object.prototype.hasOwnProperty.call(req.body, "join_day") ||
+    Object.prototype.hasOwnProperty.call(req.body, "join_year");
+  const clearingJoin =
+    wantsUpdateJoin &&
+    [providedJoinMonth, providedJoinDay, providedJoinYear].every(
+      (v) => v === null || v === undefined || String(v).trim() === ""
+    );
+  const normalizedJoin =
+    wantsUpdateJoin && !clearingJoin
+      ? normalizeJoinDate(providedJoinMonth, providedJoinDay, providedJoinYear)
+      : null;
+  if (wantsUpdateJoin && !clearingJoin && !normalizedJoin) {
     return res.status(400).json({ message: "Invalid date of joining (month, day, and year required)." });
   }
 
@@ -207,12 +223,17 @@ router.put("/me", async (req, res) => {
   let nextJoinDay = existing.join_day;
   let nextJoinYear = existing.join_year;
   if (wantsUpdateJoin) {
-    if (!normalizedJoin) {
+    if (clearingJoin) {
+      nextJoinMonth = null;
+      nextJoinDay = null;
+      nextJoinYear = null;
+    } else if (normalizedJoin) {
+      nextJoinMonth = normalizedJoin.join_month;
+      nextJoinDay = normalizedJoin.join_day;
+      nextJoinYear = normalizedJoin.join_year;
+    } else {
       return res.status(400).json({ message: "Invalid date of joining (month, day, and year required)." });
     }
-    nextJoinMonth = normalizedJoin.join_month;
-    nextJoinDay = normalizedJoin.join_day;
-    nextJoinYear = normalizedJoin.join_year;
   }
 
   let nextInviteHash = existing.invite_token_hash;

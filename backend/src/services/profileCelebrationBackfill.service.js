@@ -1,6 +1,6 @@
 /**
- * Backfill users.join_* from account created_at when missing.
- * Birthdays come from user profiles only (Profile page).
+ * Join dates for work anniversaries must be set explicitly on the Profile page.
+ * Do not infer them from account created_at.
  */
 
 function createdAtParts(iso) {
@@ -24,27 +24,37 @@ function createdAtParts(iso) {
 }
 
 /**
+ * Remove join dates that were auto-copied from created_at (legacy backfill).
  * @param {object} db
  */
-async function backfillProfileCelebrationDates(db) {
-  const stats = { join_from_created: 0 };
+async function clearBackfilledJoinDates(db) {
+  const stats = { cleared: 0 };
 
   const users = await db
     .prepare("SELECT id, join_month, join_day, join_year, created_at FROM users")
     .all();
 
   for (const u of Array.isArray(users) ? users : []) {
-    const missingJoin = u.join_month == null || u.join_day == null || u.join_year == null;
-    if (!missingJoin || !u.created_at) continue;
+    if (u.join_month == null || u.join_day == null || u.join_year == null) continue;
     const jp = createdAtParts(u.created_at);
     if (!jp) continue;
+    const sameAsCreated =
+      jp.join_month === Number(u.join_month) &&
+      jp.join_day === Number(u.join_day) &&
+      jp.join_year === Number(u.join_year);
+    if (!sameAsCreated) continue;
     await db
-      .prepare("UPDATE users SET join_month = ?, join_day = ?, join_year = ? WHERE id = ?")
-      .run(jp.join_month, jp.join_day, jp.join_year, u.id);
-    stats.join_from_created += 1;
+      .prepare("UPDATE users SET join_month = NULL, join_day = NULL, join_year = NULL WHERE id = ?")
+      .run(u.id);
+    stats.cleared += 1;
   }
 
   return stats;
 }
 
-module.exports = { backfillProfileCelebrationDates };
+/** @deprecated Join dates are no longer backfilled from created_at. */
+async function backfillProfileCelebrationDates() {
+  return { join_from_created: 0 };
+}
+
+module.exports = { backfillProfileCelebrationDates, clearBackfilledJoinDates, createdAtParts };

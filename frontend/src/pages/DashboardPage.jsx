@@ -91,15 +91,7 @@ export default function DashboardPage() {
   const isIT = userHasDepartment(user, "IT");
   const [upcoming, setUpcoming] = useState([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
-  const [birthdays, setBirthdays] = useState({
-    today: [],
-    upcoming: [],
-    anniversaries_today: [],
-    anniversaries_upcoming: [],
-    range_days: 14,
-  });
-  const [birthdaysLoading, setBirthdaysLoading] = useState(true);
-  const { openCelebration } = useCelebration();
+  const { openCelebration, feed: birthdays, feedLoading: birthdaysLoading } = useCelebration();
   const [topVisitors, setTopVisitors] = useState([]);
   const [topVisitorsLoading, setTopVisitorsLoading] = useState(false);
   const [employeeOfMonthEntries, setEmployeeOfMonthEntries] = useState([]);
@@ -117,176 +109,137 @@ export default function DashboardPage() {
     CUSTOMER_WINS_FEED.widgetKey,
   ]);
 
-  const loadUpcoming = useCallback(async () => {
+  const loadHomeFeeds = useCallback(async () => {
     setUpcomingLoading(true);
-    try {
-      const r = await api.get("/upcoming/feed");
-      setUpcoming(Array.isArray(r.data) ? r.data : []);
-    } catch (err) {
-      console.warn("Upcoming feed failed:", err.response?.status, err.response?.data ?? err.message);
-      setUpcoming([]);
-    } finally {
-      setUpcomingLoading(false);
-    }
-  }, []);
-
-  const loadBirthdays = useCallback(async () => {
-    setBirthdaysLoading(true);
-    try {
-      const r = await api.get("/birthdays/feed", { params: { days: 14 } });
-      const d = r.data || {};
-      setBirthdays({
-        today: Array.isArray(d.today) ? d.today : [],
-        upcoming: Array.isArray(d.upcoming) ? d.upcoming : [],
-        anniversaries_today: Array.isArray(d.anniversaries_today) ? d.anniversaries_today : [],
-        anniversaries_upcoming: Array.isArray(d.anniversaries_upcoming) ? d.anniversaries_upcoming : [],
-        range_days: Number(d.range_days) || 14,
-      });
-    } catch (err) {
-      console.warn("Birthdays feed failed:", err.response?.status, err.response?.data ?? err.message);
-      setBirthdays({
-        today: [],
-        upcoming: [],
-        anniversaries_today: [],
-        anniversaries_upcoming: [],
-        range_days: 14,
-      });
-    } finally {
-      setBirthdaysLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadUpcoming();
-  }, [loadUpcoming]);
-
-  useEffect(() => {
-    loadBirthdays();
-  }, [loadBirthdays]);
-
-  const loadEmployeeOfMonth = useCallback(async () => {
     setEmployeeOfMonthLoading(true);
-    try {
-      const { data } = await api.get("/employee-of-month/current");
+    setLeadershipUpdateLoading(true);
+    setNewHireLoading(true);
+    setCustomerWinLoading(true);
+    setCommunityInvolvementLoading(true);
+
+    const [
+      upcomingResult,
+      employeeOfMonthResult,
+      leadershipResult,
+      newHireResult,
+      customerWinResult,
+      communityResult,
+      layoutResult,
+    ] = await Promise.allSettled([
+      api.get("/upcoming/feed"),
+      api.get("/employee-of-month/current"),
+      api.get("/leadership-updates/current"),
+      api.get("/new-hires/current"),
+      api.get("/customer-wins/current"),
+      api.get("/community-involvement/current"),
+      api.get("/home-spotlight/layout"),
+    ]);
+
+    if (upcomingResult.status === "fulfilled") {
+      setUpcoming(Array.isArray(upcomingResult.value.data) ? upcomingResult.value.data : []);
+    } else {
+      console.warn(
+        "Upcoming feed failed:",
+        upcomingResult.reason?.response?.status,
+        upcomingResult.reason?.response?.data ?? upcomingResult.reason?.message
+      );
+      setUpcoming([]);
+    }
+    setUpcomingLoading(false);
+
+    if (employeeOfMonthResult.status === "fulfilled") {
+      const data = employeeOfMonthResult.value.data;
       const rows = Array.isArray(data)
         ? data.filter((item) => item?.employee?.name)
         : data?.employee?.name
           ? [data]
           : [];
       setEmployeeOfMonthEntries(rows);
-    } catch (err) {
-      console.warn("Employee of the Month failed:", err.response?.status, err.response?.data ?? err.message);
+    } else {
+      console.warn(
+        "Employee of the Month failed:",
+        employeeOfMonthResult.reason?.response?.status,
+        employeeOfMonthResult.reason?.response?.data ?? employeeOfMonthResult.reason?.message
+      );
       setEmployeeOfMonthEntries([]);
-    } finally {
-      setEmployeeOfMonthLoading(false);
     }
-  }, []);
+    setEmployeeOfMonthLoading(false);
 
-  useEffect(() => {
-    loadEmployeeOfMonth();
-  }, [loadEmployeeOfMonth]);
-
-  const loadLeadershipUpdate = useCallback(async () => {
-    setLeadershipUpdateLoading(true);
-    try {
-      const { data } = await api.get("/leadership-updates/current");
-      setLeadershipUpdateEntries(parseSpotlightFeedEntries(data));
-    } catch (err) {
-      console.warn("Leadership update failed:", err.response?.status, err.response?.data ?? err.message);
+    if (leadershipResult.status === "fulfilled") {
+      setLeadershipUpdateEntries(parseSpotlightFeedEntries(leadershipResult.value.data));
+    } else {
+      console.warn(
+        "Leadership update failed:",
+        leadershipResult.reason?.response?.status,
+        leadershipResult.reason?.response?.data ?? leadershipResult.reason?.message
+      );
       setLeadershipUpdateEntries([]);
-    } finally {
-      setLeadershipUpdateLoading(false);
     }
-  }, []);
+    setLeadershipUpdateLoading(false);
 
-  useEffect(() => {
-    loadLeadershipUpdate();
-  }, [loadLeadershipUpdate]);
-
-  const loadNewHire = useCallback(async () => {
-    setNewHireLoading(true);
-    try {
-      const { data } = await api.get("/new-hires/current");
-      setNewHireEntries(parseSpotlightFeedEntries(data));
-    } catch (err) {
-      console.warn("New hire failed:", err.response?.status, err.response?.data ?? err.message);
+    if (newHireResult.status === "fulfilled") {
+      setNewHireEntries(parseSpotlightFeedEntries(newHireResult.value.data));
+    } else {
+      console.warn(
+        "New hire failed:",
+        newHireResult.reason?.response?.status,
+        newHireResult.reason?.response?.data ?? newHireResult.reason?.message
+      );
       setNewHireEntries([]);
-    } finally {
-      setNewHireLoading(false);
     }
-  }, []);
+    setNewHireLoading(false);
 
-  useEffect(() => {
-    loadNewHire();
-  }, [loadNewHire]);
-
-  const loadCustomerWin = useCallback(async () => {
-    setCustomerWinLoading(true);
-    try {
-      const { data } = await api.get("/customer-wins/current");
-      setCustomerWinEntries(parseSpotlightFeedEntries(data));
-    } catch (err) {
-      console.warn("Customer win failed:", err.response?.status, err.response?.data ?? err.message);
+    if (customerWinResult.status === "fulfilled") {
+      setCustomerWinEntries(parseSpotlightFeedEntries(customerWinResult.value.data));
+    } else {
+      console.warn(
+        "Customer win failed:",
+        customerWinResult.reason?.response?.status,
+        customerWinResult.reason?.response?.data ?? customerWinResult.reason?.message
+      );
       setCustomerWinEntries([]);
-    } finally {
-      setCustomerWinLoading(false);
     }
-  }, []);
+    setCustomerWinLoading(false);
 
-  useEffect(() => {
-    loadCustomerWin();
-  }, [loadCustomerWin]);
-
-  const loadCommunityInvolvement = useCallback(async () => {
-    setCommunityInvolvementLoading(true);
-    try {
-      const { data } = await api.get("/community-involvement/current");
-      setCommunityInvolvementEntries(parseSpotlightFeedEntries(data));
-    } catch (err) {
-      console.warn("Community involvement failed:", err.response?.status, err.response?.data ?? err.message);
+    if (communityResult.status === "fulfilled") {
+      setCommunityInvolvementEntries(parseSpotlightFeedEntries(communityResult.value.data));
+    } else {
+      console.warn(
+        "Community involvement failed:",
+        communityResult.reason?.response?.status,
+        communityResult.reason?.response?.data ?? communityResult.reason?.message
+      );
       setCommunityInvolvementEntries([]);
-    } finally {
-      setCommunityInvolvementLoading(false);
+    }
+    setCommunityInvolvementLoading(false);
+
+    if (layoutResult.status === "fulfilled") {
+      const order = Array.isArray(layoutResult.value.data?.order) ? layoutResult.value.data.order : [];
+      const allowed = [
+        NEW_HIRES_FEED.widgetKey,
+        CUSTOMER_WINS_FEED.widgetKey,
+        COMMUNITY_INVOLVEMENT_FEED.widgetKey,
+      ];
+      const normalized = [];
+      const seen = new Set();
+      for (const key of order) {
+        const k = String(key || "").trim();
+        if (!allowed.includes(k) || seen.has(k)) continue;
+        seen.add(k);
+        normalized.push(k);
+      }
+      for (const key of allowed) {
+        if (!seen.has(key)) normalized.push(key);
+      }
+      setBottomRowOrder(normalized);
+    } else {
+      setBottomRowOrder([NEW_HIRES_FEED.widgetKey, CUSTOMER_WINS_FEED.widgetKey, COMMUNITY_INVOLVEMENT_FEED.widgetKey]);
     }
   }, []);
 
   useEffect(() => {
-    loadCommunityInvolvement();
-  }, [loadCommunityInvolvement]);
-
-  useEffect(() => {
-    let alive = true;
-    api
-      .get("/home-spotlight/layout")
-      .then(({ data }) => {
-        if (!alive) return;
-        const order = Array.isArray(data?.order) ? data.order : [];
-        const allowed = [
-          NEW_HIRES_FEED.widgetKey,
-          CUSTOMER_WINS_FEED.widgetKey,
-          COMMUNITY_INVOLVEMENT_FEED.widgetKey,
-        ];
-        const normalized = [];
-        const seen = new Set();
-        for (const key of order) {
-          const k = String(key || "").trim();
-          if (!allowed.includes(k) || seen.has(k)) continue;
-          seen.add(k);
-          normalized.push(k);
-        }
-        for (const key of allowed) {
-          if (!seen.has(key)) normalized.push(key);
-        }
-        setBottomRowOrder(normalized);
-      })
-      .catch(() => {
-        if (!alive) return;
-        setBottomRowOrder([NEW_HIRES_FEED.widgetKey, CUSTOMER_WINS_FEED.widgetKey, COMMUNITY_INVOLVEMENT_FEED.widgetKey]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+    loadHomeFeeds();
+  }, [loadHomeFeeds]);
 
   const bottomRowWidgets = useMemo(() => {
     const map = {

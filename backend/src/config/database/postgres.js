@@ -667,13 +667,13 @@ async function migrateColumns(client) {
   }
 
   try {
-    const { backfillProfileCelebrationDates } = require("../../services/profileCelebrationBackfill.service");
-    const stats = await backfillProfileCelebrationDates(db);
-    if (stats.join_from_created > 0) {
-      console.log(`[pg migrate] profile join-date backfill: join_from_created=${stats.join_from_created}`);
+    const { clearBackfilledJoinDates } = require("../../services/profileCelebrationBackfill.service");
+    const stats = await clearBackfilledJoinDates(db);
+    if (stats.cleared > 0) {
+      console.log(`[pg migrate] cleared auto-filled join dates: cleared=${stats.cleared}`);
     }
   } catch (e) {
-    console.warn("[pg migrate] profile celebration backfill:", e.message);
+    console.warn("[pg migrate] profile join-date cleanup:", e.message);
   }
 }
 

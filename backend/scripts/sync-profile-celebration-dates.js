@@ -1,5 +1,5 @@
 /**
- * Backfill users.join_* from account created_at when missing.
+ * Clear join dates that were auto-filled from account created_at (legacy backfill).
  * Usage: node scripts/sync-profile-celebration-dates.js
  */
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
@@ -7,9 +7,9 @@ require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") }
 async function main() {
   const database = require("../src/config/database");
   await database.initDb();
-  const { backfillProfileCelebrationDates } = require("../src/services/profileCelebrationBackfill.service");
-  const stats = await backfillProfileCelebrationDates(database.db);
-  console.log("Profile celebration backfill complete:", stats);
+  const { clearBackfilledJoinDates } = require("../src/services/profileCelebrationBackfill.service");
+  const stats = await clearBackfilledJoinDates(database.db);
+  console.log("Profile join-date cleanup complete:", stats);
 
   const { portalTodayParts } = require("../src/utils/portalDate");
   const today = portalTodayParts();

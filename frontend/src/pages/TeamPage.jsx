@@ -7,6 +7,7 @@ import ManagerTrainingNotifications from "../components/ManagerTrainingNotificat
 import ReportingHierarchyTree from "../components/ReportingHierarchyTree";
 import { useAuth } from "../context/AuthContext";
 import { managerInboxWithTeamJson } from "../services/leaveClient";
+import { USER_ME_WITH_TRAINING } from "../services/userMeClient";
 import { isSupervisor } from "../utils/supervisorAccess";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
@@ -28,7 +29,7 @@ export default function TeamPage() {
 
   const reloadProfile = useCallback(async () => {
     try {
-      const res = await api.get("/users/me");
+      const res = await api.get("/users/me", USER_ME_WITH_TRAINING);
       setMe(res.data);
     } catch (e) {
       setError(friendlyErrorMessage(e, "Failed to load team"));
@@ -57,7 +58,7 @@ export default function TeamPage() {
       setLoading(true);
       setError("");
       try {
-        const res = await api.get("/users/me");
+        const res = await api.get("/users/me", USER_ME_WITH_TRAINING);
         setMe(res.data);
       } catch (e) {
         setError(friendlyErrorMessage(e, "Failed to load team"));

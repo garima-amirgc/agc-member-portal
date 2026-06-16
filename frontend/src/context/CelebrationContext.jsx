@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import api from "../services/api";
+import { fetchBirthdaysFeed } from "../services/birthdaysFeedClient";
 import BirthdayPopupModal from "../components/BirthdayPopupModal";
 import {
   markAnniversaryAutoDismissed,
@@ -9,6 +9,14 @@ import {
 } from "../utils/celebrationStorage";
 
 const CelebrationContext = createContext(null);
+
+const EMPTY_FEED = {
+  today: [],
+  upcoming: [],
+  anniversaries_today: [],
+  anniversaries_upcoming: [],
+  range_days: 14,
+};
 
 function buildTodayCelebrations(feed) {
   const birthdays = (Array.isArray(feed?.today) ? feed.today : []).map((b) => ({
@@ -23,7 +31,8 @@ function buildTodayCelebrations(feed) {
 }
 
 export function CelebrationProvider({ children, userId }) {
-  const [feed, setFeed] = useState({ today: [], anniversaries_today: [] });
+  const [feed, setFeed] = useState(EMPTY_FEED);
+  const [feedLoading, setFeedLoading] = useState(true);
   const [person, setPerson] = useState(null);
   const autoOpenedKindRef = useRef(null);
   const feedReadyRef = useRef(false);
@@ -37,20 +46,17 @@ export function CelebrationProvider({ children, userId }) {
 
   const loadFeed = useCallback(() => {
     feedReadyRef.current = false;
-    return api
-      .get("/birthdays/feed")
-      .then(({ data }) => {
-        const d = data || {};
-        setFeed({
-          today: Array.isArray(d.today) ? d.today : [],
-          anniversaries_today: Array.isArray(d.anniversaries_today) ? d.anniversaries_today : [],
-        });
+    setFeedLoading(true);
+    return fetchBirthdaysFeed(14)
+      .then((normalized) => {
+        setFeed(normalized);
         feedReadyRef.current = true;
       })
       .catch(() => {
-        setFeed({ today: [], anniversaries_today: [] });
+        setFeed(EMPTY_FEED);
         feedReadyRef.current = true;
-      });
+      })
+      .finally(() => setFeedLoading(false));
   }, []);
 
   useEffect(() => {
@@ -123,13 +129,14 @@ export function CelebrationProvider({ children, userId }) {
   const value = useMemo(
     () => ({
       feed,
+      feedLoading,
       todayCelebrations,
       birthdaysToday: birthdays,
       anniversariesToday: anniversaries,
       loadFeed,
       openCelebration,
     }),
-    [feed, todayCelebrations, birthdays, anniversaries, loadFeed, openCelebration]
+    [feed, feedLoading, todayCelebrations, birthdays, anniversaries, loadFeed, openCelebration]
   );
 
   return (
