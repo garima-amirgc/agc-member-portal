@@ -5,6 +5,7 @@ import { PAGE_SHELL } from "../constants/pageLayout";
 import DashboardAssignmentNotice from "../components/DashboardAssignmentNotice";
 import TrainingCompletionNotice from "../components/TrainingCompletionNotice";
 import UpcomingEventCards from "../components/UpcomingEventCards";
+import UpcomingMiniCalendar from "../components/UpcomingMiniCalendar";
 import api from "../services/api";
 import { useCelebration } from "../context/CelebrationContext";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
@@ -446,6 +447,12 @@ export default function DashboardPage() {
 
           <aside className="min-w-0 lg:col-span-3 lg:sticky lg:top-6 lg:self-start">
             <div className="space-y-4">
+              <UpcomingMiniCalendar
+                events={upcoming}
+                loading={upcomingLoading}
+                onEventClick={openUpcomingEvent}
+              />
+
               {!upcomingLoading && todayEvents.length > 0 ? (
                 <div className="card no-title-underline p-3 sm:p-4">
                   <h3 className="mb-2 text-sm font-semibold text-[#0B3EAF] dark:text-[#A7D344]">Today’s event</h3>

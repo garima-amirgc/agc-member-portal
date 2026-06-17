@@ -1,52 +1,37 @@
-import { getEventTimeIso } from "./eventDate";
-
-function isSameLocalDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-  );
-}
+import { torontoTodayYmd, ymdInToronto } from "./torontoDate";
 
 /**
  * Split merged upcoming feed into “today” vs “later” lists for home / facility sidebars.
- * Events dated today appear only in `todayEvents`. Undated announcements stay in upcoming until expired.
+ * Uses America/Toronto for “today”. Events dated today appear only in `todayEvents`.
  */
 export function splitUpcomingForHome(upcoming) {
-  const now = new Date();
+  const todayYmd = torontoTodayYmd();
   if (!Array.isArray(upcoming) || upcoming.length === 0) {
     return { todayEvents: [], upcomingFutureOnly: [] };
   }
 
   const todayEvents = [];
   for (const ev of upcoming) {
-    const iso = getEventTimeIso(ev);
-    if (!iso) continue;
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) continue;
-    if (isSameLocalDay(d, now)) todayEvents.push(ev);
+    const dayYmd = ymdInToronto(ev?.event_at ?? ev?.start_at);
+    if (!dayYmd) continue;
+    if (dayYmd === todayYmd) todayEvents.push(ev);
   }
 
   const todayIds = new Set(todayEvents.map((e) => e?.id).filter((x) => x != null));
 
   const upcomingFutureOnly = upcoming.filter((ev) => {
     if (todayIds.has(ev?.id)) return false;
-    const eventIso = getEventTimeIso(ev);
-    const endIso = ev?.end_at ?? ev?.endAt ?? null;
+    const dayYmd = ymdInToronto(ev?.event_at ?? ev?.start_at);
+    const endYmd = ymdInToronto(ev?.end_at);
 
-    if (!eventIso) return true;
+    if (!dayYmd) return true;
+    if (dayYmd === todayYmd) return false;
 
-    const eventDate = new Date(eventIso);
-    if (Number.isNaN(eventDate.getTime())) return true;
-
-    if (isSameLocalDay(eventDate, now)) return false;
-
-    if (endIso) {
-      const endDate = new Date(endIso);
-      if (!Number.isNaN(endDate.getTime())) {
-        return endDate.getTime() > now.getTime();
-      }
+    if (endYmd) {
+      return endYmd >= todayYmd;
     }
 
-    return true;
+    return dayYmd > todayYmd;
   });
 
   return { todayEvents, upcomingFutureOnly };
