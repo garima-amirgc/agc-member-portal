@@ -1,0 +1,22 @@
+---
+description: Mobile and tablet responsiveness is mandatory for all UI work
+alwaysApply: true
+---
+
+# Responsive Design Rule
+
+Anything built or changed in the frontend must be responsive on mobile and tablet, not just desktop. This applies to every new page, component, modal, table, chart, and edit to an existing one — no exceptions.
+
+Requirements:
+- Use responsive Tailwind breakpoints (`sm:`, `md:`, `lg:`) instead of fixed/desktop-only widths and heights.
+- No fixed-width layouts that break or overflow on small screens (avoid hardcoded `px` widths on containers; prefer `max-w-*`, `w-full`, `flex`, `grid` with wrapping).
+- Tables, charts, and org charts must scroll horizontally or stack/wrap on narrow screens instead of clipping content.
+- Touch targets (buttons, links, tabs) must stay easily tappable on small screens.
+- Text must remain readable at small sizes — no clipped or overlapping text on narrow viewports.
+- Sidebar/navigation must collapse or stack appropriately on small screens.
+
+Before considering any UI task done:
+- Mentally check (or actually check, if a browser/screenshot tool is available) the layout at mobile width (~375px) and tablet width (~768px), in addition to desktop.
+- If a component reused an existing pattern (e.g. card grid, modal, chart), confirm that pattern's responsive behavior still holds for the new content.
+
+This rule is in addition to, not a replacement for, the responsive points in [05-ui-portal-design.mdc](./05-ui-portal-design.mdc) and the testing checklist in [06-testing-checklist.mdc](./06-testing-checklist.mdc).

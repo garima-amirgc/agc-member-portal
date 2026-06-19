@@ -1,4 +1,6 @@
 import AgcFacilityOrgChart from "./AgcFacilityOrgChart";
+import AqmFacilityOrgChart from "./AqmFacilityOrgChart";
+import AspFacilityOrgChart from "./AspFacilityOrgChart";
 
 function initials(name = "") {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -33,6 +35,12 @@ export default function OrgChart({ facility }) {
   const fac = String(facility || "").toUpperCase();
   if (fac === "AGC") {
     return <AgcFacilityOrgChart />;
+  }
+  if (fac === "AQM") {
+    return <AqmFacilityOrgChart />;
+  }
+  if (fac === "ASP") {
+    return <AspFacilityOrgChart />;
   }
 
   return (

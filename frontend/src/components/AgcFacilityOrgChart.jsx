@@ -136,7 +136,7 @@ function SpinePersonBlock({ row, align }) {
 
 function SpineList() {
   return (
-    <div className="relative mx-auto w-full max-w-5xl pt-1">
+    <div className="relative mx-auto w-full pt-1">
       <div className={`absolute top-0 bottom-0 left-1/2 z-0 w-px -translate-x-1/2 ${LINE}`} aria-hidden />
       <ul className="relative z-[1] m-0 list-none space-y-1.5 p-0 sm:space-y-2">
         {SPINE_ROWS.map((row) => (
@@ -176,7 +176,10 @@ function SpineList() {
 }
 
 export default function AgcFacilityOrgChart() {
-  const colGrid = "mx-auto grid w-full max-w-5xl grid-cols-1 gap-8 sm:gap-10 lg:grid-cols-3 lg:gap-6";
+  // The AGC leadership spine (col 2) carries far more entries than the Finance branch (col 1) or
+  // the empty third track, so it gets a wider share of the row — an even three-way split was
+  // squeezing long titles like "Director of Human Resources — AGC" until names got clipped.
+  const colGrid = "mx-auto grid w-full max-w-5xl grid-cols-1 gap-8 sm:gap-10 lg:grid-cols-[0.9fr_2.1fr_0.6fr] lg:gap-6";
 
   return (
     <div className="w-full min-w-0">
@@ -184,13 +187,74 @@ export default function AgcFacilityOrgChart() {
         <h2 className="text-sm font-bold text-slate-900 dark:text-white">AGC leadership</h2>
       </div>
 
+      {/*
+        Mobile (<sm): the zigzag connector spine below gets ambiguous and the long job titles
+        overflow once everything is squeezed to phone width, so phones get an explicit indented
+        "reports to" list instead — the same approach already used for the AQM and ASP charts.
+        Tablet/desktop keep the connector-line spine.
+      */}
+      <div className="block rounded-xl border border-slate-200/80 bg-slate-50/90 p-3 sm:hidden dark:border-slate-700 dark:bg-slate-900/40">
+        <div className="mb-2 rounded-lg border border-dashed border-slate-300 p-2 dark:border-slate-600">
+          <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Leadership (peers)
+          </div>
+          <div className="flex flex-col items-stretch gap-1.5">
+            {TOP.map((p) => (
+              <OrgPersonNode key={p.name} compact name={p.name} title={p.title} photoSrc={p.photoSrc} />
+            ))}
+          </div>
+        </div>
+
+        {/* Reports to Sherry Aziz */}
+        <div className="ml-2 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+          <OrgPersonNode
+            compact
+            name="David Schlosser"
+            title="VP Finance"
+            photoSrc={orgChartAssetUrl("org-chart/david-schlosser.png")}
+          />
+          <div className="ml-2 mt-1.5 flex flex-col items-stretch gap-1.5 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+            <OrgPersonNode
+              compact
+              name="Steven Chow"
+              title="Director of Finance"
+              photoSrc={orgChartAssetUrl("org-chart/steven-show.png")}
+            />
+            <OrgPersonNode
+              compact
+              name="Dhannjaykumar Patel"
+              title="Financial Controller"
+              photoSrc={orgChartAssetUrl("org-chart/dhannjaykumar-patel.png")}
+            />
+          </div>
+        </div>
+
+        {/* Reports to Tony Aziz */}
+        <div className="ml-2 mt-3 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+          <div className="flex flex-col items-stretch gap-2">
+            {SPINE_ROWS.map((row) => (
+              <div key={row.name}>
+                <OrgPersonNode compact name={row.name} title={row.title} photoSrc={row.photoSrc} />
+                {row.reports?.length ? (
+                  <div className="ml-2 mt-1.5 flex flex-col items-stretch gap-1.5 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+                    {row.reports.map((r) => (
+                      <OrgPersonNode key={r.name} compact name={r.name} title={r.title} photoSrc={r.photoSrc} />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div
         className={[
-          "rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-4 sm:px-5 dark:border-slate-700 dark:bg-slate-900/40",
+          "hidden rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-4 sm:block sm:px-5 dark:border-slate-700 dark:bg-slate-900/40",
           "overflow-x-auto",
         ].join(" ")}
       >
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap justify-center gap-x-6 gap-y-4 sm:gap-x-10 lg:grid lg:grid-cols-3 lg:justify-items-center lg:gap-x-6">
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap justify-center gap-x-6 gap-y-4 sm:gap-x-10 lg:grid lg:grid-cols-[0.9fr_2.1fr_0.6fr] lg:justify-items-center lg:gap-x-6">
           {TOP.map((p) => (
             <div key={p.name} className="flex flex-col items-center">
               <OrgPersonNode name={p.name} title={p.title} photoSrc={p.photoSrc} />
