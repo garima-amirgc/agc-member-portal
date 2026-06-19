@@ -4,6 +4,7 @@ import api from "../services/api";
 import { FACILITY_CODES } from "../constants/facilities";
 import { PAGE_PADDING, PAGE_SHELL } from "../constants/pageLayout";
 import OrgChart from "../components/OrgChart";
+import AqmPoultryFlashcards from "../components/AqmPoultryFlashcards";
 
 /** Rounded-stroke icons (outline style). */
 function ResourceCategoryIcon({ name }) {
@@ -323,6 +324,11 @@ export default function FacilityCoursesPage() {
           {activeTab === "org" ? (
             <div className="min-w-0">
               <OrgChart facility={facilityNorm} />
+              {facilityNorm === "AQM" && (
+                <div className="mt-6">
+                  <AqmPoultryFlashcards />
+                </div>
+              )}
             </div>
           ) : null}
         </div>

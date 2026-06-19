@@ -1167,6 +1167,26 @@ async function initDb() {
     console.error("[db] admin_grants upcoming migration:", e.message || e);
   }
 
+  // Indexes for frequently-filtered foreign-key columns (performance; additive, no schema change).
+  // Placed after all CREATE TABLE/ALTER TABLE statements above so every referenced table/column exists.
+  try {
+    rawDb.exec(`
+      CREATE INDEX IF NOT EXISTS idx_users_manager_id ON users (manager_id);
+      CREATE INDEX IF NOT EXISTS idx_lessons_course_id ON lessons (course_id);
+      CREATE INDEX IF NOT EXISTS idx_assignments_course_id ON assignments (course_id);
+      CREATE INDEX IF NOT EXISTS idx_leave_requests_employee_id ON leave_requests (employee_id);
+      CREATE INDEX IF NOT EXISTS idx_leave_requests_manager_id ON leave_requests (manager_id);
+      CREATE INDEX IF NOT EXISTS idx_it_tickets_user_id ON it_tickets (user_id);
+      CREATE INDEX IF NOT EXISTS idx_it_tickets_assignee_id ON it_tickets (assignee_id);
+      CREATE INDEX IF NOT EXISTS idx_company_content_items_section ON company_content_items (section);
+      CREATE INDEX IF NOT EXISTS idx_manager_notifications_manager_id ON manager_notifications (manager_id);
+      CREATE INDEX IF NOT EXISTS idx_manager_all_training_alerts_manager_id ON manager_all_training_alerts (manager_id);
+      CREATE INDEX IF NOT EXISTS idx_resource_documents_business_unit_category ON resource_documents (business_unit, category);
+    `);
+  } catch (e) {
+    console.error("[db] performance indexes:", e.message || e);
+  }
+
   persist();
 }
 

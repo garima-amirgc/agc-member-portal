@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
 import { adminNavGroupLabel } from "../../constants/adminNavGroups";
 import { isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
+import { COMPANY_CONTENT_NAV_TITLE } from "../../constants/companyContentConfig";
 import { IconBuilding, IconChevron, IconHelp, IconSearch, IconSparkle } from "./SidebarIcons";
 import { SidebarAdminGroupDropdown } from "./AdminNavGroupDropdown";
 
@@ -156,7 +157,7 @@ export default function AppSidebar() {
         </div>
 
         {filteredAboutCompany.length > 0 ? (
-          <NavSection title="About Company" icon={IconBuilding} defaultOpen={!!q}>
+          <NavSection title={COMPANY_CONTENT_NAV_TITLE} icon={IconBuilding} defaultOpen={!!q}>
             {filteredAboutCompany.map((item) => (
               <NavItem key={item.to} {...item} />
             ))}

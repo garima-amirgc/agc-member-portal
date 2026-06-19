@@ -56,7 +56,8 @@ function insertHasNoSerialId(sqlTrimmed) {
     /^\s*insert\s+into\s+user_departments\b/i.test(sqlTrimmed) ||
     /^\s*insert\s+into\s+report_access_users\b/i.test(sqlTrimmed) ||
     /^\s*insert\s+into\s+portal_visits\b/i.test(sqlTrimmed) ||
-    /^\s*insert\s+into\s+all_training_milestones\b/i.test(sqlTrimmed)
+    /^\s*insert\s+into\s+all_training_milestones\b/i.test(sqlTrimmed) ||
+    /^\s*insert\s+into\s+portal_settings\b/i.test(sqlTrimmed)
   );
 }
 

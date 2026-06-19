@@ -1,0 +1,40 @@
+---
+description: UI and portal design rules
+alwaysApply: true
+---
+
+# Portal UI Design Rules
+
+The portal should look professional, clean, modern, and easy to use.
+
+Design style:
+- Use clean spacing.
+- Use consistent font sizes.
+- Use soft rounded corners.
+- Use calm professional colors.
+- Use clear active states in sidebar/navigation.
+- Avoid clutter.
+- Keep pages easy for non-technical users.
+
+Sidebar rules:
+- Keep labels short and clear.
+- Use consistent icons.
+- Use hover states.
+- Use visible active states.
+- Group related items together.
+- Avoid too many nested levels.
+
+Content page rules:
+- Use card-based layouts where helpful.
+- Use clear headings.
+- Use short descriptions.
+- Make links easy to scan.
+- Keep policy, benefit, form, and portal link sections organized.
+
+Responsive rules:
+- Portal must work on desktop, tablet, and mobile.
+- Sidebar should collapse or stack nicely on small screens.
+- Buttons should be easy to click.
+- Text should remain readable.
+
+Keep the design business-friendly, not too playful.

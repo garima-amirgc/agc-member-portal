@@ -200,10 +200,7 @@ export function usePortalNavItems(user) {
       }
     }
 
-    const aboutCompanyItems = ABOUT_COMPANY_NAV_ITEMS.map((item) => ({
-      ...item,
-      icon: IconBuilding,
-    }));
+    const aboutCompanyItems = ABOUT_COMPANY_NAV_ITEMS.map((item) => ({ ...item }));
 
     const homeTo = "/";
 

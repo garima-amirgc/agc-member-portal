@@ -2,6 +2,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { PAGE_GUTTER_X } from "../../constants/pageLayout";
+import { COMPANY_CONTENT_NAV_TITLE } from "../../constants/companyContentConfig";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
 import { TopBarAdminGroupDropdown } from "./AdminNavGroupDropdown";
 import { resolvePublicMediaUrl } from "../../utils/mediaUrl";
@@ -151,7 +152,7 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
                 {aboutCompanyItems.length > 0 ? (
                   <>
                     <p className="px-4 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-[#5c5f66] dark:text-white/55">
-                      About Company
+                      {COMPANY_CONTENT_NAV_TITLE}
                     </p>
                     <div className="pb-1">
                       {aboutCompanyItems.map((item) => (

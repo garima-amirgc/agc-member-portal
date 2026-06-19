@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { lazy, useEffect, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import api from "./services/api";
 import { FACILITY_CODES } from "./constants/facilities";
@@ -11,45 +11,52 @@ import InviteSetupPage from "./pages/InviteSetupPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import DashboardIndex from "./pages/DashboardIndex";
-import DashboardPage from "./pages/DashboardPage";
-import UpcomingPage, { UpcomingEventDetailPage } from "./pages/UpcomingPage";
-import AdminUpcomingPage from "./pages/AdminUpcomingPage";
-import AdminEmployeeOfMonthPage from "./pages/AdminEmployeeOfMonthPage";
-import AdminLeadershipUpdatesPage from "./pages/AdminLeadershipUpdatesPage";
-import AdminNewHiresPage from "./pages/AdminNewHiresPage";
-import EmployeeOfMonthHistoryPage from "./pages/EmployeeOfMonthHistoryPage";
-import LeadershipUpdatesPage from "./pages/LeadershipUpdatesPage";
-import LeadershipUpdateDetailPage from "./pages/LeadershipUpdateDetailPage";
-import NewHiresPage from "./pages/NewHiresPage";
-import NewHireDetailPage from "./pages/NewHireDetailPage";
-import CustomerWinsPage from "./pages/CustomerWinsPage";
-import CustomerWinDetailPage from "./pages/CustomerWinDetailPage";
-import AdminCustomerWinsPage from "./pages/AdminCustomerWinsPage";
-import CommunityInvolvementPage from "./pages/CommunityInvolvementPage";
-import CommunityInvolvementDetailPage from "./pages/CommunityInvolvementDetailPage";
-import AdminCommunityInvolvementPage from "./pages/AdminCommunityInvolvementPage";
-import AdminAboutCompanyPage from "./pages/AdminAboutCompanyPage";
-import AboutCompanyPage from "./pages/AboutCompanyPage";
-import AdminUsersPage from "./pages/AdminUsersPage";
-import CoursePlayerPage from "./pages/CoursePlayerPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
-import ProfilePage from "./pages/ProfilePage";
-import HelpPage from "./pages/HelpPage";
-import FacilitiesPage from "./pages/FacilitiesPage";
-import FacilityCoursesPage from "./pages/FacilityCoursesPage";
-import ManagerDashboardPage from "./pages/ManagerDashboardPage";
-import TeamPage from "./pages/TeamPage";
-import ResourcesCategoryPage from "./pages/ResourcesCategoryPage";
-import ResourceVideoPage from "./pages/ResourceVideoPage";
-import ResourceDocumentPage from "./pages/ResourceDocumentPage";
-import ItTicketsPage from "./pages/ItTicketsPage";
-import CalendarPage from "./pages/CalendarPage";
-import ReportsPage from "./pages/ReportsPage";
-import AdminReportsPage from "./pages/AdminReportsPage";
-import AdminSystemStatusPage from "./pages/AdminSystemStatusPage";
-import AdminCalendarPage from "./pages/AdminCalendarPage";
-import AdminPollsPage from "./pages/AdminPollsPage";
 import { ADMIN_GRANT_KEYS } from "./constants/adminGrants";
+
+// Route-based code splitting: everything below the auth screens is fetched on demand
+// instead of being bundled into the initial app download (App.jsx is wrapped in
+// <Suspense> below, so each of these loads only when its route is visited).
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const UpcomingPage = lazy(() => import("./pages/UpcomingPage"));
+const UpcomingEventDetailPage = lazy(() =>
+  import("./pages/UpcomingPage").then((m) => ({ default: m.UpcomingEventDetailPage }))
+);
+const AdminUpcomingPage = lazy(() => import("./pages/AdminUpcomingPage"));
+const AdminEmployeeOfMonthPage = lazy(() => import("./pages/AdminEmployeeOfMonthPage"));
+const AdminLeadershipUpdatesPage = lazy(() => import("./pages/AdminLeadershipUpdatesPage"));
+const AdminNewHiresPage = lazy(() => import("./pages/AdminNewHiresPage"));
+const EmployeeOfMonthHistoryPage = lazy(() => import("./pages/EmployeeOfMonthHistoryPage"));
+const LeadershipUpdatesPage = lazy(() => import("./pages/LeadershipUpdatesPage"));
+const LeadershipUpdateDetailPage = lazy(() => import("./pages/LeadershipUpdateDetailPage"));
+const NewHiresPage = lazy(() => import("./pages/NewHiresPage"));
+const NewHireDetailPage = lazy(() => import("./pages/NewHireDetailPage"));
+const CustomerWinsPage = lazy(() => import("./pages/CustomerWinsPage"));
+const CustomerWinDetailPage = lazy(() => import("./pages/CustomerWinDetailPage"));
+const AdminCustomerWinsPage = lazy(() => import("./pages/AdminCustomerWinsPage"));
+const CommunityInvolvementPage = lazy(() => import("./pages/CommunityInvolvementPage"));
+const CommunityInvolvementDetailPage = lazy(() => import("./pages/CommunityInvolvementDetailPage"));
+const AdminCommunityInvolvementPage = lazy(() => import("./pages/AdminCommunityInvolvementPage"));
+const AdminAboutCompanyPage = lazy(() => import("./pages/AdminAboutCompanyPage"));
+const AboutCompanyPage = lazy(() => import("./pages/AboutCompanyPage"));
+const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
+const CoursePlayerPage = lazy(() => import("./pages/CoursePlayerPage"));
+const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const HelpPage = lazy(() => import("./pages/HelpPage"));
+const FacilitiesPage = lazy(() => import("./pages/FacilitiesPage"));
+const FacilityCoursesPage = lazy(() => import("./pages/FacilityCoursesPage"));
+const ManagerDashboardPage = lazy(() => import("./pages/ManagerDashboardPage"));
+const TeamPage = lazy(() => import("./pages/TeamPage"));
+const ResourcesCategoryPage = lazy(() => import("./pages/ResourcesCategoryPage"));
+const ResourceVideoPage = lazy(() => import("./pages/ResourceVideoPage"));
+const ResourceDocumentPage = lazy(() => import("./pages/ResourceDocumentPage"));
+const ItTicketsPage = lazy(() => import("./pages/ItTicketsPage"));
+const CalendarPage = lazy(() => import("./pages/CalendarPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const AdminReportsPage = lazy(() => import("./pages/AdminReportsPage"));
+const AdminSystemStatusPage = lazy(() => import("./pages/AdminSystemStatusPage"));
+const AdminCalendarPage = lazy(() => import("./pages/AdminCalendarPage"));
+const AdminPollsPage = lazy(() => import("./pages/AdminPollsPage"));
 
 function pickFacilityForLegacyResources(me) {
   try {

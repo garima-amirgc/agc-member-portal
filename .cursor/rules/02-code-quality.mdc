@@ -1,0 +1,30 @@
+---
+description: Clean code and maintainability rules
+alwaysApply: true
+---
+
+# Code Quality Rules
+
+Always keep the code clean, simple, readable, and maintainable.
+
+Follow these rules:
+- Reuse existing components when possible.
+- Avoid duplicate code.
+- Keep components small and focused.
+- Use meaningful variable, function, and component names.
+- Follow the current project structure.
+- Remove unused imports.
+- Remove unused variables.
+- Do not leave unnecessary console.log statements.
+- Do not hardcode values that should be config or environment variables.
+- Keep API calls inside existing service/helper files if the project has them.
+- Add comments only when the logic is not obvious.
+
+Before finishing:
+1. Check for syntax errors.
+2. Check broken imports.
+3. Check responsive layout.
+4. Check whether login, SSO, routing, or deployment may be affected.
+5. Suggest local testing.
+
+Prefer small, safe changes over large rewrites.

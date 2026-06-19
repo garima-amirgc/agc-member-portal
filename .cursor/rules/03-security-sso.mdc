@@ -1,0 +1,36 @@
+---
+description: Security, authentication, and SSO rules
+alwaysApply: true
+---
+
+# Security and SSO Rules
+
+This portal uses authentication and SSO. Be very careful with login-related code.
+
+Never expose:
+- Client secrets
+- API keys
+- Access tokens
+- Refresh tokens
+- Private credentials
+- Production environment values
+
+Use environment variables for sensitive values.
+
+SSO rules:
+- Do not change SSO callback URLs unless clearly requested.
+- Do not remove authentication middleware.
+- Do not bypass login checks.
+- Do not store tokens in unsafe locations.
+- Keep protected routes protected.
+- Check frontend and backend authentication flow before changing login logic.
+
+When working on authentication:
+1. Identify provider/config files first.
+2. Check environment variable names.
+3. Check redirect URL logic.
+4. Check protected routes.
+5. Explain risk before making changes.
+
+For local testing, use local environment variables only.
+Never paste real production secrets into code.

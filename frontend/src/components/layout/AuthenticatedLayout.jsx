@@ -4,7 +4,7 @@ import {
   isFacilityUniversityOnlyPortal,
   isPathAllowedForFacilityUniversityOnly,
 } from "../../utils/facilityUniversityOnly";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import AppSidebar from "./AppSidebar";
 import AppTopBar from "./AppTopBar";
@@ -156,7 +156,9 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
         <div className="agc-main-column relative flex min-w-0 flex-1 flex-col">
           <AppTopBar darkMode={darkMode} setDarkMode={setDarkMode} />
           <div className="min-h-0 min-w-0 flex-1 pb-2 sm:pb-3">
-            <Outlet />
+            <Suspense fallback={null}>
+              <Outlet />
+            </Suspense>
           </div>
           <BottomBirdBand />
           <Footer />

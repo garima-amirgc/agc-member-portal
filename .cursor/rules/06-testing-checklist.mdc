@@ -1,0 +1,36 @@
+---
+description: Testing checklist before completing work
+alwaysApply: true
+---
+
+# Testing Checklist
+
+Before saying the task is complete, check the following.
+
+Frontend:
+- Page loads without errors.
+- Navigation works.
+- Sidebar active item works.
+- Forms validate correctly.
+- Buttons and links work.
+- Layout is responsive.
+
+Backend:
+- API endpoint works.
+- Error handling exists.
+- Authentication is respected.
+- No sensitive data is returned by mistake.
+
+SSO:
+- Login flow is not broken.
+- Logout flow is not broken.
+- Protected pages are still protected.
+
+Git:
+- Run git status.
+- Mention changed files.
+- Do not commit unless user asks.
+
+Deployment:
+- Build should pass locally before Render deployment.
+- Environment variables should be documented.

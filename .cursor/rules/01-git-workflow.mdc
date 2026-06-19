@@ -1,0 +1,35 @@
+---
+description: Git workflow rules for safe development
+alwaysApply: true
+---
+
+# Git Workflow Rules
+
+Before starting any coding task, always remind the user to pull the latest code from Git so the local project has the newest content and changes.
+
+Recommended starting commands:
+
+```bash
+git status
+git branch
+git pull origin main
+```
+
+If the project uses another branch, check the current branch first and pull from that branch.
+
+Rules:
+- Never work on outdated code if Git is available.
+- Never overwrite other people's work.
+- Never force push.
+- Never delete files unless clearly requested.
+- Do not commit or push unless the user asks.
+- After changes, summarize the files changed.
+
+Before finishing a task, suggest running:
+
+```bash
+git status
+npm run build
+```
+
+Use the correct build command from package.json if it is different.

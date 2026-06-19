@@ -1,0 +1,33 @@
+---
+description: Render deployment and environment rules
+alwaysApply: true
+---
+
+# Render Deployment Rules
+
+This project is deployed through Render.
+
+Before changing deployment-related files, check:
+- package.json
+- render.yaml, if available
+- environment variable usage
+- build command
+- start command
+- Node version
+- frontend/backend folder structure
+
+Do not change Render build or start commands unless required.
+
+When adding new environment variables:
+1. Add variable names to .env.example only.
+2. Never add real secret values.
+3. Tell the user to add real values in the Render dashboard.
+
+Before deployment:
+1. Run local build if possible.
+2. Confirm there are no broken imports.
+3. Confirm environment variables are documented.
+4. Check API base URLs.
+5. Check CORS settings if frontend and backend are separate.
+
+Never commit .env files.

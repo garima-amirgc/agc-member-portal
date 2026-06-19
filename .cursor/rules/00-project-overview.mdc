@@ -1,0 +1,28 @@
+---
+description: Member portal project overview and general behavior
+alwaysApply: true
+---
+
+# Member Portal Project Rules
+
+This project is an internal member portal.
+
+The portal includes:
+- SSO/login authentication
+- Protected member pages
+- Company information, policies, benefits, forms, and portal links
+- Git-based workflow
+- Render deployment
+- Local development environment
+
+Before editing any code:
+1. Review the related files first.
+2. Understand the current folder structure.
+3. Follow existing naming patterns.
+4. Avoid large rewrites unless clearly required.
+5. Do not remove existing routes, components, or content unless requested.
+6. Explain major changes before making them.
+
+Always keep the portal professional, clean, secure, and easy for non-technical users.
+
+See also `AGENTS.md` in the project root for detailed architecture and gotchas.

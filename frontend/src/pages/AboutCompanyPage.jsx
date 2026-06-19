@@ -151,7 +151,7 @@ function AboutCompanySectionPage({ meta }) {
     );
   }
 
-  const isLinks = meta.key === "links";
+  const isLinks = meta.key === "links" || meta.key === "links_websites";
 
   return (
     <div className={PAGE_SHELL}>

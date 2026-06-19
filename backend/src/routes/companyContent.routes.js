@@ -8,7 +8,10 @@ const {
   COMPANY_ABOUT_INTRO_KEY,
   COMPANY_CONTENT_SEED,
   DEFAULT_ABOUT_INTRO,
+  LINKS_SECTIONS_MIGRATED_KEY,
+  isPortalLinkRow,
   isValidCompanySection,
+  normalizeCompanySectionKey,
 } = require("../config/companyContentSections");
 
 const TABLE = "company_content_items";
@@ -112,7 +115,28 @@ async function moveItemInSection(id, direction) {
   await db.prepare(`UPDATE ${TABLE} SET sort_order = ?, updated_at = ? WHERE id = ?`).run(Number(a.sort_order) || 0, now, b.id);
 }
 
+async function migrateLinksSectionsIfNeeded() {
+  const flag = await db.prepare("SELECT setting_key FROM portal_settings WHERE setting_key = ?").get(LINKS_SECTIONS_MIGRATED_KEY);
+  if (flag) return;
+
+  const rows = await db.prepare(`SELECT id, title, link_url FROM ${TABLE} WHERE section = 'links'`).all();
+  const now = new Date().toISOString();
+  for (const row of rows) {
+    if (!isPortalLinkRow(row)) {
+      await db.prepare(`UPDATE ${TABLE} SET section = 'links_websites', updated_at = ? WHERE id = ?`).run(now, row.id);
+    }
+  }
+
+  const migrated = await db.prepare("SELECT setting_key FROM portal_settings WHERE setting_key = ?").get(LINKS_SECTIONS_MIGRATED_KEY);
+  if (!migrated) {
+    await db
+      .prepare("INSERT INTO portal_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)")
+      .run(LINKS_SECTIONS_MIGRATED_KEY, JSON.stringify({ migrated_at: now }), now);
+  }
+}
+
 async function seedCompanyContentIfEmpty() {
+  await migrateLinksSectionsIfNeeded();
   const countRow = await db.prepare(`SELECT COUNT(*) AS c FROM ${TABLE}`).get();
   if (Number(countRow?.c) > 0) return;
 
@@ -149,7 +173,7 @@ router.get("/about-page", async (_req, res) => {
 });
 
 router.get("/section/:section", async (req, res) => {
-  const section = String(req.params.section || "").trim();
+  const section = normalizeCompanySectionKey(req.params.section);
   if (!isValidCompanySection(section)) return res.status(400).json({ message: "Invalid section." });
   try {
     await seedCompanyContentIfEmpty();
@@ -196,7 +220,7 @@ router.get("/admin/items", requireAdminGrant(GRANT), async (_req, res) => {
 
 router.post("/admin/items", requireAdminGrant(GRANT), async (req, res) => {
   try {
-    const section = String(req.body?.section || "").trim();
+    const section = normalizeCompanySectionKey(req.body?.section);
     if (!isValidCompanySection(section)) return res.status(400).json({ message: "Invalid section." });
 
     const title = String(req.body?.title || "").trim();
@@ -233,7 +257,7 @@ router.put("/admin/items/:id", requireAdminGrant(GRANT), async (req, res) => {
     const existing = await db.prepare(`SELECT * FROM ${TABLE} WHERE id = ?`).get(id);
     if (!existing) return res.status(404).json({ message: "Item not found." });
 
-    const section = String(req.body?.section || existing.section || "").trim();
+    const section = normalizeCompanySectionKey(req.body?.section || existing.section);
     if (!isValidCompanySection(section)) return res.status(400).json({ message: "Invalid section." });
 
     const title = String(req.body?.title || "").trim();
