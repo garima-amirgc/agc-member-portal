@@ -9,7 +9,6 @@ import {
   IconMegaphone,
 } from "../components/layout/SidebarIcons";
 
-/** Sidebar / mobile nav group label for company content links. */
 export const COMPANY_CONTENT_NAV_TITLE = "AGC";
 
 export const COMPANY_CONTENT_SECTIONS = Object.freeze([
@@ -103,7 +102,6 @@ export const ABOUT_COMPANY_NAV_ITEMS = COMPANY_CONTENT_SECTIONS.map((section) =>
   icon: section.navIcon || IconBuilding,
 }));
 
-/** Admin tabs — about_forms stored separately from main about page route key. */
 export const COMPANY_CONTENT_ADMIN_SECTIONS = Object.freeze([
   { key: "policy", label: "Company policy", showFile: true, showLink: false, showDescription: true },
   { key: "benefits", label: "Benefits", showFile: true, showLink: false, showDescription: true },

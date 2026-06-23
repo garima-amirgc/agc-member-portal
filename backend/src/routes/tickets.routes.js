@@ -4,6 +4,7 @@ const itTickets = require("../services/itTickets.service");
 const userDeptSvc = require("../services/userDepartments.service");
 const ticketUpload = require("./upload.routes");
 const { ROLES, canonicalRole } = require("../config/constants");
+const { hasAdminGrant, ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 
 const router = express.Router();
 router.use(authRequired);
@@ -27,7 +28,6 @@ router.get("/assigned-to-me", async (req, res) => {
   }
 });
 
-/** Same handler as POST /upload/ticket-attachment — mounted here so the URL matches other /tickets/* API calls. */
 router.post(
   "/attachments/upload",
   ticketUpload.ticketAttachmentUploadSingle,
@@ -46,9 +46,10 @@ router.post("/", async (req, res) => {
 
 router.get("/", async (req, res) => {
   try {
-    const isIT = await userDeptSvc.hasDepartment(req.user.id, "IT");
-    const isAdmin = canonicalRole(req.user.role) === ROLES.ADMIN;
-    if (isIT || isAdmin) {
+    const isFullAdmin = canonicalRole(req.user.role) === ROLES.ADMIN &&
+      (req.user.adminGrants == null || (Array.isArray(req.user.adminGrants) && req.user.adminGrants.length === 0));
+    const hasTicketVisibility = hasAdminGrant(req.user, ADMIN_GRANT_KEYS.IT_TICKETS);
+    if (isFullAdmin || hasTicketVisibility) {
       return res.json(await itTickets.listAllTicketsForIT());
     }
     return res.json(await itTickets.listTicketsForUser(req.user.id));

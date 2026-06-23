@@ -1,7 +1,6 @@
 const path = require("path");
 const fs = require("fs");
 
-/** Backend package root (…/backend), not process.cwd() — avoids a second empty DB when Node starts from the repo root. */
 const backendRoot = path.join(__dirname, "..", "..", "..");
 const envDb = process.env.DB_PATH != null ? String(process.env.DB_PATH).trim() : "";
 const dbPath = envDb
@@ -18,14 +17,10 @@ function persist() {
   fs.writeFileSync(dbPath, Buffer.from(data));
 }
 
-/** sql.js throws if bind() receives undefined; SQLite NULL should be null in JS. */
 function bindParams(params) {
   return params.map((p) => (p === undefined ? null : p));
 }
 
-/**
- * better-sqlite3–compatible sync wrapper over sql.js (no native build).
- */
 function createDbInterface() {
   return {
     prepare(sql) {
@@ -243,6 +238,7 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
     manual_name TEXT,
+    facility TEXT,
     year INTEGER NOT NULL,
     month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
     citation TEXT,
@@ -262,6 +258,7 @@ const SCHEMA = `
     description TEXT,
     link_url TEXT,
     image_url TEXT,
+    facility TEXT,
     published INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_by INTEGER,
@@ -296,6 +293,7 @@ const SCHEMA = `
     description TEXT,
     link_url TEXT,
     image_url TEXT,
+    facility TEXT,
     published INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_by INTEGER,
@@ -310,6 +308,7 @@ const SCHEMA = `
     description TEXT,
     link_url TEXT,
     image_url TEXT,
+    facility TEXT,
     published INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_by INTEGER,
@@ -460,37 +459,29 @@ async function initDb() {
   rawDb.run("PRAGMA foreign_keys = ON");
   rawDb.exec(SCHEMA);
 
-  // Lightweight migrations for existing DB files.
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN profile_image_url TEXT");
   } catch {
-    // column already exists
   }
   try {
     rawDb.exec("ALTER TABLE birthday_list ADD COLUMN company_name TEXT");
   } catch {
-    /* column already exists */
   }
   try {
     rawDb.exec("UPDATE birthday_list SET company_name = 'AGC University' WHERE company_name IS NULL OR TRIM(company_name) = ''");
   } catch {
-    /* ignore */
   }
   try {
     rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN start_at TEXT");
   } catch {
-    // column already exists
   }
   try {
     rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN end_at TEXT");
   } catch {
-    // column already exists
   }
   try {
-    // Avoid CHECK on ALTER — some SQLite/sql.js builds reject it and the column never gets added.
     rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN published INTEGER DEFAULT 1");
   } catch {
-    // column already exists
   }
   try {
     const info = rawDb.exec("PRAGMA table_info(facility_upcoming)");
@@ -507,10 +498,8 @@ async function initDb() {
   try {
     rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN image_url TEXT");
   } catch {
-    /* column already exists */
   }
 
-  // New table (added after some DBs already existed).
   try {
     rawDb.exec(`
       CREATE TABLE IF NOT EXISTS portal_visits (
@@ -552,15 +541,12 @@ async function initDb() {
   try {
     rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN show_from_at TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN event_at TEXT");
   } catch {
-    /* exists */
   }
   try {
-    // Legacy `start_at` was the only date; treat it as the real event time after upgrade.
     rawDb.exec(`
       UPDATE facility_upcoming
       SET event_at = start_at
@@ -573,7 +559,6 @@ async function initDb() {
   try {
     rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN business_units TEXT");
   } catch {
-    /* column already exists */
   }
   try {
     const sel = rawDb.prepare(
@@ -600,77 +585,70 @@ async function initDb() {
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN department TEXT");
   } catch {
-    // column already exists
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN designation TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN invite_token_hash TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN invite_expires_at TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN password_reset_token_hash TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN password_reset_expires_at TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN birth_month INTEGER");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN birth_day INTEGER");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN join_month INTEGER");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN join_day INTEGER");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN join_year INTEGER");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN phone TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN address TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN admin_grants TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN facility_university_only INTEGER NOT NULL DEFAULT 0");
   } catch {
-    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN is_new_hire INTEGER NOT NULL DEFAULT 0");
+  } catch {
+  }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN new_hire_marked_at TEXT");
+  } catch {
   }
 
   try {
@@ -679,6 +657,7 @@ async function initDb() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
         manual_name TEXT,
+        facility TEXT,
         year INTEGER NOT NULL,
         month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
         citation TEXT,
@@ -693,27 +672,26 @@ async function initDb() {
       );
     `);
   } catch {
-    /* ignore */
   }
   try {
     rawDb.exec("ALTER TABLE employee_of_month ADD COLUMN image_url TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE employee_of_month ADD COLUMN manual_name TEXT");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE employee_of_month ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
   } catch {
-    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE employee_of_month ADD COLUMN facility TEXT");
+  } catch {
   }
   try {
     rawDb.exec("UPDATE employee_of_month SET sort_order = id WHERE COALESCE(sort_order, 0) = 0");
   } catch {
-    /* ignore */
   }
   try {
     rawDb.exec(`
@@ -731,7 +709,6 @@ async function initDb() {
       );
     `);
   } catch {
-    /* ignore */
   }
   try {
     rawDb.exec(`
@@ -749,18 +726,27 @@ async function initDb() {
       );
     `);
   } catch {
-    /* ignore */
   }
 
   try {
     rawDb.exec("ALTER TABLE leadership_updates ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
   } catch {
-    /* exists */
   }
   try {
     rawDb.exec("ALTER TABLE new_hires ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
   } catch {
-    /* exists */
+  }
+  try {
+    rawDb.exec("ALTER TABLE leadership_updates ADD COLUMN facility TEXT");
+  } catch {
+  }
+  try {
+    rawDb.exec("ALTER TABLE customer_wins ADD COLUMN facility TEXT");
+  } catch {
+  }
+  try {
+    rawDb.exec("ALTER TABLE community_involvement ADD COLUMN facility TEXT");
+  } catch {
   }
   try {
     rawDb.exec(`
@@ -771,7 +757,6 @@ async function initDb() {
       );
     `);
   } catch {
-    /* ignore */
   }
   try {
     const migrated = rawDb
@@ -783,6 +768,7 @@ async function initDb() {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER,
           manual_name TEXT,
+          facility TEXT,
           year INTEGER NOT NULL,
           month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
           citation TEXT,
@@ -797,9 +783,9 @@ async function initDb() {
       `);
       rawDb.exec(`
         INSERT INTO employee_of_month__multi (
-          id, user_id, manual_name, year, month, citation, image_url, published, created_by, created_at, updated_at
+          id, user_id, manual_name, facility, year, month, citation, image_url, published, created_by, created_at, updated_at
         )
-        SELECT id, user_id, manual_name, year, month, citation, image_url, published, created_by, created_at, updated_at
+        SELECT id, user_id, manual_name, facility, year, month, citation, image_url, published, created_by, created_at, updated_at
         FROM employee_of_month;
       `);
       rawDb.exec("DROP TABLE employee_of_month");
@@ -810,7 +796,6 @@ async function initDb() {
       `);
     }
   } catch {
-    /* ignore */
   }
   try {
     const migrated = rawDb
@@ -822,6 +807,7 @@ async function initDb() {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER,
           manual_name TEXT,
+          facility TEXT,
           year INTEGER NOT NULL,
           month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
           citation TEXT,
@@ -836,9 +822,9 @@ async function initDb() {
       `);
       rawDb.exec(`
         INSERT INTO employee_of_month__manual (
-          id, user_id, manual_name, year, month, citation, image_url, published, created_by, created_at, updated_at
+          id, user_id, manual_name, facility, year, month, citation, image_url, published, created_by, created_at, updated_at
         )
-        SELECT id, user_id, manual_name, year, month, citation, image_url, published, created_by, created_at, updated_at
+        SELECT id, user_id, manual_name, facility, year, month, citation, image_url, published, created_by, created_at, updated_at
         FROM employee_of_month;
       `);
       rawDb.exec("DROP TABLE employee_of_month");
@@ -849,7 +835,6 @@ async function initDb() {
       `);
     }
   } catch {
-    /* ignore */
   }
   try {
     rawDb.exec("UPDATE leadership_updates SET sort_order = id WHERE COALESCE(sort_order, 0) = 0");
@@ -857,7 +842,6 @@ async function initDb() {
     rawDb.exec("UPDATE customer_wins SET sort_order = id WHERE COALESCE(sort_order, 0) = 0");
     rawDb.exec("UPDATE community_involvement SET sort_order = id WHERE COALESCE(sort_order, 0) = 0");
   } catch {
-    /* ignore */
   }
   try {
     rawDb.exec(`
@@ -876,7 +860,6 @@ async function initDb() {
       );
     `);
   } catch {
-    /* ignore */
   }
   try {
     rawDb.exec(`
@@ -895,7 +878,6 @@ async function initDb() {
       );
     `);
   } catch {
-    /* ignore */
   }
   try {
     rawDb.exec(`
@@ -916,10 +898,8 @@ async function initDb() {
       );
     `);
   } catch {
-    /* ignore */
   }
 
-  // Polls/feedback popup tables (safe no-op if already exist).
   try {
     rawDb.exec(`
       CREATE TABLE IF NOT EXISTS polls (
@@ -938,22 +918,18 @@ async function initDb() {
       );
     `);
   } catch {
-    /* ignore */
   }
   try {
     rawDb.exec("ALTER TABLE polls ADD COLUMN start_at TEXT");
   } catch {
-    /* column exists */
   }
   try {
     rawDb.exec("ALTER TABLE polls ADD COLUMN end_at TEXT");
   } catch {
-    /* column exists */
   }
   try {
     rawDb.exec("ALTER TABLE polls ADD COLUMN banner_image_url TEXT");
   } catch {
-    /* column exists */
   }
   try {
     rawDb.exec(`
@@ -969,7 +945,6 @@ async function initDb() {
       );
     `);
   } catch {
-    /* ignore */
   }
 
   rawDb.exec(`
@@ -989,31 +964,26 @@ async function initDb() {
   try {
     rawDb.exec("ALTER TABLE it_tickets ADD COLUMN assignee_id INTEGER REFERENCES users(id)");
   } catch {
-    /* column exists */
   }
 
   try {
     rawDb.exec("ALTER TABLE it_tickets ADD COLUMN attachments TEXT");
   } catch {
-    /* column exists */
   }
 
   try {
     rawDb.exec("ALTER TABLE it_tickets ADD COLUMN closed_at TEXT");
   } catch {
-    /* column exists */
   }
 
   try {
     rawDb.exec("ALTER TABLE it_tickets ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'");
   } catch {
-    /* column exists */
   }
 
   try {
     rawDb.exec("UPDATE it_tickets SET priority = 'medium' WHERE priority IS NULL OR TRIM(priority) = ''");
   } catch {
-    /* ignore */
   }
 
   try {
@@ -1021,25 +991,21 @@ async function initDb() {
       "UPDATE it_tickets SET closed_at = updated_at WHERE status = 'closed' AND (closed_at IS NULL OR TRIM(COALESCE(closed_at, '')) = '')"
     );
   } catch {
-    /* ignore */
   }
 
   try {
     rawDb.exec("UPDATE users SET department = 'Production' WHERE department IS NULL OR TRIM(department) = ''");
   } catch {
-    /* ignore */
   }
 
   try {
     rawDb.exec("ALTER TABLE courses ADD COLUMN resource_category TEXT");
   } catch {
-    /* column already exists */
   }
 
   try {
     rawDb.exec("ALTER TABLE lessons ADD COLUMN video_uploaded_at TEXT");
   } catch {
-    /* column already exists */
   }
   try {
     rawDb.exec(`
@@ -1050,7 +1016,6 @@ async function initDb() {
       WHERE video_uploaded_at IS NULL OR TRIM(COALESCE(video_uploaded_at, '')) = ''
     `);
   } catch {
-    /* ignore */
   }
 
   rawDb.exec(`
@@ -1070,7 +1035,6 @@ async function initDb() {
   try {
     rawDb.exec("ALTER TABLE resource_documents ADD COLUMN file_uploaded_at TEXT");
   } catch {
-    /* column already exists */
   }
   try {
     rawDb.exec(`
@@ -1079,7 +1043,6 @@ async function initDb() {
       WHERE file_uploaded_at IS NULL OR TRIM(COALESCE(file_uploaded_at, '')) = ''
     `);
   } catch {
-    /* ignore */
   }
 
   rawDb.exec(`
@@ -1110,7 +1073,6 @@ async function initDb() {
     );
   `);
 
-  // Admins manage every facility: grant all sites in user_facilities (navigation + legacy URLs).
   rawDb.exec(`
     INSERT OR IGNORE INTO user_facilities(user_id, business_unit)
     SELECT u.id, fac.business_unit
@@ -1124,13 +1086,10 @@ async function initDb() {
     WHERE u.role = 'Admin'
   `);
 
-  // Backfill facilities for existing users created before multi-facility support.
-  // This keeps the rest of the app working even if `user_facilities` was empty.
   rawDb.exec(
     "INSERT OR IGNORE INTO user_facilities(user_id, business_unit) SELECT id, business_unit FROM users"
   );
 
-  // One row per user from legacy users.department → user_departments (skip if already present).
   rawDb.exec(`
     INSERT OR IGNORE INTO user_departments(user_id, department)
     SELECT u.id,
@@ -1167,8 +1126,6 @@ async function initDb() {
     console.error("[db] admin_grants upcoming migration:", e.message || e);
   }
 
-  // Indexes for frequently-filtered foreign-key columns (performance; additive, no schema change).
-  // Placed after all CREATE TABLE/ALTER TABLE statements above so every referenced table/column exists.
   try {
     rawDb.exec(`
       CREATE INDEX IF NOT EXISTS idx_users_manager_id ON users (manager_id);

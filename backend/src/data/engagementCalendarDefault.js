@@ -1,6 +1,3 @@
-/**
- * Seed data for engagement_calendar — keep in sync with frontend/src/data/engagementCalendarDefault.js
- */
 const DEFAULT_YEAR = 2026;
 const DEFAULT_SUBTITLE =
   "Quick reference for the year — events are coordinated by HR/Leadership.";
@@ -93,7 +90,6 @@ function defaultDataJson() {
   return JSON.stringify({ subtitle: DEFAULT_SUBTITLE, months: DEFAULT_MONTHS });
 }
 
-/** Allowed month art keys — keep in sync with frontend ENGAGEMENT_ART_KINDS. */
 const ENGAGEMENT_ART_KINDS = [
   "fireworks",
   "ribbon",
@@ -110,10 +106,6 @@ const ENGAGEMENT_ART_KINDS = [
 ];
 const ENGAGEMENT_ART_KIND_SET = new Set(ENGAGEMENT_ART_KINDS);
 
-/**
- * Ensure 12 months always have valid art, theme strings, and item titles so PUT validation
- * and the admin UI (controlled selects) stay in sync with stored JSON.
- */
 function normalizeEngagementMonths(monthsIn) {
   if (!Array.isArray(monthsIn) || monthsIn.length !== 12) return null;
   const out = [];

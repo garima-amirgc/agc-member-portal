@@ -29,7 +29,6 @@ function isEnabled() {
   return Boolean(microsoftConfig());
 }
 
-/** Public API origin for OAuth redirect (no trailing slash). */
 function apiPublicOrigin(req) {
   const explicit = envCred("API_PUBLIC_URL") || envCred("PUBLIC_API_URL");
   if (explicit) return explicit.replace(/\/+$/, "");

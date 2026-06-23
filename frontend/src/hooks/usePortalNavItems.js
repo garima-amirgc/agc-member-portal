@@ -13,13 +13,9 @@ import {
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { buildAdminNavGroups } from "../constants/adminNavGroups";
 import { ABOUT_COMPANY_NAV_ITEMS } from "../constants/companyContentConfig";
-import { hasAdminGrant } from "../utils/adminAccess";
+import { hasAdminGrant, hasAnyAdminGrant } from "../utils/adminAccess";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../utils/facilityUniversityOnly";
 
-/**
- * Same main/admin nav items and home link target as the sidebar (role-aware).
- * Pass the full `user` object so scoped admins only see administration areas they were granted.
- */
 export function usePortalNavItems(user) {
   const role = user?.role;
   return useMemo(() => {
@@ -41,7 +37,6 @@ export function usePortalNavItems(user) {
     const showAdministrationNav = role === "Admin" || hasScopedGrants;
 
     const main = [];
-    /** Same home route for every role so `/` and upcoming feed behavior stay aligned (DashboardPage). */
     main.push({
       to: "/",
       end: true,
@@ -101,17 +96,15 @@ export function usePortalNavItems(user) {
           group: "hr",
         },
         {
-          to: "/admin/employee-of-month",
+          to: "/admin/company-news",
           icon: IconUsers,
-          label: "Employee of the Month",
-          grantKey: ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH,
-          group: "hr",
-        },
-        {
-          to: "/admin/leadership-updates",
-          icon: IconUsers,
-          label: "Leadership updates",
-          grantKey: ADMIN_GRANT_KEYS.LEADERSHIP_UPDATES,
+          label: "Company News",
+          grantKeys: [
+            ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH,
+            ADMIN_GRANT_KEYS.LEADERSHIP_UPDATES,
+            ADMIN_GRANT_KEYS.CUSTOMER_WINS,
+            ADMIN_GRANT_KEYS.COMMUNITY_INVOLVEMENT,
+          ],
           group: "hr",
         },
         {
@@ -119,13 +112,6 @@ export function usePortalNavItems(user) {
           icon: IconUsers,
           label: "New hires",
           grantKey: ADMIN_GRANT_KEYS.NEW_HIRES,
-          group: "hr",
-        },
-        {
-          to: "/admin/community-involvement",
-          icon: IconUsers,
-          label: "Community involvement",
-          grantKey: ADMIN_GRANT_KEYS.COMMUNITY_INVOLVEMENT,
           group: "hr",
         },
         {
@@ -150,13 +136,6 @@ export function usePortalNavItems(user) {
           label: "Manage upcoming",
           grantKey: ADMIN_GRANT_KEYS.UPCOMING_EVENTS,
           group: "social",
-        },
-        {
-          to: "/admin/customer-wins",
-          icon: IconUsers,
-          label: "Customer wins",
-          grantKey: ADMIN_GRANT_KEYS.CUSTOMER_WINS,
-          group: "sales",
         },
         {
           to: "/users",
@@ -193,8 +172,9 @@ export function usePortalNavItems(user) {
         },
       ];
       for (const item of candidates) {
-        if (hasAdminGrant(user, item.grantKey)) {
-          const { grantKey: _k, ...nav } = item;
+        const allowed = item.grantKeys ? hasAnyAdminGrant(user, item.grantKeys) : hasAdminGrant(user, item.grantKey);
+        if (allowed) {
+          const { grantKey: _k, grantKeys: _ks, ...nav } = item;
           admin.push(nav);
         }
       }

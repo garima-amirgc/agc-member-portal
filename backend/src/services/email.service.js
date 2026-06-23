@@ -1,15 +1,11 @@
 const nodemailer = require("nodemailer");
 
-/** Display name in email subjects, footers, and plain-text signatures. */
 const APP_MAIL_BRAND = "AGC Member Portal";
 
-/** Bump when invite/reset HTML changes (helps verify production deploy). */
 const EMAIL_TEMPLATE_VERSION = "20260605-email-v8";
 
-/** Header bar behind the logo in HTML emails. */
 const EMAIL_HEADER_BG = "#0B3EAF";
 
-/** Friendly “From” name shown in inbox lists. */
 const EMAIL_FROM_NAME = String(process.env.EMAIL_FROM_NAME || "AGC Member Portal").trim();
 
 function escapeHtml(s) {
@@ -21,7 +17,6 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-/** Public URL to a logo image (https). Prefer EMAIL_LOGO_URL, then DO Spaces branding asset, then static site. */
 function getEmailLogoUrl() {
   const explicit = String(process.env.EMAIL_LOGO_URL || "").trim();
   if (explicit) return explicit;
@@ -136,7 +131,6 @@ function getTransporter() {
       tls: {
         rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== "false",
       },
-      /** Microsoft 365 / some hosts need explicit STARTTLS on port 587. Set SMTP_REQUIRE_TLS=true if sends fail. */
       ...(process.env.SMTP_REQUIRE_TLS === "true" ? { requireTLS: true } : {}),
       ...(process.env.SMTP_DEBUG === "1" || process.env.SMTP_DEBUG === "true" ? { debug: true } : {}),
     });
@@ -144,15 +138,10 @@ function getTransporter() {
   return transporter;
 }
 
-/** Reset pool (e.g. after .env change in tests). */
 function resetTransporter() {
   transporter = null;
 }
 
-/**
- * Send email via SMTP (Microsoft 365 / Outlook when using smtp.office365.com + app password or allowed account).
- * @returns {Promise<{ sent?: boolean, skipped?: boolean }>}
- */
 async function sendMail({ to, subject, text, html }) {
   const t = getTransporter();
   if (!t) {
@@ -176,7 +165,6 @@ async function sendMail({ to, subject, text, html }) {
   return { sent: true, messageId: info.messageId };
 }
 
-/** Log SMTP readiness at startup (Render / production debugging). */
 async function verifySmtpConnection() {
   const t = getTransporter();
   if (!t) {
@@ -194,9 +182,6 @@ async function verifySmtpConnection() {
   }
 }
 
-/**
- * Notify manager in Outlook / corporate email when a direct report completes a course.
- */
 async function sendManagerCourseCompletionEmail({
   managerEmail,
   managerName,
@@ -393,9 +378,6 @@ async function sendITTicketCreatedEmail({
   return sendMail({ to, subject, text, html });
 }
 
-/**
- * Notify assignee and requester when an open ticket is updated.
- */
 async function sendITTicketUpdatedEmail({
   to,
   recipientName,
@@ -488,9 +470,6 @@ async function sendITTicketUpdatedEmail({
   return sendMail({ to, subject, text, html });
 }
 
-/**
- * Notify the ticket creator when their ticket is marked completed.
- */
 async function sendITTicketResolvedEmail({
   to,
   creatorName,
@@ -541,9 +520,6 @@ async function sendITTicketResolvedEmail({
   return sendMail({ to, subject, text, html });
 }
 
-/**
- * Invite link for first-time password setup (admin-created users).
- */
 async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
   if (!to) return { skipped: true, reason: "Missing recipient email address." };
   const subject = `Set up your ${APP_MAIL_BRAND} account`;
@@ -593,10 +569,6 @@ async function sendAccountInviteEmail({ to, name, setupUrl, validDays }) {
   return out;
 }
 
-/**
- * Invite email with explicit success/error for admin create / resend flows.
- * @returns {Promise<{ email_sent: boolean, email_error?: string }>}
- */
 async function deliverAccountInviteEmail({ to, name, setupUrl, validDays }) {
   if (!to) {
     return { email_sent: false, email_error: "Missing recipient email address." };
@@ -618,9 +590,6 @@ async function deliverAccountInviteEmail({ to, name, setupUrl, validDays }) {
   }
 }
 
-/**
- * Password reset for accounts that already completed invite setup.
- */
 async function sendPasswordResetEmail({ to, name, resetUrl, validMinutes }) {
   if (!to) {
     return { email_sent: false, email_error: "Missing recipient email address." };

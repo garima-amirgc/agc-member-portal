@@ -1,4 +1,3 @@
-/** Administration sidebar sub-groups (display order). */
 export const ADMIN_NAV_GROUPS = Object.freeze([
   { key: "hr", label: "HR" },
   { key: "social", label: "Social Committee" },

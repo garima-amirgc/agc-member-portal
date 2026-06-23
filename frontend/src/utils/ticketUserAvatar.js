@@ -1,9 +1,5 @@
 import { resolvePublicMediaUrl } from "./mediaUrl";
 
-/**
- * Profile photo for the user who submitted a ticket.
- * Uses API join data; if missing and this is the current user's ticket, uses fresh /users/me avatar.
- */
 export function ticketRequesterPhotoUrl(ticket, currentUser) {
   if (!ticket) return "";
   const fromApi = ticket.user_profile_image_url ?? ticket.userProfileImageUrl ?? "";

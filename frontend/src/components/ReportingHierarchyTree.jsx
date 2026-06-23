@@ -1,7 +1,6 @@
 import { Fragment, useMemo } from "react";
 import ProgressBar from "./ProgressBar";
 
-/** Drop leading Admins when a Manager (or you) still remains — line manager stays visually on top. */
 function chainForDisplay(chain) {
   const c = Array.isArray(chain) ? [...chain] : [];
   while (c.length > 2 && c[0]?.role === "Admin") {
@@ -73,7 +72,6 @@ function VerticalConnector({ tall }) {
   );
 }
 
-/** One direct report column: person on the shared row; their own reports hang below only them. */
 function DirectReportColumn({ person, teamMember }) {
   const subs = Array.isArray(person.direct_reports) ? person.direct_reports : [];
   return (
@@ -121,9 +119,6 @@ function DirectReportsRow({ reports, supervisorName, teamById }) {
   );
 }
 
-/**
- * People above you (vertical), then you, then every direct report on one shared row (siblings).
- */
 export default function ReportingHierarchyTree({ hierarchy, currentUserId, team = [], selfTraining = null }) {
   const rawChain = Array.isArray(hierarchy?.chain) ? hierarchy.chain : [];
   const chain = useMemo(() => chainForDisplay(rawChain), [rawChain]);

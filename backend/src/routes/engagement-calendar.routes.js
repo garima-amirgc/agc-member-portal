@@ -54,7 +54,6 @@ function validatePayload(body) {
   return { year, data: { subtitle, months } };
 }
 
-/** Public (authenticated) calendar — latest year row. */
 router.get("/", authRequired, async (req, res) => {
   try {
     let row;
@@ -89,7 +88,6 @@ router.get("/", authRequired, async (req, res) => {
   }
 });
 
-/** Replace calendar for a year (admin). */
 router.put("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.ENGAGEMENT_CALENDAR), async (req, res) => {
   const v = validatePayload(req.body);
   if (v.error) return res.status(400).json({ message: v.error });

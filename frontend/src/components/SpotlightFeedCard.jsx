@@ -11,7 +11,7 @@ import {
   SpotlightFeedReadMoreLink,
   SPOTLIGHT_FEED_CARD_MIN_H,
 } from "./SpotlightFeedCardParts";
-import { formatSpotlightFeedDate, spotlightFeedNeedsReadMore, SPOTLIGHT_FEED_HOME_DESC_MIN_H, SPOTLIGHT_FEED_HOME_LINE_CLAMP } from "../utils/spotlightFeedDisplay";
+import { formatSpotlightFeedDate, spotlightFeedNeedsReadMore, SPOTLIGHT_FEED_HOME_DESC_MIN_H } from "../utils/spotlightFeedDisplay";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 import { useSpotlightCarousel } from "../hooks/useSpotlightCarousel";
 import SpotlightCardSlider from "./SpotlightCardSlider";
@@ -50,8 +50,9 @@ function CompactCardShell({ feed, children, starClassName, ...pauseProps }) {
   return (
     <div
       {...pauseProps}
-      className={`card relative overflow-hidden border-[#0B3EAF]/15 bg-gradient-to-br from-[#eef3ff] via-white to-[#f4fbe8] dark:border-[#A7D344]/20 dark:from-[#0B3EAF]/10 dark:via-slate-900/40 dark:to-[#A7D344]/10 ${SPOTLIGHT_FEED_CARD_MIN_H} flex flex-col`}
+      className={`card group relative overflow-hidden rounded-2xl border-[#0B3EAF]/12 bg-gradient-to-br from-[#eef3ff] via-white to-[#f4fbe8] transition duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-[#A7D344]/20 dark:from-[#0B3EAF]/10 dark:via-slate-900/40 dark:to-[#A7D344]/10 ${SPOTLIGHT_FEED_CARD_MIN_H} flex flex-col`}
     >
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0B3EAF] to-[#A7D344]" aria-hidden />
       {showStar ? (
         <EmployeeOfMonthBackgroundStar
           className={
@@ -125,7 +126,10 @@ function CompactSlideBody({ feed, entry, stableLayout = false }) {
             <p className="line-clamp-2 min-h-[3rem] text-base font-bold text-slate-900 dark:text-white">{title}</p>
           </div>
         </div>
-        <p className={`${SPOTLIGHT_FEED_HOME_LINE_CLAMP} ${SPOTLIGHT_FEED_HOME_DESC_MIN_H} text-sm leading-relaxed text-slate-700 dark:text-slate-300`}>
+        <p
+          className={`${SPOTLIGHT_FEED_HOME_DESC_MIN_H} overflow-hidden text-sm leading-relaxed text-slate-700 dark:text-slate-300`}
+          style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}
+        >
           {description || "\u00A0"}
         </p>
       </>

@@ -57,7 +57,6 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  /** If an admin updates this account’s grants, refetch when the user comes back to the tab (avoids stale nav / access). */
   useEffect(() => {
     let debounce = null;
     let tabWasHidden = false;
@@ -102,7 +101,6 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  /** After invite flow: persist token + user without going through login. */
   const establishSession = (payload) => {
     if (!payload?.token || !payload?.user) return;
     localStorage.setItem("token", payload.token);

@@ -1,9 +1,5 @@
 import { torontoTodayYmd, ymdInToronto } from "./torontoDate";
 
-/**
- * Split merged upcoming feed into “today” vs “later” lists for home / facility sidebars.
- * Uses America/Toronto for “today”. Events dated today appear only in `todayEvents`.
- */
 export function splitUpcomingForHome(upcoming) {
   const todayYmd = torontoTodayYmd();
   if (!Array.isArray(upcoming) || upcoming.length === 0) {

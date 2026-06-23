@@ -40,7 +40,6 @@ const router = express.Router();
 
 const PASSWORD_RESET_MINUTES = Math.min(24 * 60, Math.max(15, Number(process.env.PASSWORD_RESET_MINUTES || 60)));
 
-/** On local dev, return the setup/reset URL in the JSON so you can test without inbox delivery. */
 function recoverAccessDevExtrasEnabled() {
   if (process.env.RECOVER_ACCESS_DEV_LINKS === "1") return true;
   if (process.env.RENDER || process.env.NODE_ENV === "production") return false;
@@ -121,7 +120,6 @@ router.post("/login", async (req, res) => {
   return res.json(session);
 });
 
-/** Whether Microsoft SSO is configured on the API (for login UI). */
 router.get("/microsoft/status", (_req, res) => {
   res.json({
     enabled: msAuth.isEnabled(),
@@ -129,7 +127,6 @@ router.get("/microsoft/status", (_req, res) => {
   });
 });
 
-/** Start Microsoft Entra ID sign-in (redirects to Microsoft). */
 router.get("/microsoft", (req, res) => {
   if (!msAuth.isEnabled()) {
     return res.redirect(msAuth.frontendLoginUrl("sso_error=Microsoft+SSO+is+not+configured+on+the+server."));
@@ -140,7 +137,6 @@ router.get("/microsoft", (req, res) => {
   return res.redirect(msAuth.buildAuthorizeUrl(req, { state, remember }));
 });
 
-/** OAuth callback — exchange code, match portal user, issue JWT, redirect to SPA. */
 router.get("/microsoft/callback", async (req, res) => {
   const clearStateCookie = `ms_sso_state=; ${msAuth.cookieOpts(req, 0)}`;
   try {
@@ -209,10 +205,6 @@ router.get("/microsoft/callback", async (req, res) => {
   }
 });
 
-/**
- * Public: request invite email again (pending/expired invite) or password reset email (active accounts).
- * Always returns the same message to avoid email enumeration.
- */
 router.post("/recover-access", async (req, res) => {
   const email = String(req.body?.email || "").trim();
   if (!email) return res.status(400).json({ message: "Email is required." });
@@ -288,7 +280,6 @@ router.post("/recover-access", async (req, res) => {
   }
 });
 
-/** Public: validate password reset token before showing the form. */
 router.get("/reset-password-status", async (req, res) => {
   const raw = String(req.query.token || "").trim();
   if (!raw) return res.status(400).json({ valid: false, message: "Token required" });
@@ -305,7 +296,6 @@ router.get("/reset-password-status", async (req, res) => {
   return res.json({ valid: true, email: inviteSvc.maskEmail(row.email) });
 });
 
-/** Public: set new password after forgot-password email. */
 router.post("/reset-password", async (req, res) => {
   try {
     const raw = String(req.body?.token || "").trim();
@@ -352,7 +342,6 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
-/** Public: check invite token before showing set-password form. */
 router.get("/invite-status", async (req, res) => {
   const raw = String(req.query.token || "").trim();
   if (!raw) return res.status(400).json({ valid: false, message: "Token required" });
@@ -367,7 +356,6 @@ router.get("/invite-status", async (req, res) => {
   return res.json({ valid: true, email: inviteSvc.maskEmail(row.email) });
 });
 
-/** Public: first-time password after admin invite. */
 router.post("/complete-invite", async (req, res) => {
   try {
     const raw = String(req.body?.token || "").trim();

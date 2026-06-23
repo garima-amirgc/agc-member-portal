@@ -71,38 +71,40 @@ export default function SpotlightFeedDetailPage({ feed }) {
           <p className="text-sm text-slate-600 dark:text-slate-400">This entry could not be found.</p>
         </div>
       ) : (
-        <EmployeeOfMonthCardShell showBackgroundStar={feed.showBackgroundStar !== false} className="p-5 sm:p-6">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-            {img ? (
-              <div className="mx-auto h-32 w-32 shrink-0 overflow-hidden rounded-2xl bg-white shadow-md ring-2 ring-[#A7D344]/60 sm:mx-0">
-                <img src={img} alt="" className="h-full w-full object-cover" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <EmployeeOfMonthCardShell showBackgroundStar={feed.showBackgroundStar !== false} className="p-5 sm:p-6">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+              {img ? (
+                <div className="mx-auto h-32 w-32 shrink-0 overflow-hidden rounded-2xl bg-white shadow-md ring-2 ring-[#A7D344]/60 sm:mx-0">
+                  <img src={img} alt="" className="h-full w-full object-cover" />
+                </div>
+              ) : null}
+              <div className="min-w-0 flex-1 text-left">
+                {dateLabel ? (
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#0B3EAF] dark:text-[#A7D344]">
+                    {dateLabel}
+                  </p>
+                ) : null}
+                <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
+                {description ? (
+                  <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                    {description}
+                  </p>
+                ) : null}
+                {linkUrl ? (
+                  <a
+                    href={linkUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-flex text-sm font-semibold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF]"
+                  >
+                    Visit link
+                  </a>
+                ) : null}
               </div>
-            ) : null}
-            <div className="min-w-0 flex-1 text-left">
-              {dateLabel ? (
-                <p className="text-xs font-bold uppercase tracking-wide text-[#0B3EAF] dark:text-[#A7D344]">
-                  {dateLabel}
-                </p>
-              ) : null}
-              <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
-              {description ? (
-                <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-                  {description}
-                </p>
-              ) : null}
-              {linkUrl ? (
-                <a
-                  href={linkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-4 inline-flex text-sm font-semibold text-[#0B3EAF] underline decoration-[#A7D344] decoration-2 underline-offset-2 hover:text-[#082d82] dark:text-[#A7D344] dark:decoration-[#0B3EAF]"
-                >
-                  Visit link
-                </a>
-              ) : null}
             </div>
-          </div>
-        </EmployeeOfMonthCardShell>
+          </EmployeeOfMonthCardShell>
+        </div>
       )}
     </main>
   );

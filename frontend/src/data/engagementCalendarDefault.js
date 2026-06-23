@@ -1,4 +1,3 @@
-/** Default engagement calendar (fallback when API unavailable). Keep in sync with backend seed. */
 export const DEFAULT_CALENDAR_YEAR = 2026;
 
 export const DEFAULT_CALENDAR_SUBTITLE =
@@ -103,7 +102,6 @@ export const DEFAULT_CALENDAR_MONTHS = [
   },
 ];
 
-/** Align loaded/partial month objects with what the API expects (matches backend normalizeEngagementMonths). */
 export function normalizeEngagementMonths(monthsIn) {
   if (!Array.isArray(monthsIn) || monthsIn.length !== 12) return null;
   const out = [];

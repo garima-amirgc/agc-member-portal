@@ -1,16 +1,9 @@
-/**
- * Leave APIs use fetch + multiple URL candidates so we still work if:
- * - An old Node process is bound to :5000 without leave routes (restart fixes it)
- * - baseURL / proxy / IPv4 vs IPv6 mismatch
- */
-
 import api from "./api";
 
 function unique(list) {
   return [...new Set(list.filter(Boolean))];
 }
 
-/** Ordered list of full URLs to try for one logical leave endpoint (path like "/auth/leave-request"). */
 export function leaveRequestUrls(path) {
   const p = path.startsWith("/") ? path : `/${path}`;
   const env = typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL?.trim();
@@ -49,10 +42,6 @@ async function tryFetch(url, init) {
   return res;
 }
 
-/**
- * @param {string} path - e.g. "/auth/leave-request"
- * @param {RequestInit} init
- */
 export async function leaveFetch(path, init = {}) {
   const token = localStorage.getItem("token");
   const headers = new Headers(init.headers || {});
@@ -103,17 +92,12 @@ export async function leaveJson(path, init = {}) {
     }
     const err = new Error(msg);
     err.status = res.status;
-    // Never attach raw HTML / parse fallback to data — UI often reads data.message first.
     err.data = { message: msg };
     throw err;
   }
   return data;
 }
 
-/**
- * Manager team payload: tries /auth/... first (same as leave), then /users/manager/team-overview
- * for older backends that only mounted the users router.
- */
 export async function managerTeamJson() {
   const paths = ["/auth/manager-team-overview", "/users/manager/team-overview"];
   let lastErr = null;
@@ -128,7 +112,6 @@ export async function managerTeamJson() {
   throw lastErr || new Error("Could not load team overview.");
 }
 
-/** Team page: direct reports + current user training (skips leave inbox). */
 export async function managerTeamWithSelfJson() {
   const paths = ["/auth/manager-team-overview", "/users/manager/team-overview"];
   let lastErr = null;
@@ -180,7 +163,6 @@ async function teamFallback(inboxArr) {
         const { data } = await api.get(p);
         if (Array.isArray(data)) return data;
       } catch {
-        /* try next */
       }
     }
     return null;
@@ -199,10 +181,6 @@ async function teamFallback(inboxArr) {
   }
 }
 
-/**
- * Loads manager inbox + team in one payload. Uses axios first (same as /users/me) so Windows
- * localhost/IPv4 matches the rest of the app; then fetch fallbacks.
- */
 export async function managerInboxWithTeamJson() {
   try {
     const { data } = await api.get("/auth/manager-leave-inbox");
@@ -210,7 +188,6 @@ export async function managerInboxWithTeamJson() {
     if (n.kind === "bundle") return { inbox: n.inbox, team: n.team, teamError: "" };
     if (n.kind === "legacy") return teamFallback(n.inbox);
   } catch {
-    /* try next */
   }
 
   try {
@@ -219,7 +196,6 @@ export async function managerInboxWithTeamJson() {
     if (n.kind === "bundle") return { inbox: n.inbox, team: n.team, teamError: "" };
     if (n.kind === "legacy") return teamFallback(n.inbox);
   } catch {
-    /* try fetch */
   }
 
   try {

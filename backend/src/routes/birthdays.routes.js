@@ -78,7 +78,6 @@ async function loadProfileAnniversaryCandidates() {
   return candidates;
 }
 
-/** Celebrations from user profiles — popups use today; dashboard sidebar uses upcoming within `days`. */
 router.get("/feed", authRequired, async (req, res) => {
   const rangeDays = parseRangeDays(req.query?.days, 14);
   const todayParts = portalTodayParts();

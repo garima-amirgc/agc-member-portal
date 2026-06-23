@@ -2,10 +2,6 @@ const leaveSvc = require("../services/leaveRequests.service");
 const managerTeamSvc = require("../services/managerTeam.service");
 const { hasDirectReports } = require("../services/supervisor.service");
 
-/**
- * Supervisor leave inbox always returns { leave_inbox, team_overview } so the UI can load both
- * without a second route (avoids 404 when team-only paths are missing on the running server).
- */
 async function managerLeaveInboxWithTeam(req, res) {
   if (!(await hasDirectReports(req.user.id))) return res.status(403).json({ message: "Forbidden" });
   try {

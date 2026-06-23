@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 export const SPOTLIGHT_AUTO_ROTATE_MS = 6000;
-export const SPOTLIGHT_COMPACT_SLIDE_HEIGHT = "h-[12.25rem]";
+export const SPOTLIGHT_COMPACT_SLIDE_HEIGHT = "h-[13rem]";
 
 export function useSpotlightCarousel(itemCount, resetKeys = []) {
   const [activeIndex, setActiveIndex] = useState(0);

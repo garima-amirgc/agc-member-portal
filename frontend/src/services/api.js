@@ -1,9 +1,5 @@
 import axios from "axios";
 
-/**
- * Loopback API for local dev.
- * Use `localhost` here because this environment can reach `localhost:*` but not `127.0.0.1:*` reliably.
- */
 const LOOPBACK_API = "http://localhost:5000";
 
 const DEV_LIKE_PORTS = new Set([
@@ -19,15 +15,7 @@ const DEV_LIKE_PORTS = new Set([
   "4321",
 ]);
 
-/**
- * - `VITE_API_URL`: set when API is on another host (build time).
- * - Browser on a local dev port (Vite, preview, Live Server, etc.): use loopback API on :5000.
- * - `import.meta.env.DEV`: same.
- * - Otherwise same-origin `/api` (reverse proxy).
- */
 function resolveApiBaseURL() {
-  // In local dev, always prefer the local backend.
-  // This avoids surprises from stale `localStorage.AG C_API_URL` pointing at Render.
   if (import.meta.env.DEV) {
     return LOOPBACK_API;
   }
@@ -39,7 +27,6 @@ function resolveApiBaseURL() {
       if (typeof window !== "undefined" && /^https?:\/\//i.test(u)) {
         try {
           if (new URL(u).origin === window.location.origin) {
-            /* Mis-set to the SPA origin — ignore so Render sibling / env can apply */
           } else {
             return u;
           }
@@ -51,7 +38,6 @@ function resolveApiBaseURL() {
       }
     }
   } catch {
-    /* ignore */
   }
 
   const raw = import.meta.env.VITE_API_URL;
@@ -62,13 +48,11 @@ function resolveApiBaseURL() {
   if (typeof window !== "undefined") {
     const { hostname, port } = window.location;
 
-    /** Render: static site is often `name-web.onrender.com` and the API is `name.onrender.com`. */
     const renderSibling = /^(.+)-web\.onrender\.com$/i.exec(hostname);
     if (renderSibling) {
       return `https://${renderSibling[1]}.onrender.com`;
     }
 
-    /** Custom SPA domain when VITE_API_URL was not baked into the build. */
     if (hostname === "memberportal.amirgc.com") {
       return "https://agc-member-portal.onrender.com";
     }
@@ -85,7 +69,6 @@ function resolveApiBaseURL() {
   return "/api";
 }
 
-/** HTTPS page must not call http:// API (mixed content — browser blocks). */
 function ensureHttpsIfPageSecure(url) {
   const u = String(url || "").trim();
   if (typeof window === "undefined" || window.location.protocol !== "https:") return u;
@@ -95,29 +78,18 @@ function ensureHttpsIfPageSecure(url) {
   return u;
 }
 
-/** Current API base (re-resolve; prefer this over the snapshot `apiBaseURL` for URLs at runtime). */
 export function getApiBaseURL() {
   return ensureHttpsIfPageSecure(resolveApiBaseURL());
 }
 
 export const apiBaseURL = resolveApiBaseURL();
 
-/**
- * POST path for IT ticket file uploads. Must match how `baseURL` is resolved:
- * - `baseURL === "/api"` → axios joins to `/api/tickets/attachments/upload` (Vite proxies `/api`).
- * - `baseURL` is an absolute URL (e.g. `http://127.0.0.1:5000` or a mis-set `http://localhost:5173`) →
- *   use `/api/tickets/...` so the request hits the Express `/api` mount (or Vite proxy), not `/tickets` on the dev server.
- */
 export function ticketAttachmentsUploadPath() {
   const b = String(getApiBaseURL() || "");
   if (b === "/api") return "/tickets/attachments/upload";
   return "/api/tickets/attachments/upload";
 }
 
-/**
- * Admin user invite resend. Same rule as ticket uploads: with absolute `baseURL`, path must include `/api`
- * so the request hits Express (not the Vite dev server if `baseURL` was mis-set to the app origin).
- */
 export function usersResendInvitePath(userId) {
   const id = encodeURIComponent(String(userId));
   const b = String(getApiBaseURL() || "");
@@ -125,11 +97,6 @@ export function usersResendInvitePath(userId) {
   return `/api/users/${id}/resend-invite`;
 }
 
-/**
- * Same URL axios uses for `api.put(\`/users/${id}\`, ...)` — for fetch() with a raw JSON body.
- * - Absolute API base (e.g. http://127.0.0.1:5000): /users/:id on that host.
- * - Relative /api: page origin + /api/users/:id
- */
 export function resolveUserPutUrl(userId) {
   const id = encodeURIComponent(String(userId));
   const base = String(getApiBaseURL() || "").replace(/\/+$/, "");
@@ -143,23 +110,12 @@ export function resolveUserPutUrl(userId) {
   return `${origin}/api/users/${id}`;
 }
 
-/**
- * PUT /users/:id — use the shared axios instance so baseURL, auth, and HTTPS/loopback rules match GET /users.
- * (A prior fetch-based path could hit a different resolved URL than list/load in some environments.)
- */
 export async function putUserSave(userId, body) {
   const id = encodeURIComponent(String(userId));
   const { data } = await api.put(`/users/${id}`, body);
   return { data };
 }
 
-/**
- * Resend invite — same networking rules as `postItTicketAttachment`:
- * when the SPA and API are same-origin (or base is relative `/api`), POST via the page origin + `/api/users/...`
- * so Vite’s proxy is used. When API is cross-origin (e.g. page on localhost:5173, API on 127.0.0.1:5000),
- * POST to the configured base with `/api/users/...`.
- */
-/** Public auth routes (forgot password, reset, invite) — reliable across SPA proxy and cross-origin API. */
 export function authPublicPath(subpath) {
   const p = String(subpath || "").replace(/^\//, "");
   const b = String(getApiBaseURL() || "");
@@ -174,7 +130,6 @@ export async function postRecoverAccess(email) {
   const cfg = { timeout: 90000 };
   if (typeof window !== "undefined") {
     const pageOrigin = window.location.origin;
-    // Vite dev: always POST via the page origin so `/api` proxies to the backend on :5000.
     if (import.meta.env.DEV) {
       const { data } = await api.post(path, body, { ...cfg, baseURL: pageOrigin });
       return data;
@@ -221,11 +176,6 @@ export async function postUsersResendInvite(userId) {
   return data;
 }
 
-/**
- * POST multipart for IT ticket attachments. Uses the **page origin** + `/api/...` whenever the API is
- * same-origin or relative, so Vite’s `/api` proxy is always used in dev (avoids 404 on `/tickets` hitting the dev server).
- * If `apiBaseURL` points at a different host (cross-origin API), posts directly to that base instead.
- */
 export async function postItTicketAttachment(fd) {
   const cfg = { timeout: 120000 };
   if (typeof window !== "undefined") {
@@ -253,7 +203,6 @@ export async function postItTicketAttachment(fd) {
 
 const api = axios.create({
   baseURL: "",
-  /** Render free tier cold starts can exceed 15s; admin DELETE etc. need headroom */
   timeout: 90000,
 });
 
@@ -271,7 +220,6 @@ api.interceptors.response.use(
     const status = err.response?.status;
     const reqPath = cfg?.url || "";
 
-    // If leave/manager/resources APIs 404 (wrong origin / proxy / IPv6), retry once against IPv4 loopback :5000.
     const isLeaveCall =
       /leave-request|my-leave-requests|manager-leave-inbox|manager-leave-requests|manager-team-overview|manager\/team-overview|manager\/leave-inbox/.test(
         reqPath

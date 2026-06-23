@@ -18,7 +18,7 @@ Follow these rules:
 - Do not leave unnecessary console.log statements.
 - Do not hardcode values that should be config or environment variables.
 - Keep API calls inside existing service/helper files if the project has them.
-- Add comments only when the logic is not obvious.
+- Do not add comments in code. Only add a comment if it is truly required to explain non-obvious logic, and keep it as short as possible (one short line, not a paragraph).
 
 Before finishing:
 1. Check for syntax errors.

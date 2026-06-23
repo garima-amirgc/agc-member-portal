@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { PAGE_GUTTER_X } from "../../constants/pageLayout";
 import { COMPANY_CONTENT_NAV_TITLE } from "../../constants/companyContentConfig";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
+import { useMyOpenTicketCount } from "../../hooks/useMyOpenTicketCount";
 import { TopBarAdminGroupDropdown } from "./AdminNavGroupDropdown";
 import { resolvePublicMediaUrl } from "../../utils/mediaUrl";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
@@ -24,9 +25,10 @@ function greetingForHour(h) {
   return "Good evening";
 }
 
-function TopBarNavLink({ item, onNavigate }) {
+function TopBarNavLink({ item, onNavigate, badge }) {
   const Icon = item.icon;
   const sub = item.desc?.trim();
+  const showBadge = Number(badge) > 0;
   return (
     <NavLink
       to={item.to}
@@ -46,7 +48,14 @@ function TopBarNavLink({ item, onNavigate }) {
         aria-hidden
       />
       <span className="min-w-0">
-        <span className="block font-semibold leading-tight">{item.label}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="block font-semibold leading-tight">{item.label}</span>
+          {showBadge ? (
+            <span className="inline-flex h-4 min-w-[1rem] shrink-0 items-center justify-center rounded-full bg-[#E02B20] px-1 text-[10px] font-bold leading-none text-white">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          ) : null}
+        </span>
         {sub ? (
           <span className="mt-0.5 block text-xs text-[#5c5f66] dark:text-white/70">{sub}</span>
         ) : null}
@@ -59,6 +68,7 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { mainItems, adminGroups, aboutCompanyItems } = usePortalNavItems(user);
+  const ticketBadgeCount = useMyOpenTicketCount(user);
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -92,9 +102,7 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
     <header
       className={`sticky top-0 z-30 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white/95 py-3.5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-[#0f0f0f]/95 ${PAGE_GUTTER_X}`}
     >
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-lg font-bold leading-tight text-slate-900 sm:text-xl dark:text-white">{greeting}</p>
-      </div>
+      <div className="min-w-0 flex-1"></div>
 
       <div className="flex shrink-0 items-center gap-3">
         <div className="hidden text-right sm:block">
@@ -146,6 +154,7 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
                       key={item.to + (item.end ? "-e" : "")}
                       item={item}
                       onNavigate={closeMenu}
+                      badge={item.to === "/it-tickets" ? ticketBadgeCount : 0}
                     />
                   ))}
                 </div>

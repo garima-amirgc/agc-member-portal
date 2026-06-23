@@ -10,7 +10,6 @@ import { friendlyErrorMessage } from "../services/friendlyError";
 
 const isDev = import.meta.env.DEV;
 
-/** Shared focus ring for accent inputs */
 const inputWrapFocus = "focus-within:ring-2 focus-within:ring-brand-blue/25 dark:focus-within:ring-brand-green/20";
 
 export default function LoginPage() {
@@ -111,7 +110,6 @@ export default function LoginPage() {
   return (
     <div className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-gradient-to-br from-[#eef2fb] via-[#f4f6fb] to-[#e2e8f3] dark:from-[#0a0a0a] dark:via-[#0c0c0c] dark:to-[#111111] lg:h-[100dvh] lg:overflow-x-hidden">
       <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-1 flex-col justify-center gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-5 md:px-8 lg:min-h-0 lg:flex-row lg:items-center lg:justify-center lg:gap-0 lg:px-8 lg:py-2 xl:px-10">
-        {/* Brand panel */}
         <section
           className="agc-login-hero relative isolate z-0 order-1 flex w-full min-w-0 flex-col gap-4 overflow-hidden rounded-2xl px-6 py-6 pb-28 shadow-[0_20px_60px_rgba(11,62,175,0.35)] sm:gap-5 sm:rounded-3xl sm:px-8 sm:py-7 sm:pb-32 md:px-10 md:py-8 lg:order-none lg:w-[min(100%,520px)] lg:flex-shrink-0 lg:rounded-3xl lg:py-8 lg:pb-8"
           aria-labelledby="login-brand-heading"
@@ -183,7 +181,6 @@ export default function LoginPage() {
           </div>
         </section>
 
-        {/* Login card */}
         <div className="relative z-10 order-2 w-full min-w-0 max-w-full lg:order-none lg:-ml-10 lg:max-w-[min(100%,440px)] lg:flex-shrink-0 xl:-ml-16 xl:max-w-[460px]">
           <div className="mb-4 rounded-2xl border border-black/[0.06] bg-white/90 px-5 py-4 shadow-[0_4px_24px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:border-stone-700/80 dark:bg-[#141414]/95 dark:shadow-[0_24px_60px_rgba(0,0,0,0.45)] sm:mb-5 sm:px-6 sm:py-5 lg:hidden">
             <h2 className="font-sans text-lg font-bold text-brand-black dark:text-white sm:text-xl">Sign in</h2>

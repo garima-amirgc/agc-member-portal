@@ -1,13 +1,8 @@
 import axios from "axios";
 import { getApiBaseURL } from "./api";
 
-/**
- * Convert API / network errors into a user-friendly message.
- * Keep it safe (no sensitive details) and actionable.
- */
 export function friendlyErrorMessage(err, fallback = "Something went wrong.") {
   try {
-    // Non-Axios / unknown error
     if (!axios.isAxiosError(err)) {
       if (err && typeof err === "object" && "message" in err && typeof err.message === "string") return err.message;
       return fallback;
@@ -17,7 +12,6 @@ export function friendlyErrorMessage(err, fallback = "Something went wrong.") {
     const data = err.response?.data || {};
     const code = data?.code;
 
-    // Network / CORS / offline / DNS
     if (!err.response) {
       return `Cannot reach server at ${getApiBaseURL()}. Please check your connection and try again.`;
     }

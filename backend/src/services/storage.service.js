@@ -7,27 +7,18 @@ const uploadBase = path.resolve(
   String(process.env.UPLOAD_DIR || "uploads").replace(/^\.\/+/, "")
 );
 
-/** Local disk: URL path served by Express `/uploads`. */
 const getPublicVideoUrl = (filename) => `/uploads/${filename}`;
 
-/** Resource documents stored under `uploads/docs/` when not using object storage. */
 const getPublicDocumentUrl = (filename) => `/uploads/docs/${filename}`;
 
-/** Upcoming event images under `uploads/upcoming/` when not using object storage. */
 const getPublicUpcomingImageUrl = (filename) => `/uploads/upcoming/${filename}`;
 
-/** Poll banner images under `uploads/polls/` when not using object storage. */
 const getPublicPollBannerUrl = (filename) => `/uploads/polls/${filename}`;
 
-/** IT ticket attachments under `uploads/tickets/` when not using object storage. */
 const getPublicTicketAttachmentUrl = (filename) => `/uploads/tickets/${filename}`;
 
 const resolveStoragePath = (filename) => path.join(uploadBase, filename);
 
-/**
- * If `storedUrl` is a same-server `/uploads/...` path, return the absolute file path if it exists.
- * Used to stream documents stored on local disk.
- */
 function resolveLocalUploadFileUrl(storedUrl) {
   const s = String(storedUrl || "").trim();
   const prefix = "/uploads/";

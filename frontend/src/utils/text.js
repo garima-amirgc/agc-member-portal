@@ -1,8 +1,3 @@
-/**
- * Trims to at most `maxWords` words; appends "..." when truncated.
- * @param {string | null | undefined} text
- * @param {number} [maxWords]
- */
 export function truncateWords(text, maxWords = 200) {
   if (text == null || typeof text !== "string") return "";
   const s = text.trim();

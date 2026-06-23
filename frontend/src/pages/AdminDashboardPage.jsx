@@ -10,22 +10,19 @@ const EMPTY_COURSE = { title: "", description: "", business_unit: "AGC", resourc
 const EMPTY_DOC = { business_unit: "AGC", category: "finance", title: "" };
 const EMPTY_REPORT = { business_unit: "AGC", title: "", link_url: "", description: "" };
 
-/** Videos and documents. Upcoming → /admin/upcoming. */
 export default function AdminDashboardPage() {
-  const [active, setActive] = useState("videos"); // videos | documents | reports
+  const [active, setActive] = useState("videos");
   const [courses, setCourses] = useState([]);
   const [resourceDocuments, setResourceDocuments] = useState([]);
   const [courseForm, setCourseForm] = useState(EMPTY_COURSE);
   const [creatingCourse, setCreatingCourse] = useState(false);
   const createCourseVideoRef = useRef(null);
-  /** Inline edit: one course at a time */
   const [courseEdit, setCourseEdit] = useState(null);
   const [savingCourse, setSavingCourse] = useState(false);
   const [uploadingCourseId, setUploadingCourseId] = useState(null);
   const [docForm, setDocForm] = useState(EMPTY_DOC);
   const docFileRef = useRef(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
-  /** Inline edit: one document at a time */
   const [docEdit, setDocEdit] = useState(null);
   const docEditFileRef = useRef(null);
   const [savingDocEdit, setSavingDocEdit] = useState(false);
@@ -737,7 +734,6 @@ export default function AdminDashboardPage() {
                             });
                           }
                         } catch {
-                          /* ignore */
                         }
                       }
                       return (

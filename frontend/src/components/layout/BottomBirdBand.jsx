@@ -1,7 +1,3 @@
-/**
- * Global decorative band above the footer.
- * Birds sit bottom-right inside this band (no overlap with content).
- */
 export default function BottomBirdBand() {
   return (
     <div className="relative w-full">

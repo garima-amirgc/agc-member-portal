@@ -7,18 +7,15 @@ export const CATEGORIES = [
   { key: "it", label: "IT" },
 ];
 
-/** @param {string} facilityCode uppercase e.g. AGC */
 export function storageKey(userId, categoryKey, facilityCode) {
   const f = facilityCode || "AGC";
   return `resources_progress_v2:${userId || "anon"}:${f}:${categoryKey}`;
 }
 
-/** No placeholder rows — only LMS/API content is shown (see mergeLmsResourceItems). */
 export function seedItems(_categoryKey) {
   return { videos: [], docs: [] };
 }
 
-/** Merge LMS items from the API (videos + documents uploaded in admin). */
 export function mergeLmsResourceItems(seedBlock, lmsVideos, lmsDocs) {
   const extraV = Array.isArray(lmsVideos) ? lmsVideos : [];
   const extraD = Array.isArray(lmsDocs) ? lmsDocs : [];

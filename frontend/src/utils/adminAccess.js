@@ -13,10 +13,6 @@ export function isAdministrator(user) {
   return roleIsAdministrator(user?.role);
 }
 
-/**
- * Full administrator: Admin role and no scoped list stored (`admin_grants` null/undefined).
- * Empty array counts as “no scoped list” (matches API + avoids stale localStorage breaking saves).
- */
 export function isFullAdmin(user) {
   if (!user || !roleIsAdministrator(user.role)) return false;
   const g = user.admin_grants;
@@ -25,20 +21,11 @@ export function isFullAdmin(user) {
   return false;
 }
 
-/**
- * Same gate as the API for changing others’ `admin_grants` (full administrators only).
- * Prefer inferring from role + `admin_grants` so stale `is_full_admin: false` in localStorage
- * cannot block saves; still honor explicit `is_full_admin: true` from the server.
- */
 export function canManageAdminGrants(user) {
   if (!user) return false;
   return isFullAdmin(user) || user.is_full_admin === true;
 }
 
-/**
- * Super admin (`Admin` + no stored list) has every area; granular keys only show when explicitly granted.
- * Legacy DB key `upcoming` maps to facility upcoming events only (not spotlight feeds).
- */
 export function hasAdminGrant(user, grantKey) {
   if (!user || !grantKey) return false;
   const isAdminRole = roleIsAdministrator(user.role);

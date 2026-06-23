@@ -8,7 +8,6 @@ import { useResourceProgress } from "../hooks/useResourceProgress";
 import api, { getApiBaseURL } from "../services/api";
 import { CATEGORIES, computeProgress, mergeLmsResourceItems, seedItems } from "../utils/resourcesContent";
 
-/** PDF / images / plain text: load through authenticated API stream (same bucket as videos). */
 function shouldUseAuthStream(fileUrl) {
   const p = String(fileUrl || "").split("?")[0].toLowerCase();
   if (p.endsWith(".pdf")) return true;
@@ -47,7 +46,7 @@ export default function ResourceDocumentPage() {
   const [loading, setLoading] = useState(true);
 
   const [viewSrc, setViewSrc] = useState(null);
-  const [viewMode, setViewMode] = useState("idle"); // idle | loading | iframe | img | text | empty
+  const [viewMode, setViewMode] = useState("idle");
   const [textContent, setTextContent] = useState(null);
 
   const progressId = doc ? `doc-${doc.id}` : null;

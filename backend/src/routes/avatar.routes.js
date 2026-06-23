@@ -29,7 +29,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_, file, cb) => {
     const allowed = [".png", ".jpg", ".jpeg", ".webp"];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -41,7 +41,6 @@ function removeTempFile(localPath) {
   try {
     if (localPath && fs.existsSync(localPath)) fs.unlinkSync(localPath);
   } catch {
-    /* ignore */
   }
 }
 

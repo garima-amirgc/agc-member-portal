@@ -3,10 +3,6 @@ function initials(name = "") {
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
 }
 
-/**
- * Public Spaces origin for org-chart headshots. Override with `VITE_ORG_CHART_ASSETS_BASE` (no trailing slash).
- * Matches the project's default bucket when env is not set, so photos still load in local dev.
- */
 const DEFAULT_ORG_CHART_ASSETS_BASE = "https://agc-university-resources.tor1.digitaloceanspaces.com";
 
 function orgChartAssetUrl(relativeKey) {
@@ -18,9 +14,6 @@ function orgChartAssetUrl(relativeKey) {
 
 const LINE = "bg-slate-400 dark:bg-slate-500";
 
-/**
- * @param {{ name: string; title: string; photoSrc?: string; compact?: boolean }} props
- */
 function OrgPersonNode({ name, title, photoSrc, compact }) {
   const ini = initials(name);
   return (
@@ -102,26 +95,22 @@ function HBar({ className = "", dashed = false }) {
   return <div className={[`h-px shrink-0 ${LINE}`, className].filter(Boolean).join(" ")} aria-hidden />;
 }
 
-// Top executive row: CFO — CEO — Director of Operations (peers, CEO in the middle).
 const TOP = [
   { name: "Sherry Aziz", title: "Chief Finance Officer", photoSrc: "/sherry-aziz.png" },
   { name: "Tony Aziz", title: "Chief Executive Officer", photoSrc: orgChartAssetUrl("org-chart/tony-aziz.png") },
   { name: "Adam Aziz", title: "Director of Operations", photoSrc: orgChartAssetUrl("org-chart/adam-aziz.png") },
 ];
 
-// Reports to Tony Aziz at the ASP facility (solid line).
 const TONY_REPORTS = [
   { name: "Montasser Abdelkodouss", title: "Senior Specialist QA", photoSrc: orgChartAssetUrl("org-chart/montasser-abdelkodouss.png") },
   { name: "Richard Wark", title: "Production Manager", photoSrc: orgChartAssetUrl("org-chart/richard-wark.png") },
   { name: "Tallib Deen", title: "Maintenance Manager", photoSrc: orgChartAssetUrl("org-chart/tallib-deen.png") },
 ];
 
-// Reports to Adam Aziz (solid line).
 const ADAM_REPORTS = [
   { name: "Martin Thangaraj", title: "Group Maintenance Manager - AGC", photoSrc: orgChartAssetUrl("org-chart/martin-thangaraj.png") },
 ];
 
-// Indirect / matrix relationship — dotted line, not a direct-report line.
 const DOTTED_LINK = { from: "Tallib Deen", to: "Martin Thangaraj" };
 
 export default function AspFacilityOrgChart() {
@@ -131,13 +120,7 @@ export default function AspFacilityOrgChart() {
         <h2 className="text-sm font-bold text-slate-900 dark:text-white">ASP organization</h2>
       </div>
 
-      {/*
-        Mobile (<sm): a horizontal tree with connector lines gets ambiguous once boxes wrap onto
-        separate lines, so phones get an explicit indented "reports to" list instead. Tablet/desktop
-        keep the connector-line tree below.
-      */}
       <div className="block rounded-xl border border-slate-200/80 bg-slate-50/90 p-3 sm:hidden dark:border-slate-700 dark:bg-slate-900/40">
-        {/* Sherry, Tony, and Adam are peers — shown together at the top as one leadership group. */}
         <div className="mb-2 rounded-lg border border-dashed border-slate-300 p-2 dark:border-slate-600">
           <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Leadership (peers)
@@ -149,7 +132,6 @@ export default function AspFacilityOrgChart() {
           </div>
         </div>
 
-        {/* Tony Aziz's direct reports. */}
         <div className="ml-2 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
           <div className="flex flex-col items-stretch gap-1.5">
             {TONY_REPORTS.map((p) => (
@@ -166,7 +148,6 @@ export default function AspFacilityOrgChart() {
           </div>
         </div>
 
-        {/* Adam Aziz's direct report. */}
         <div className="ml-2 mt-3 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
           <div className="flex flex-col items-stretch gap-1.5">
             {ADAM_REPORTS.map((p) => (
@@ -190,11 +171,6 @@ export default function AspFacilityOrgChart() {
           "overflow-x-auto",
         ].join(" ")}
       >
-        {/*
-          Top row: same 3-column grid as the rows below, so Tony Aziz (middle column) lines up
-          exactly with the trunk line and Richard Wark underneath, regardless of how wide each
-          name/title pill renders. Using flex here let text-width differences nudge Tony off-center.
-        */}
         <div className="mx-auto grid w-full max-w-4xl grid-cols-3 items-start justify-center gap-x-6 sm:gap-x-10">
           {TOP.map((p) => (
             <div key={p.name} className="flex flex-col items-center">
@@ -207,22 +183,12 @@ export default function AspFacilityOrgChart() {
           <HBar className="h-px w-full" />
         </div>
 
-        {/*
-          Mid row: Adam Aziz's sole report (Martin Thangaraj) sits in the same column as Tallib Deen
-          below, so the dashed matrix line between them is a single straight dashed bar — not an
-          ambiguous floating caption. Tony Aziz's trunk passes through the center column.
-        */}
         <div className="mx-auto grid w-full max-w-4xl grid-cols-3 items-start justify-center gap-x-6 sm:gap-x-10">
           <div aria-hidden />
           <div className="flex flex-col items-center" aria-hidden>
             <VBar className="h-[52px]" />
           </div>
           <div className="flex flex-col items-center">
-            {/*
-              Adam's stub VBar touches the peer bar above, then a dedicated short branch bar marks
-              this as Adam's own branch point (not a continuation of the shared peer line) before
-              dropping to Martin Thangaraj — the same trunk-branch-leaf grammar used for Tony's branch.
-            */}
             <VBar className="h-3" />
             <HBar className="h-px w-10" />
             <VBar className="h-3" />
@@ -235,7 +201,6 @@ export default function AspFacilityOrgChart() {
           <HBar className="h-px w-full" />
         </div>
 
-        {/* Bottom: Tony Aziz's three ASP reports on a shared spine. Tallib Deen's dashed line continues up to Martin Thangaraj. */}
         <div className="mx-auto grid w-full max-w-4xl grid-cols-3 items-start justify-center gap-x-6 sm:gap-x-10">
           {TONY_REPORTS.map((p) => (
             <div key={p.name} className="flex flex-col items-center">

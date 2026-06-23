@@ -1,6 +1,5 @@
 const { db, isPostgres } = require("../config/db");
 
-/** Rolling window for the home dashboard “top visitors” leaderboard. */
 const PORTAL_VISIT_WINDOW_DAYS = 7;
 
 async function recordPortalVisit(userId) {
@@ -15,7 +14,6 @@ async function recordPortalVisit(userId) {
     await db.prepare("INSERT INTO portal_visit_log (user_id, visited_at) VALUES (?, ?)").run(uid, visitedAt);
   }
 
-  // Keep legacy aggregate row in sync (optional; leaderboard uses portal_visit_log).
   try {
     if (isPostgres) {
       await db
@@ -39,7 +37,6 @@ async function recordPortalVisit(userId) {
         .run(visitedAt, uid);
     }
   } catch {
-    /* portal_visits table may be missing on very old DBs */
   }
 
   return { ok: true };

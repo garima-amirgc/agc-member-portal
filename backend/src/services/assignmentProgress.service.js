@@ -1,11 +1,6 @@
 const { db } = require("../config/db");
 const { syncUserAssignmentsForFacilities } = require("./assignmentSync.service");
 
-/**
- * Recalculate assignment progress from lesson_completions.
- * @param {number} assignmentId
- * @returns {Promise<{ progress: number, status: string, courseJustCompleted: boolean }>}
- */
 async function recalculateAssignmentProgress(assignmentId) {
   const assignment = await db.prepare("SELECT * FROM assignments WHERE id = ?").get(assignmentId);
   if (!assignment) {
@@ -48,11 +43,6 @@ async function recalculateAssignmentProgress(assignmentId) {
   };
 }
 
-/**
- * When a resource video (lesson) is marked complete, mirror it on the user's course assignment.
- * @param {number} userId
- * @param {number} lessonId
- */
 async function syncAssignmentFromResourceLesson(userId, lessonId) {
   await syncUserAssignmentsForFacilities(userId);
 

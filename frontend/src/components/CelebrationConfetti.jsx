@@ -2,7 +2,6 @@ import { useMemo } from "react";
 
 const COLORS = ["#0B3EAF", "#A7D344", "#E02B20", "#FFB900", "#ff6b9d", "#4ecdc4", "#fff"];
 
-/** Lightweight CSS confetti — no external GIF required. */
 export default function CelebrationConfetti({ active = true, density = 48 }) {
   const pieces = useMemo(() => {
     return Array.from({ length: density }, (_, i) => ({

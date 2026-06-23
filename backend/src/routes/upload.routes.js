@@ -62,7 +62,6 @@ const uploadImage = multer({
   },
 });
 
-/** IT ticket attachments: images + common documents (any signed-in user). */
 const ticketAttachmentUpload = multer({
   storage,
   limits: { fileSize: (Number(process.env.IT_TICKET_UPLOAD_MAX_MB) || 15) * 1024 * 1024 },
@@ -104,7 +103,6 @@ function removeTempFile(localPath) {
   try {
     if (localPath && fs.existsSync(localPath)) fs.unlinkSync(localPath);
   } catch {
-    /* ignore */
   }
 }
 
@@ -265,7 +263,6 @@ router.post(
         try {
           fs.unlinkSync(localPath);
         } catch {
-          /* ignore */
         }
       }
       return res.json({
@@ -317,7 +314,6 @@ async function handleTicketAttachmentUpload(req, res) {
       try {
         fs.unlinkSync(localPath);
       } catch {
-        /* ignore */
       }
     }
     return res.json({
@@ -379,7 +375,6 @@ router.post(
         try {
           fs.unlinkSync(localPath);
         } catch {
-          /* ignore */
         }
       }
       return res.json({
@@ -434,7 +429,6 @@ router.post(
         try {
           fs.unlinkSync(localPath);
         } catch {
-          /* ignore */
         }
       }
       return res.json({

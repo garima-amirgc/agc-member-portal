@@ -7,10 +7,6 @@ function isActiveTicket(t) {
   return t && t.status !== "closed";
 }
 
-/**
- * Single banner when the user has open IT tickets assigned to them (IT staff)
- * or open tickets they submitted. Hidden when everything is completed.
- */
 export default function DashboardAssignmentNotice({ user }) {
   const [assignedToMeCount, setAssignedToMeCount] = useState(0);
   const [myOpenCount, setMyOpenCount] = useState(0);

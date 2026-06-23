@@ -1,8 +1,3 @@
-/**
- * Join dates for work anniversaries must be set explicitly on the Profile page.
- * Do not infer them from account created_at.
- */
-
 function createdAtParts(iso) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -23,10 +18,6 @@ function createdAtParts(iso) {
   };
 }
 
-/**
- * Remove join dates that were auto-copied from created_at (legacy backfill).
- * @param {object} db
- */
 async function clearBackfilledJoinDates(db) {
   const stats = { cleared: 0 };
 
@@ -52,7 +43,6 @@ async function clearBackfilledJoinDates(db) {
   return stats;
 }
 
-/** @deprecated Join dates are no longer backfilled from created_at. */
 async function backfillProfileCelebrationDates() {
   return { join_from_created: 0 };
 }

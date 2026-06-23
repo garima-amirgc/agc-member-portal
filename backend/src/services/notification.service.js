@@ -58,12 +58,6 @@ const notifyManagerCourseCompletion = async ({ managerId, employeeId, courseId, 
     });
 };
 
-/**
- * When an employee finishes every facility-scoped assignment, notify them and their manager once
- * per completion cycle (new assignments reset the milestone).
- * @param {number} employeeId
- * @returns {Promise<{ notified: boolean, allComplete: boolean }>}
- */
 async function maybeNotifyAllTrainingComplete(employeeId) {
   const summary = await getTrainingSummary(employeeId);
   if (!summary.allComplete) {

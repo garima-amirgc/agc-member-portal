@@ -3,9 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { postAuthLandingPath } from "../utils/facilityUniversityOnly";
 
-/**
- * Completes Microsoft SSO after API redirect (token in query string, then stripped from URL).
- */
 export default function SsoCallbackPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -25,7 +22,6 @@ export default function SsoCallbackPage() {
       try {
         localStorage.setItem("agc_remember_me", "1");
       } catch {
-        /* ignore */
       }
     }
 

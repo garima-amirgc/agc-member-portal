@@ -3,6 +3,7 @@ const { db } = require("../config/db");
 const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
+const { BUSINESS_UNITS } = require("../config/constants");
 
 const router = express.Router();
 
@@ -30,6 +31,7 @@ const SELECT_WITH_USER = `
     e.id,
     e.user_id,
     e.manual_name,
+    e.facility,
     e.year,
     e.month,
     e.citation,
@@ -56,10 +58,13 @@ function shapeRow(row) {
   const manualName = row.manual_name != null ? String(row.manual_name).trim() : "";
   const linkedName = row.employee_name != null ? String(row.employee_name).trim() : "";
   const displayName = manualName || linkedName;
+  const facility = row.facility != null ? String(row.facility).trim() : "";
+  const linkedBusinessUnit = row.user_id ? String(row.employee_business_unit || "").trim() : "";
   return {
     id: row.id,
     user_id: row.user_id,
     manual_name: manualName,
+    facility: facility || linkedBusinessUnit,
     is_manual: !row.user_id && !!manualName,
     year,
     month,
@@ -77,7 +82,7 @@ function shapeRow(row) {
       email: row.user_id ? row.employee_email : "",
       designation: row.user_id ? row.employee_designation : "",
       department: row.user_id ? row.employee_department : "",
-      business_unit: row.user_id ? row.employee_business_unit : "",
+      business_unit: facility || linkedBusinessUnit,
       profile_image_url: row.user_id ? row.employee_profile_image_url : "",
     },
   };
@@ -100,6 +105,16 @@ function parseYearMonth(body) {
     return { error: "Month must be between 1 and 12." };
   }
   return { year, month };
+}
+
+function parseFacility(body) {
+  if (body?.facility === null || body?.facility === "") return null;
+  if (body?.facility == null) return undefined;
+  const value = String(body.facility).trim().toUpperCase();
+  if (!BUSINESS_UNITS.includes(value)) {
+    return { error: "Please select a valid facility." };
+  }
+  return { value };
 }
 
 function parseEmployee(body) {
@@ -195,7 +210,6 @@ async function moveEmployeeOfMonthEntry(id, direction) {
   await db.prepare(`UPDATE ${TABLE} SET sort_order = ?, updated_at = ? WHERE id = ?`).run(aOrder, now, b.id);
 }
 
-/** Current calendar month if published, otherwise latest published month on or before today. */
 async function resolveFeaturedPeriod() {
   const now = new Date();
   const year = now.getFullYear();
@@ -236,11 +250,11 @@ async function resolveFeaturedPeriod() {
   return { year: Number(row.year), month: Number(row.month) };
 }
 
-/** Home page: all published winners for the featured month (slider when more than one). */
 router.get("/current", authRequired, async (_req, res) => {
   try {
-    const period = await resolveFeaturedPeriod();
-    if (!period) return res.json([]);
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
 
     const rows = await db
       .prepare(
@@ -248,7 +262,7 @@ router.get("/current", authRequired, async (_req, res) => {
          WHERE e.published = 1 AND e.year = ? AND e.month = ?
          ORDER BY e.sort_order ASC, e.id ASC`
       )
-      .all(period.year, period.month);
+      .all(year, month);
 
     return res.json(rows.map(shapeRow).filter((row) => row?.employee?.name));
   } catch (e) {
@@ -257,29 +271,21 @@ router.get("/current", authRequired, async (_req, res) => {
   }
 });
 
-/** Past winners only — excludes the month currently featured on the home page. */
 router.get("/history", authRequired, async (_req, res) => {
   try {
-    const period = await resolveFeaturedPeriod();
-    let rows;
-    if (period) {
-      rows = await db
-        .prepare(
-          `${SELECT_WITH_USER}
-           WHERE e.published = 1
-             AND NOT (e.year = ? AND e.month = ?)
-           ORDER BY e.year DESC, e.month DESC, e.sort_order ASC, e.id DESC`
-        )
-        .all(period.year, period.month);
-    } else {
-      rows = await db
-        .prepare(
-          `${SELECT_WITH_USER}
-           WHERE e.published = 1
-           ORDER BY e.year DESC, e.month DESC, e.sort_order ASC, e.id DESC`
-        )
-        .all();
-    }
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    const rows = await db
+      .prepare(
+        `${SELECT_WITH_USER}
+         WHERE e.published = 1
+           AND NOT (e.year = ? AND e.month = ?)
+         ORDER BY e.year DESC, e.month DESC, e.sort_order ASC, e.id DESC`
+      )
+      .all(year, month);
+
     return res.json(rows.map(shapeRow).filter((row) => row?.employee?.name));
   } catch (e) {
     console.error("[employee-of-month] history:", e);
@@ -315,6 +321,19 @@ router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MON
   }
 });
 
+router.get("/:id", authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "Invalid id." });
+    const row = await db.prepare(`${SELECT_WITH_USER} WHERE e.id = ? AND e.published = 1`).get(id);
+    if (!row) return res.status(404).json({ message: "Entry not found." });
+    return res.json(shapeRow(row));
+  } catch (e) {
+    console.error("[employee-of-month] get-by-id:", e);
+    return res.status(500).json({ message: "Could not load entry." });
+  }
+});
+
 router.post("/:id/move", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH), async (req, res) => {
   try {
     await moveEmployeeOfMonthEntry(req.params.id, req.body?.direction);
@@ -334,6 +353,9 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MO
 
     const ym = parseYearMonth(req.body);
     if (ym.error) return res.status(400).json({ message: ym.error });
+
+    const facility = parseFacility(req.body);
+    if (facility?.error) return res.status(400).json({ message: facility.error });
 
     if (employee.user_id) {
       const user = await db.prepare("SELECT id FROM users WHERE id = ?").get(employee.user_id);
@@ -358,12 +380,13 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_MO
 
     const result = await db
       .prepare(
-        `INSERT INTO ${TABLE} (user_id, manual_name, year, month, citation, image_url, published, sort_order, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO ${TABLE} (user_id, manual_name, facility, year, month, citation, image_url, published, sort_order, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         employee.user_id,
         employee.manual_name,
+        facility?.value ?? null,
         ym.year,
         ym.month,
         citation || null,
@@ -399,6 +422,9 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_
     const ym = parseYearMonth(req.body);
     if (ym.error) return res.status(400).json({ message: ym.error });
 
+    const facility = parseFacility(req.body);
+    if (facility?.error) return res.status(400).json({ message: facility.error });
+
     if (employee.user_id) {
       const user = await db.prepare("SELECT id FROM users WHERE id = ?").get(employee.user_id);
       if (!user) return res.status(400).json({ message: "Selected employee was not found." });
@@ -421,16 +447,18 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.EMPLOYEE_OF_
     const now = new Date().toISOString();
 
     const nextImageUrl = imageUrl !== undefined ? imageUrl : existing.image_url;
+    const nextFacility = facility !== undefined ? facility?.value ?? null : existing.facility;
 
     await db
       .prepare(
         `UPDATE employee_of_month
-         SET user_id = ?, manual_name = ?, year = ?, month = ?, citation = ?, image_url = ?, published = ?, updated_at = ?
+         SET user_id = ?, manual_name = ?, facility = ?, year = ?, month = ?, citation = ?, image_url = ?, published = ?, updated_at = ?
          WHERE id = ?`
       )
       .run(
         employee.user_id,
         employee.manual_name,
+        nextFacility || null,
         ym.year,
         ym.month,
         citation || null,

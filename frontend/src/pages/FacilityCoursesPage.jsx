@@ -6,7 +6,6 @@ import { PAGE_PADDING, PAGE_SHELL } from "../constants/pageLayout";
 import OrgChart from "../components/OrgChart";
 import AqmPoultryFlashcards from "../components/AqmPoultryFlashcards";
 
-/** Rounded-stroke icons (outline style). */
 function ResourceCategoryIcon({ name }) {
   const cls = "h-7 w-7";
   const stroke = { strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" };
@@ -119,7 +118,7 @@ export default function FacilityCoursesPage() {
   const facilityNorm = (facility || "").toUpperCase();
 
   const [me, setMe] = useState(null);
-  const [activeTab, setActiveTab] = useState("resources"); // resources | org
+  const [activeTab, setActiveTab] = useState("resources");
   const [resourceCounts, setResourceCounts] = useState({});
   const [resourceCountsLoading, setResourceCountsLoading] = useState(true);
 
@@ -130,7 +129,6 @@ export default function FacilityCoursesPage() {
     })();
   }, []);
 
-  /** Opening or switching facility always lands on Resources (AGC, AQM, SCF, ASP). */
   useEffect(() => {
     setActiveTab("resources");
   }, [facilityNorm]);
@@ -193,7 +191,6 @@ export default function FacilityCoursesPage() {
       try {
         sessionStorage.setItem("agc_portal_last_facility", facilityNorm);
       } catch {
-        /* ignore */
       }
     }
   }, [facilityNorm]);
@@ -274,7 +271,6 @@ export default function FacilityCoursesPage() {
             Organization
           </button>
 
-          {/* Baseline under tabs; active tab overlaps it (no line between active tab and panel). */}
           <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-px bg-slate-200 dark:bg-slate-700" />
         </div>
 

@@ -21,7 +21,7 @@ export function SpotlightSlidePagination({
 }) {
   if (count <= 1) return null;
   return (
-    <div className="mt-3 flex flex-col items-center gap-2">
+    <div className="mt-5 flex flex-col items-center gap-2">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {activeIndex + 1} of {count}
       </p>
@@ -112,11 +112,17 @@ export default function SpotlightCardSlider({
         ) : null}
 
         <div
-          className={`overflow-hidden ${compact && hasMultiple ? SPOTLIGHT_COMPACT_SLIDE_HEIGHT : ""}`}
+          className={`relative overflow-hidden ${compact && hasMultiple ? SPOTLIGHT_COMPACT_SLIDE_HEIGHT : ""}`}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
           <div key={slideKey ?? safeIndex}>{children}</div>
+          {compact && hasMultiple ? (
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-white to-transparent dark:from-slate-900"
+              aria-hidden
+            />
+          ) : null}
         </div>
       </div>
 

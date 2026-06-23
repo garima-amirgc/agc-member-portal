@@ -1,12 +1,6 @@
 import { compareYmd, ymdInToronto } from "./torontoDate";
 import { monthWindow, ymd } from "./calendarDate";
 
-/**
- * Social / facility upcoming feed (`facility_upcoming`).
- * Highlights only the scheduled event day (`event_at`). `show_from_at` / `end_at` control
- * portal listing visibility and must not span calendar highlights.
- * @param {unknown[]} events
- */
 export function buildUpcomingEventRanges(events) {
   const out = [];
   for (const ev of Array.isArray(events) ? events : []) {
@@ -29,10 +23,6 @@ export function buildUpcomingEventRanges(events) {
   return out;
 }
 
-/**
- * Company calendar page events (`calendar_events` — holidays, activities).
- * @param {unknown[]} events
- */
 export function buildCalendarEventRanges(events) {
   const out = [];
   for (const ev of Array.isArray(events) ? events : []) {
@@ -64,7 +54,6 @@ function spansYmd(range, dayYmd) {
   return range.startYmd <= dayYmd && range.endYmd >= dayYmd;
 }
 
-/** @returns {'single' | 'start' | 'middle' | 'end'} */
 export function rangeRoleForDay(range, dayYmd) {
   if (range.startYmd === range.endYmd) return "single";
   if (dayYmd === range.startYmd) return "start";
@@ -72,14 +61,8 @@ export function rangeRoleForDay(range, dayYmd) {
   return "middle";
 }
 
-/**
- * @param {ReturnType<typeof buildUpcomingEventRanges>} ranges
- * @param {number} year
- * @param {number} month0
- */
 export function buildMonthDayMap(ranges, year, month0) {
   const win = monthWindow(year, month0);
-  /** @type {Map<string, ReturnType<typeof buildUpcomingEventRanges>>} */
   const map = new Map();
 
   for (let day = 1; day <= win.daysInMonth; day += 1) {

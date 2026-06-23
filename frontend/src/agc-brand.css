@@ -1,7 +1,3 @@
-/**
- * AGC Member Portal — brand palette (always applied):
- * #0B3EAF blue · #A7D344 green · #E02B20 red · #000000 black · #ffffff white
- */
 :root {
   --agc-blue: #0b3eaf;
   --agc-blue-hover: #082d82;
@@ -44,7 +40,6 @@ html.dark .agc-app-shell > .agc-main-column {
   background: #0a0a0a !important;
 }
 
-/* Sidebar — #0B3EAF (light & dark) */
 .agc-sidebar-shell {
   width: var(--agc-sidebar-width) !important;
   min-width: var(--agc-sidebar-width);
@@ -61,7 +56,6 @@ html.dark .agc-sidebar-shell {
   box-shadow: none !important;
 }
 
-/* Active row: lime chip on blue sidebar */
 .agc-sidebar-shell .agc-nav-active {
   background-color: var(--agc-green) !important;
   color: var(--agc-black) !important;
@@ -82,10 +76,6 @@ html.dark .agc-sidebar-shell .agc-nav-active svg {
   color: var(--agc-black) !important;
 }
 
-/**
- * Sidebar nav scrollbar — light track, blue thumb, end caps + arrow buttons (WebKit/Blink).
- * Reference: slim pill track (#f0f0f0), thumb #4a76d4, small black triangles.
- */
 .agc-sidebar-nav-scroll,
 .overflow-y-auto,
 .overflow-auto {
@@ -157,14 +147,12 @@ html.dark .agc-sidebar-shell .agc-nav-active svg {
 
 footer.agc-footer-reserved {
   margin-top: auto;
-  /* Transparent so the birds don't sit on a white/gray block. */
   background-color: transparent !important;
 }
 
 footer.agc-footer-reserved .agc-footer-reserved-bar {
   height: 3px;
   width: 100%;
-  /* Brand red #E02B20 with subtle light/dark variation */
   background: linear-gradient(90deg, #f04a41 0%, #e02b20 50%, #c4241a 100%);
 }
 

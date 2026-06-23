@@ -24,7 +24,6 @@ export function invalidateBirthdaysFeedCache() {
   inflight = null;
 }
 
-/** Shared birthdays feed fetch — dedupes concurrent calls and caches briefly. */
 export async function fetchBirthdaysFeed(days = 14) {
   const key = cacheKey(days);
   if (cache && cache.key === key && Date.now() - cache.at < TTL_MS) {

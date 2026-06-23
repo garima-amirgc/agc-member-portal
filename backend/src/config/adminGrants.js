@@ -1,9 +1,7 @@
 const { ROLES, canonicalRole } = require("./constants");
 
-/** Keys for scoped administration areas (stored in users.admin_grants as JSON array). */
 const ADMIN_GRANT_KEYS = Object.freeze({
   ENGAGEMENT_CALENDAR: "engagement_calendar",
-  /** @deprecated Stored on older accounts — treated as {@link ADMIN_GRANT_KEYS.UPCOMING_EVENTS} only. */
   UPCOMING: "upcoming",
   UPCOMING_EVENTS: "upcoming_events",
   EMPLOYEE_OF_MONTH: "employee_of_month",
@@ -17,6 +15,7 @@ const ADMIN_GRANT_KEYS = Object.freeze({
   SYSTEM: "system",
   FEEDBACK_POLLS: "feedback_polls",
   COMPANY_CONTENT: "company_content",
+  IT_TICKETS: "it_tickets",
 });
 
 const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
@@ -66,7 +65,6 @@ function _sanitizeGrantKeys(arr) {
   return out;
 }
 
-/** Full administrator: Admin role and no scoped list (DB null / full access). */
 function isFullAdminUser(reqUser) {
   if (!reqUser) return false;
   const role = canonicalRole(reqUser.role);
@@ -82,7 +80,6 @@ function _grantList(reqUser) {
   return Array.isArray(g) ? g : [];
 }
 
-/** Super-admin (Admin + no list) has every area; granular keys only show when explicitly granted. */
 function hasAdminGrant(reqUser, grantKey) {
   if (!reqUser || !grantKey) return false;
   const role = canonicalRole(reqUser.role);
@@ -113,10 +110,6 @@ function hasAnyAdminGrant(reqUser, grantKeys) {
   return grantKeys.some((k) => hasAdminGrant(reqUser, k));
 }
 
-/**
- * Normalize grant keys on save: legacy `upcoming` becomes `upcoming_events`.
- * @param {string[]} keys
- */
 function normalizeGrantKeysForSave(keys) {
   const out = [];
   const seen = new Set();
@@ -131,12 +124,6 @@ function normalizeGrantKeysForSave(keys) {
   return out;
 }
 
-/**
- * Validate body for save. `null` => clear stored grants (or full admin when role is Admin).
- * Empty array: clears optional grants for non-admin accounts; invalid for scoped Admin accounts.
- * @param {{ targetIsAdminRole?: boolean }} [opts]
- * @returns {{ db: null|string } | { error: string } | { omit: true }}
- */
 function sanitizeAdminGrantsPayload(value, opts = {}) {
   const targetIsAdminRole = opts.targetIsAdminRole === true;
   if (value === null) return { db: null };
@@ -165,10 +152,6 @@ function sanitizeAdminGrantsPayload(value, opts = {}) {
   return { db: JSON.stringify(normalized) };
 }
 
-/**
- * One-time data fix: replace stored legacy `upcoming` with `upcoming_events`.
- * Does not add spotlight permissions — those must be assigned explicitly.
- */
 async function migrateLegacyUpcomingGrantKey(db) {
   const rows = await db.prepare(
     "SELECT id, admin_grants FROM users WHERE admin_grants IS NOT NULL AND admin_grants LIKE '%upcoming%'"

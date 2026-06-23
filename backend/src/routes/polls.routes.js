@@ -35,10 +35,6 @@ function mapPollRow(row) {
   };
 }
 
-/**
- * Get all active polls this user has not submitted yet.
- * Returns { polls: [] } when none are available.
- */
 router.get("/active", async (req, res) => {
   const now = nowIso();
   const rows = await db

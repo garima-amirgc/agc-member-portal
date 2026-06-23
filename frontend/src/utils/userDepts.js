@@ -1,4 +1,3 @@
-/** Departments list for display (API returns `departments` array; legacy may only have `department`). */
 export function departmentsList(userLike) {
   if (!userLike) return ["Production"];
   if (Array.isArray(userLike.departments) && userLike.departments.length > 0) {

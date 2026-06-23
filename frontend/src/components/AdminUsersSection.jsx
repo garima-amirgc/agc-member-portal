@@ -7,7 +7,6 @@ import AdminGrantCheckboxGroups from "./AdminGrantCheckboxGroups";
 import { normalizeAdminGrantsForUi } from "../constants/adminGrants";
 import { canManageAdminGrants } from "../utils/adminAccess";
 
-/** Match backend `canonicalRole` so grant payloads use the correct Admin branch even if API casing/labels vary. */
 function isAdminRole(role) {
   const sl = String(role || "").trim().toLowerCase();
   return sl === "admin" || sl === "administrator" || sl === "superadmin" || sl === "super admin";
@@ -18,7 +17,6 @@ const EMPTY_USER = {
   name: "",
   email: "",
   password: "",
-  /** When false (default), backend sends invite email — avoids browser autofill on a visible password field. */
   setPasswordManually: false,
   role: "Employee",
   business_units: ["AGC"],
@@ -28,6 +26,7 @@ const EMPTY_USER = {
   admin_full_access: false,
   admin_grants: [],
   facility_university_only: false,
+  is_new_hire: false,
 };
 
 export default function AdminUsersSection({ className = "card" }) {
@@ -37,14 +36,9 @@ export default function AdminUsersSection({ className = "card" }) {
   const [updatingId, setUpdatingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [form, setForm] = useState(EMPTY_USER);
-  const [editing, setEditing] = useState(null); // { id, name, email, role, manager_id, facilities, password }
-  /** Always latest editing object for Save (avoids rare stale closure). */
+  const [editing, setEditing] = useState(null);
   const editingRef = useRef(null);
   editingRef.current = editing;
-  /**
-   * Checkbox grant selections updated synchronously in handlers — `editingRef` can lag one frame behind
-   * after toggling, which produced PUT bodies with empty admin_grants even when boxes appeared checked.
-   */
   const editGrantsSnapshotRef = useRef([]);
   const formGrantsSnapshotRef = useRef([]);
   const [loadingEdit, setLoadingEdit] = useState(false);
@@ -64,7 +58,6 @@ export default function AdminUsersSection({ className = "card" }) {
     load();
   }, []);
 
-  /** Anyone in the directory can be selected as “reports to” (role does not matter). */
   const reportsToOptionsForCreate = useMemo(() => users, [users]);
 
   const reportsToOptionsForEdit = useMemo(() => {
@@ -96,7 +89,6 @@ export default function AdminUsersSection({ className = "card" }) {
       try {
         actor = await refreshMe();
       } catch {
-        /* use cached me */
       }
       if (canManageAdminGrants(me) && !canManageAdminGrants(actor)) {
         window.alert(
@@ -144,6 +136,7 @@ export default function AdminUsersSection({ className = "card" }) {
       if (!isAdminRole(form.role)) {
         payload.facility_university_only = Boolean(form.facility_university_only);
       }
+      payload.is_new_hire = Boolean(form.is_new_hire);
       const { data } = await api.post("/users", payload);
       formGrantsSnapshotRef.current = [];
       const createdEmail = payload.email.trim();
@@ -225,7 +218,6 @@ export default function AdminUsersSection({ className = "card" }) {
         role: nextRole,
         manager_id: u.manager_id,
         business_units: Array.isArray(u.facilities) && u.facilities.length ? u.facilities : [u.business_unit].filter(Boolean),
-        // Omit departments so the server keeps current values (list row can be stale after modal edits).
       });
       await load();
     } catch (err) {
@@ -285,6 +277,7 @@ export default function AdminUsersSection({ className = "card" }) {
         admin_full_access: isAdminRole(roleResolved) && grantsResolved.length === 0,
         admin_grants: grantsResolved,
         facility_university_only: Boolean(data.facility_university_only),
+        is_new_hire: Boolean(data.is_new_hire ?? u.is_new_hire),
       });
     } catch (err) {
       const st = err.response?.status;
@@ -309,7 +302,6 @@ export default function AdminUsersSection({ className = "card" }) {
       try {
         actor = await refreshMe();
       } catch {
-        /* use cached me */
       }
       if (canManageAdminGrants(me) && !canManageAdminGrants(actor)) {
         window.alert(
@@ -366,6 +358,7 @@ export default function AdminUsersSection({ className = "card" }) {
       if (!isAdminRole(ed.role)) {
         body.facility_university_only = Boolean(ed.facility_university_only);
       }
+      body.is_new_hire = Boolean(ed.is_new_hire);
       if (canGrant) {
         if (isAdminRole(ed.role)) {
           if (ed.admin_full_access) {
@@ -404,7 +397,6 @@ export default function AdminUsersSection({ className = "card" }) {
         try {
           await refreshMe();
         } catch {
-          /* ignore */
         }
       }
     } catch (err) {
@@ -711,6 +703,21 @@ export default function AdminUsersSection({ className = "card" }) {
               </label>
             ) : null}
 
+            <label className="flex cursor-pointer items-start gap-2 rounded border border-slate-200 p-3 text-sm dark:border-slate-600">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={Boolean(form.is_new_hire)}
+                onChange={(e) => setForm({ ...form, is_new_hire: e.target.checked })}
+              />
+              <span>
+                <span className="font-medium">New hire</span>
+                <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-300">
+                  Shows a welcome card on this user's Home page (essential training, links, and who they report to) for 2 weeks.
+                </span>
+              </span>
+            </label>
+
             <div>
               <div className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                 Reports to (leave &amp; team hierarchy)
@@ -759,6 +766,11 @@ export default function AdminUsersSection({ className = "card" }) {
                       {u.facility_university_only && !isAdminRole(u.role) ? (
                         <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-900 dark:bg-emerald-900/45 dark:text-emerald-100">
                           University only
+                        </span>
+                      ) : null}
+                      {u.is_new_hire ? (
+                        <span className="rounded-full bg-[#0B3EAF]/10 px-2 py-0.5 font-bold text-[#0B3EAF] dark:bg-[#A7D344]/15 dark:text-[#A7D344]">
+                          New hire
                         </span>
                       ) : null}
                       <span>
@@ -1127,6 +1139,21 @@ export default function AdminUsersSection({ className = "card" }) {
                   </span>
                 </label>
               ) : null}
+
+              <label className="flex cursor-pointer items-start gap-2 rounded border border-slate-200 p-3 text-sm dark:border-slate-600">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={Boolean(editing.is_new_hire)}
+                  onChange={(e) => setEditing({ ...editing, is_new_hire: e.target.checked })}
+                />
+                <span>
+                  <span className="font-medium">New hire</span>
+                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-300">
+                    Shows a welcome card on this user's Home page (essential training, links, and who they report to) for 2 weeks.
+                  </span>
+                </span>
+              </label>
 
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">

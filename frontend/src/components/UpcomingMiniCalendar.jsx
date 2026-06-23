@@ -117,12 +117,12 @@ export default function UpcomingMiniCalendar({ events, loading, onEventClick }) 
   let footer = null;
   if (displayEvents.length > 0) {
     footer = (
-      <div className="mt-2 rounded-lg border border-[#0B3EAF]/15 bg-gradient-to-br from-brand-blue-soft/80 via-white to-brand-green-soft/50 px-3 py-2 dark:border-[#A7D344]/25 dark:from-[#0B3EAF]/15 dark:via-slate-900/40 dark:to-[#A7D344]/10">
+      <div className="mt-1.5 rounded-lg border border-[#0B3EAF]/15 bg-gradient-to-br from-brand-blue-soft/80 via-white to-brand-green-soft/50 px-2 py-1.5 dark:border-[#A7D344]/25 dark:from-[#0B3EAF]/15 dark:via-slate-900/40 dark:to-[#A7D344]/10">
         {displayEvents.map((ev) => (
           <button
             key={String(ev.id)}
             type="button"
-            className="mb-2 block w-full rounded-md border border-transparent px-2 py-1.5 text-left transition last:mb-0 hover:border-[#0B3EAF]/20 hover:bg-white/90 dark:hover:border-[#A7D344]/30 dark:hover:bg-white/5"
+            className="mb-1.5 block w-full rounded-md border border-transparent px-1.5 py-1 text-left transition last:mb-0 hover:border-[#0B3EAF]/20 hover:bg-white/90 dark:hover:border-[#A7D344]/30 dark:hover:bg-white/5"
             onClick={() => openRange(ev)}
           >
             <div className="text-[11px] font-semibold leading-snug text-brand-blue dark:text-brand-green">
@@ -136,39 +136,39 @@ export default function UpcomingMiniCalendar({ events, loading, onEventClick }) 
     );
   } else if (!isLoading && ranges.length === 0) {
     footer = (
-      <p className="mt-3 text-center text-[10px] text-slate-500 dark:text-slate-400">
+      <p className="mt-2 text-center text-[10px] text-slate-500 dark:text-slate-400">
         Add dates in Upcoming admin or the Calendar page to see events here.
       </p>
     );
   } else if (!isLoading && daysWithEvents === 0) {
     footer = (
-      <p className="mt-3 text-center text-[10px] text-slate-500 dark:text-slate-400">
+      <p className="mt-2 text-center text-[10px] text-slate-500 dark:text-slate-400">
         No events in {monthLabel(year, month0)}. Try another month.
       </p>
     );
   } else if (!isLoading) {
     footer = (
-      <p className="mt-3 text-center text-[10px] text-slate-500 dark:text-slate-400">
+      <p className="mt-2 text-center text-[10px] text-slate-500 dark:text-slate-400">
         {daysWithEvents} day{daysWithEvents === 1 ? "" : "s"} with events this month. Hover a highlighted day.
       </p>
     );
   }
 
   return (
-    <div className="card no-title-underline border-[#0B3EAF]/15 p-3 sm:p-4 dark:border-[#A7D344]/20">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <div className="card no-title-underline rounded-2xl border-[#0B3EAF]/15 p-2.5 sm:p-3 dark:border-[#A7D344]/20">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#0B3EAF]/25 text-brand-blue transition hover:bg-brand-blue-soft dark:border-[#A7D344]/30 dark:text-brand-green dark:hover:bg-white/5"
+          className="flex h-6 w-6 items-center justify-center rounded-md border border-[#0B3EAF]/25 text-xs text-brand-blue transition hover:bg-brand-blue-soft dark:border-[#A7D344]/30 dark:text-brand-green dark:hover:bg-white/5"
           onClick={() => shiftMonth(-1)}
           aria-label="Previous month"
         >
           ‹
         </button>
-        <h3 className="text-sm font-semibold text-brand-blue dark:text-brand-green">{monthLabel(year, month0)}</h3>
+        <h3 className="text-xs font-semibold text-brand-blue dark:text-brand-green">{monthLabel(year, month0)}</h3>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#0B3EAF]/25 text-brand-blue transition hover:bg-brand-blue-soft dark:border-[#A7D344]/30 dark:text-brand-green dark:hover:bg-white/5"
+          className="flex h-6 w-6 items-center justify-center rounded-md border border-[#0B3EAF]/25 text-xs text-brand-blue transition hover:bg-brand-blue-soft dark:border-[#A7D344]/30 dark:text-brand-green dark:hover:bg-white/5"
           onClick={() => shiftMonth(1)}
           aria-label="Next month"
         >
@@ -180,13 +180,13 @@ export default function UpcomingMiniCalendar({ events, loading, onEventClick }) 
         <p className="text-center text-[11px] text-slate-500 dark:text-slate-400">Loading calendar…</p>
       ) : (
         <div onMouseLeave={() => setHoverYmd(null)}>
-          <div className="grid grid-cols-7 gap-y-1 text-center text-[10px] font-semibold uppercase tracking-wide text-brand-blue/60 dark:text-brand-green/70">
+          <div className="grid grid-cols-7 gap-y-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-brand-blue/60 dark:text-brand-green/70">
             {DOW.map((d, i) => (
               <div key={`${d}-${i}`}>{d}</div>
             ))}
           </div>
 
-          <div className="mt-1 grid grid-cols-7 gap-y-1">
+          <div className="mt-0.5 grid grid-cols-7 gap-y-0.5">
             {Array.from({ length: gridWin.firstDow }).map((_, i) => (
               <div key={`pad-${i}`} aria-hidden />
             ))}
@@ -200,12 +200,12 @@ export default function UpcomingMiniCalendar({ events, loading, onEventClick }) 
               const isActive = displayYmd === dayYmd;
 
               return (
-                <div key={dayYmd} className="relative px-0.5 py-0.5">
+                <div key={dayYmd} className="relative px-0.5 py-px">
                   <button
                     type="button"
                     disabled={!primary}
                     className={[
-                      "flex h-8 w-full items-center justify-center text-xs font-semibold transition",
+                      "flex h-6 w-full items-center justify-center text-[11px] font-semibold transition",
                       primary && !isToday ? roleClasses(role) : !isToday ? "text-slate-700 dark:text-slate-300" : "",
                       primary ? "cursor-pointer hover:brightness-95" : "cursor-default",
                       isToday ? todayClasses(Boolean(primary), role) : "",

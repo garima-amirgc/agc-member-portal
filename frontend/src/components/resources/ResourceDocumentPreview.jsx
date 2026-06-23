@@ -37,9 +37,6 @@ function Placeholder({ kind, url, compact = false }) {
   );
 }
 
-/**
- * Thumbnail-style preview for resource documents (category grid). Images use the public URL; other types use a styled placeholder.
- */
 export default function ResourceDocumentPreview({ url, compact = false }) {
   const kind = inferKind(url);
   const src = resolveResourceAssetUrl(url);

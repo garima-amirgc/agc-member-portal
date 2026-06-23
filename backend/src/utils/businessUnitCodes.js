@@ -10,11 +10,6 @@ function normalizeBusinessUnitCode(v) {
   return "";
 }
 
-/**
- * Union of `user_facilities` rows and the user's primary `business_unit`, in stable portal order.
- * @param {{ business_unit?: string }[]} facRows
- * @param {string | null | undefined} primaryBusinessUnit
- */
 function mergeFacilityAccess(facRows, primaryBusinessUnit) {
   const set = new Set();
   for (const r of facRows || []) {

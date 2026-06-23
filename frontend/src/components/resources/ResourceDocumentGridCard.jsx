@@ -1,14 +1,10 @@
 import { Link } from "react-router-dom";
 import ResourceDocumentPreview from "./ResourceDocumentPreview";
 
-/**
- * Resource library document tile: title, description, added date, actions, preview.
- */
 export default function ResourceDocumentGridCard({
   title,
   url,
   description,
-  /** @deprecated use `description` — still supported for older call sites */
   metaLine,
   addedLabel,
   linkTo,

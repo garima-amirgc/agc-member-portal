@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-// Source: Amir Specialty Poultry processing reference — "Terms in this set (15)".
 const CARDS = [
   {
     q: "What type of chickens does Amir Specialty Poultry process?",
@@ -58,11 +57,6 @@ function ChevronIcon({ direction = "left" }) {
   );
 }
 
-/**
- * Poultry-processing flashcard slider for the AQM facility's Organization tab, rendered directly
- * below the org chart. One card at a time, with a real 3D flip between front (question) and back
- * (answer); arrows move between cards.
- */
 export default function AqmPoultryFlashcards() {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -84,7 +78,6 @@ export default function AqmPoultryFlashcards() {
         </span>
       </div>
 
-      {/* Progress bar */}
       <div className="mb-5 h-1 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
         <div
           className="h-full rounded-full bg-gradient-to-r from-[#0B3EAF] to-sky-400 transition-all duration-300"

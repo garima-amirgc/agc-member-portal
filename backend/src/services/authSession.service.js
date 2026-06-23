@@ -28,10 +28,6 @@ async function authResponseUser(userRow, departments, dept) {
   };
 }
 
-/**
- * @param {object} userRow Full users row
- * @param {boolean|string|number} rememberMe
- */
 async function issuePortalSession(userRow, rememberMe) {
   const departments = await userDeptSvc.listForUser(userRow.id);
   const dept = departments[0] || "Production";
@@ -56,11 +52,6 @@ async function issuePortalSession(userRow, rememberMe) {
   };
 }
 
-/**
- * Resolve portal user by email (case-insensitive). Returns { user, error } where error is a client-facing message or code.
- * @param {string} email
- * @param {{ viaMicrosoft?: boolean }} [options] When viaMicrosoft is true, pending invites do not block sign-in.
- */
 async function resolveUserForLogin(email, options = {}) {
   const viaMicrosoft = options.viaMicrosoft === true;
   const normalized = String(email || "").trim().toLowerCase();

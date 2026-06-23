@@ -1,7 +1,6 @@
 const { db } = require("../config/db");
 const { getTrainingSummary } = require("./trainingCompletion.service");
 
-/** Manager chain ids above this user (lightweight; avoids full hierarchy build). */
 async function getAncestorIds(userId) {
   const ancestorIds = new Set();
   let id = userId;
@@ -20,10 +19,6 @@ async function getAncestorIds(userId) {
   return ancestorIds;
 }
 
-/**
- * @param {number} managerUserId
- * @returns {Promise<Array<object>>}
- */
 async function getTeamOverview(managerUserId) {
   const ancestorIds = await getAncestorIds(managerUserId);
 

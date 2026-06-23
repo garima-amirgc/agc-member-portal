@@ -3,7 +3,8 @@ import api, { postItTicketAttachment } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import { userHasDepartment } from "../utils/userDepts";
-import { isAdministrator } from "../utils/adminAccess";
+import { isAdministrator, hasAdminGrant } from "../utils/adminAccess";
+import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import ItTicketsMonitorTable from "../components/ItTicketsMonitorTable";
 import TicketEditModal from "../components/TicketEditModal";
@@ -70,6 +71,8 @@ export default function ItTicketsPage() {
   const { user } = useAuth();
   const isIT = userHasDepartment(user, "IT");
   const isAdmin = isAdministrator(user);
+  const hasTicketVisibility = hasAdminGrant(user, ADMIN_GRANT_KEYS.IT_TICKETS);
+  const canSeeAll = isAdmin || hasTicketVisibility;
 
   const [tickets, setTickets] = useState([]);
   const [assignees, setAssignees] = useState([]);
@@ -86,7 +89,6 @@ export default function ItTicketsPage() {
   const [submissionModalTicket, setSubmissionModalTicket] = useState(null);
   const [resolvedModalTicket, setResolvedModalTicket] = useState(null);
   const prevStatusByIdRef = useRef(new Map());
-  /** @type {[{ url: string, name: string }]} */
   const [attachments, setAttachments] = useState([]);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -117,9 +119,8 @@ export default function ItTicketsPage() {
     return () => window.removeEventListener("agc-it-tickets-changed", onRefresh);
   }, [load]);
 
-  // Background poll: requestors need completion updates; IT/admin board refreshes less often.
   useEffect(() => {
-    const intervalMs = isIT || isAdmin ? 60000 : 30000;
+    const intervalMs = canSeeAll ? 60000 : 30000;
     const tick = () => {
       if (document.hidden) return;
       void load({ silent: true });
@@ -215,7 +216,6 @@ export default function ItTicketsPage() {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // When a ticket transitions into "closed", show a confirmation modal to the requestor.
   useEffect(() => {
     const prev = prevStatusByIdRef.current;
     let newlyResolved = null;
@@ -283,7 +283,7 @@ export default function ItTicketsPage() {
       <ItTicketsMonitorTable
         tickets={tickets}
         loading={loading}
-        isIT={isIT}
+        isIT={canSeeAll}
         isAdmin={isAdmin}
         onStatusChange={setStatus}
         onDelete={deleteTicket}

@@ -1,6 +1,5 @@
 const { hasDirectReports } = require("../services/supervisor.service");
 
-/** Requires the logged-in user to have at least one direct report (org supervisor). */
 async function supervisorRequired(req, res, next) {
   try {
     if (await hasDirectReports(req.user.id)) return next();

@@ -64,7 +64,6 @@ async function resourceExistsInCategory(resourceKind, resourceId, businessUnit, 
   return false;
 }
 
-/** Per-user completion for Resources (videos + uploaded documents), keyed by facility + category. */
 router.get("/me/progress/:facility/:category", async (req, res) => {
   const facility = String(req.params.facility || "").toUpperCase();
   const category = String(req.params.category || "").toLowerCase();
@@ -199,12 +198,9 @@ router.get("/facility/:facility/category/:category", async (req, res) => {
     return {
       id: `lesson-${r.id}`,
       lessonId: r.id,
-      /** Lesson / file row title (internal). */
       title: r.title,
-      /** Course title from Learning admin — use as Resources card heading. */
       course_title: r.course_title != null && String(r.course_title).trim() ? String(r.course_title).trim() : "",
       meta: r.course_title || "Training",
-      /** Course description only; no auto-filled filler text. */
       description: courseDesc,
       added_at:
         r.lesson_uploaded_at != null && String(r.lesson_uploaded_at).trim()

@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS employee_of_month (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   manual_name TEXT,
+  facility TEXT,
   year INTEGER NOT NULL,
   month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
   citation TEXT,
@@ -163,6 +164,7 @@ CREATE TABLE IF NOT EXISTS leadership_updates (
   description TEXT,
   link_url TEXT,
   image_url TEXT,
+  facility TEXT,
   published INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -195,6 +197,7 @@ CREATE TABLE IF NOT EXISTS customer_wins (
   description TEXT,
   link_url TEXT,
   image_url TEXT,
+  facility TEXT,
   published INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -208,6 +211,7 @@ CREATE TABLE IF NOT EXISTS community_involvement (
   description TEXT,
   link_url TEXT,
   image_url TEXT,
+  facility TEXT,
   published INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -402,6 +406,8 @@ async function migrateColumns(client) {
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_grants TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS facility_university_only INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_new_hire INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS new_hire_marked_at TIMESTAMPTZ",
     `CREATE TABLE IF NOT EXISTS polls (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
@@ -440,6 +446,7 @@ async function migrateColumns(client) {
       id SERIAL PRIMARY KEY,
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       manual_name TEXT,
+      facility TEXT,
       year INTEGER NOT NULL,
       month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
       citation TEXT,
@@ -453,6 +460,7 @@ async function migrateColumns(client) {
     "ALTER TABLE employee_of_month ADD COLUMN IF NOT EXISTS image_url TEXT",
     "ALTER TABLE employee_of_month ADD COLUMN IF NOT EXISTS manual_name TEXT",
     "ALTER TABLE employee_of_month ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE employee_of_month ADD COLUMN IF NOT EXISTS facility TEXT",
     `CREATE TABLE IF NOT EXISTS leadership_updates (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
@@ -477,6 +485,9 @@ async function migrateColumns(client) {
     )`,
     "ALTER TABLE leadership_updates ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE new_hires ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE leadership_updates ADD COLUMN IF NOT EXISTS facility TEXT",
+    "ALTER TABLE customer_wins ADD COLUMN IF NOT EXISTS facility TEXT",
+    "ALTER TABLE community_involvement ADD COLUMN IF NOT EXISTS facility TEXT",
     `CREATE TABLE IF NOT EXISTS portal_settings (
       setting_key TEXT PRIMARY KEY,
       setting_value TEXT NOT NULL,
@@ -557,8 +568,6 @@ async function migrateColumns(client) {
       assignment_count INTEGER NOT NULL,
       notified_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )`,
-    // Indexes for frequently-filtered foreign-key columns (performance; additive, no schema change).
-    // Appended last so every referenced table above is guaranteed to exist.
     "CREATE INDEX IF NOT EXISTS idx_users_manager_id ON users (manager_id)",
     "CREATE INDEX IF NOT EXISTS idx_lessons_course_id ON lessons (course_id)",
     "CREATE INDEX IF NOT EXISTS idx_assignments_course_id ON assignments (course_id)",
@@ -725,7 +734,6 @@ function createDbInterface(pgPool) {
 
 let db;
 
-/** DO managed DB URIs include `sslmode=require`; pg v8+ maps that to strict verify and ignores pool `ssl` — strip and use explicit ssl below. */
 function connectionStringForPool(conn) {
   try {
     const normalized = conn.replace(/^postgresql:\/\//i, "postgres://");

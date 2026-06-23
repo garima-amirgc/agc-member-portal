@@ -3,10 +3,6 @@ function initials(name = "") {
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
 }
 
-/**
- * Public Spaces origin for org-chart headshots. Override with `VITE_ORG_CHART_ASSETS_BASE` (no trailing slash).
- * Matches the project's default bucket when env is not set, so photos still load in local dev.
- */
 const DEFAULT_ORG_CHART_ASSETS_BASE = "https://agc-university-resources.tor1.digitaloceanspaces.com";
 
 function orgChartAssetUrl(relativeKey) {
@@ -18,9 +14,6 @@ function orgChartAssetUrl(relativeKey) {
 
 const LINE = "bg-slate-400 dark:bg-slate-500";
 
-/**
- * @param {{ name: string; title: string; photoSrc?: string; compact?: boolean }} props
- */
 function OrgPersonNode({ name, title, photoSrc, compact }) {
   const ini = initials(name);
   return (
@@ -82,23 +75,19 @@ function HBar({ className = "" }) {
   return <div className={[`h-px shrink-0 ${LINE}`, className].filter(Boolean).join(" ")} aria-hidden />;
 }
 
-// Top executive row: CFO — CEO — Director of Operations (peers, CEO in the middle).
 const TOP = [
   { name: "Sherry Aziz", title: "Chief Finance Officer", photoSrc: "/sherry-aziz.png" },
   { name: "Tony Aziz", title: "Chief Executive Officer", photoSrc: orgChartAssetUrl("org-chart/tony-aziz.png") },
   { name: "Adam Aziz", title: "Director of Operations", photoSrc: orgChartAssetUrl("org-chart/adam-aziz.png") },
 ];
 
-// Reports to Tony Aziz at the AQM facility.
 const MID = [
   { name: "Carol Maia", title: "FSQA Manager - AQM", photoSrc: orgChartAssetUrl("org-chart/carol-maia.png") },
   { name: "Tatiana Bairydost", title: "Plant Manager", photoSrc: orgChartAssetUrl("org-chart/tatiana-bairydost.png") },
 ];
 
-// Reports to Carol Maia (FSQA).
 const FSQA_REPORTS = [{ name: "Aastha Juneja", title: "HACCP Coordinator" }];
 
-// Reports to Tatiana Bairydost (Plant Manager) — production/shipping team.
 const PLANT_REPORTS = [
   { name: "Tushar Soni", title: "Production Supervisor" },
   { name: "Trevor Whalen", title: "Production Supervisor" },
@@ -114,11 +103,6 @@ export default function AqmFacilityOrgChart() {
         <h2 className="text-sm font-bold text-slate-900 dark:text-white">AQM organization</h2>
       </div>
 
-      {/*
-        Mobile (<sm): a horizontal tree with connector lines gets ambiguous once boxes wrap onto
-        separate lines, so phones get an explicit indented "reports to" list instead. Tablet/desktop
-        keep the connector-line tree below.
-      */}
       <div className="block rounded-xl border border-slate-200/80 bg-slate-50/90 p-3 sm:hidden dark:border-slate-700 dark:bg-slate-900/40">
         <div className="mb-2 rounded-lg border border-dashed border-slate-300 p-2 dark:border-slate-600">
           <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -174,7 +158,6 @@ export default function AqmFacilityOrgChart() {
           "overflow-x-auto",
         ].join(" ")}
       >
-        {/* Top row: peers connected by a single horizontal bar, CEO centered. Wraps instead of overflowing on small screens. */}
         <div className="mx-auto flex w-full max-w-4xl flex-wrap items-start justify-center gap-x-6 gap-y-4 sm:flex-nowrap sm:gap-x-10">
           {TOP.map((p) => (
             <div key={p.name} className="flex flex-col items-center">
@@ -187,7 +170,6 @@ export default function AqmFacilityOrgChart() {
           <HBar className="h-px w-full" />
         </div>
 
-        {/* Mid row: Carol Maia and Tatiana Bairydost both report to Tony Aziz — trunk line branches into both. */}
         <div className="mx-auto mt-0 flex w-full max-w-4xl justify-center">
           <VBar className="h-4" />
         </div>
@@ -207,7 +189,6 @@ export default function AqmFacilityOrgChart() {
           <HBar className="h-px w-full" />
         </div>
 
-        {/* Bottom: two branches stacked on mobile/tablet, side by side from sm: up — FSQA (HACCP Coordinator) and Plant (production/shipping team). */}
         <div className="mx-auto mt-4 grid w-full max-w-4xl grid-cols-1 gap-8 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-4">
           <div className="flex flex-col items-center border-t border-slate-200/80 pt-4 sm:border-t-0 sm:pt-0 dark:border-slate-700/80">
             <VBar className="h-3" />

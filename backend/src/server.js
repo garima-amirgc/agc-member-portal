@@ -7,7 +7,6 @@ const { EMAIL_TEMPLATE_VERSION, isEmailConfigured, verifySmtpConnection } = requ
 const inviteSvc = require("./services/invite.service");
 
 const app = express();
-/** Static site (e.g. *-web.onrender.com) and API on another host — allow browser + Authorization preflight */
 app.use(
   cors({
     origin: true,
@@ -84,6 +83,7 @@ async function start() {
   const calendarRoutes = require("./routes/calendar.routes");
   const pollsRoutes = require("./routes/polls.routes");
   const helpRoutes = require("./routes/help.routes");
+  const searchRoutes = require("./routes/search.routes");
   const { authRequired } = require("./middleware/auth");
   const leaveSvc = require("./services/leaveRequests.service");
   const managerTeamSvc = require("./services/managerTeam.service");
@@ -183,6 +183,7 @@ async function start() {
     ["/calendar", calendarRoutes],
     ["/polls", pollsRoutes],
     ["/help", helpRoutes],
+    ["/search", searchRoutes],
   ];
 
   function mountRoutes(router) {
@@ -231,7 +232,6 @@ async function start() {
       else if (obs.isR2Enabled()) console.log("Upload storage: Cloudflare R2");
       else console.log(`Upload storage: local disk (${uploadsDir})`);
     } catch {
-      /* ignore */
     }
     console.log(
       `Leave API ready: POST /auth/leave-request and POST /api/auth/leave-request (if you see 404, an old Node process may still be bound to port ${PORT})`
@@ -251,7 +251,6 @@ async function start() {
         );
       }
     } catch {
-      /* ignore */
     }
   });
 }

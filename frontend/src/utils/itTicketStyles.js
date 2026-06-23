@@ -1,6 +1,3 @@
-/** Brand-aligned chips and badges for IT ticket UI */
-
-/** Issue type as stored in ticket title prefix, e.g. `[Hardware] …` */
 export function issueTypeFromTicketTitle(title) {
   const raw = String(title || "");
   const m = raw.match(/^\s*\[([^\]]+)\]\s*/);

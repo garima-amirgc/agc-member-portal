@@ -1,5 +1,3 @@
-/** Month/day (and optional year) fields on user profiles — birthdays & work anniversaries. */
-
 function normalizeBirthMonthDay(month, day) {
   const m = Number(month);
   const d = Number(day);
@@ -13,7 +11,6 @@ function normalizeBirthMonthDay(month, day) {
   return { birth_month: mo, birth_day: da };
 }
 
-/** Full date of joining: month, day, and year (YYYY). */
 function normalizeJoinDate(month, day, year) {
   const parts = normalizeBirthMonthDay(month, day);
   if (!parts) return null;
@@ -29,7 +26,6 @@ function normalizeJoinDate(month, day, year) {
   };
 }
 
-/** Whole years employed on an anniversary (null if first calendar year or year not set). */
 function anniversaryYearsEmployed(joinYear, ref = new Date()) {
   const y = Number(joinYear);
   if (!Number.isFinite(y)) return null;

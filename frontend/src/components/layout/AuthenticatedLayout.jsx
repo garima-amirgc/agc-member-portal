@@ -30,7 +30,6 @@ function dismiss(userId, pollId) {
   try {
     localStorage.setItem(pollDismissKey(userId, pollId), new Date().toISOString());
   } catch {
-    /* ignore */
   }
 }
 
@@ -38,7 +37,6 @@ function clearDismiss(userId, pollId) {
   try {
     localStorage.removeItem(pollDismissKey(userId, pollId));
   } catch {
-    /* ignore */
   }
 }
 
@@ -79,7 +77,6 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
               ? [data.poll]
               : [];
           setPolls(items);
-          // Auto-open when at least one poll has not been dismissed with "Later".
           setPollOpen((open) => {
             if (open) return open;
             const anyUndismissed = items.some((p) => !isDismissed(user?.id, p.id));
@@ -93,10 +90,8 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
         .catch(() => {});
     };
 
-    // Refresh on navigation so newly activated polls appear without logout/login.
     pull();
 
-    // Also refresh once when user returns to tab.
     let debounce = null;
     let tabWasHidden = false;
     const onVis = () => {

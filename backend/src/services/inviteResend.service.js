@@ -1,10 +1,6 @@
 const inviteSvc = require("./invite.service");
 const emailSvc = require("./email.service");
 
-/**
- * Regenerate invite token and email the user (same behavior as admin "Resend invite").
- * @returns {{ setup_url: string, email_sent: boolean, email_error?: string }}
- */
 async function issueInviteAndEmail(db, userId) {
   const row = await db.prepare("SELECT id, email, name FROM users WHERE id = ?").get(userId);
   if (!row) {

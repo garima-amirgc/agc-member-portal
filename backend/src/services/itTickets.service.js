@@ -5,7 +5,6 @@ const userDeptSvc = require("./userDepartments.service");
 
 const MAX_TICKET_ATTACHMENTS = 5;
 
-/** @returns {string | null} JSON array string for DB */
 function normalizeAttachmentsJson(body) {
   let raw = body?.attachments;
   if (raw == null || raw === "") return null;
@@ -40,7 +39,6 @@ function parseAttachmentsRow(raw) {
   }
 }
 
-/** Normalize ticket rows for API (profile image from users join). */
 function mapTicketRow(row) {
   if (!row) return row;
   const url =
@@ -61,7 +59,6 @@ const USER_DEPT_LABEL_SQL = isPostgres
   ? `COALESCE((SELECT string_agg(d.department, ', ' ORDER BY d.department) FROM user_departments d WHERE d.user_id = u.id), COALESCE(NULLIF(TRIM(u.department), ''), 'Production'))`
   : `COALESCE((SELECT GROUP_CONCAT(d.department, ', ') FROM (SELECT department FROM user_departments WHERE user_id = u.id ORDER BY department) AS d), COALESCE(NULLIF(TRIM(u.department), ''), 'Production'))`;
 
-/** Completed tickets stay visible for 30 days after completion, then drop from queue lists. */
 const COMPLETED_TICKET_RETENTION_DAYS = 30;
 
 const TICKET_PRIORITY_ORDER_SQL = `CASE COALESCE(NULLIF(TRIM(t.priority), ''), '${TICKET_PRIORITY_DEFAULT}')
@@ -264,7 +261,6 @@ async function updateTicketStatus(itUserId, ticketId, status) {
 
   const updated = await getTicketById(ticketId);
 
-  // Notify the ticket creator only once when the ticket transitions into "closed".
   if (status === "closed" && before && before.status !== "closed") {
     try {
       await email.sendITTicketResolvedEmail({

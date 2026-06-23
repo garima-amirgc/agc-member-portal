@@ -1,6 +1,5 @@
 import { getApiBaseURL } from "../services/api";
 
-/** Backend serves `/uploads` as static files; resolve relative paths against the API host (or Vite proxy origin). */
 export function resolveResourceAssetUrl(url) {
   const path = String(url || "").trim();
   if (!path) return "";
@@ -12,7 +11,6 @@ export function resolveResourceAssetUrl(url) {
         const u = new URL(b.replace(/\/+$/, ""));
         return `${u.origin}${path}`;
       } catch {
-        /* fall through */
       }
     }
     if (typeof window !== "undefined") {

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../services/api";
 import { dispatchTrainingComplete, dispatchTrainingProgressUpdated } from "../utils/trainingProgressEvents";
 
-/** @returns {{ resource_kind: 'lesson'|'document', resource_id: number } | null} */
 export function parseResourceItemId(id) {
   const m = /^lesson-(\d+)$/.exec(String(id || ""));
   if (m) return { resource_kind: "lesson", resource_id: Number(m[1]) };
@@ -11,12 +10,6 @@ export function parseResourceItemId(id) {
   return null;
 }
 
-/**
- * Server-backed completion for a facility resources category (same ids as list API: lesson-N, doc-N).
- * @param {string} facilityNorm e.g. AGC
- * @param {string} categoryKey e.g. finance
- * @param {boolean} enabled fetch only when true (e.g. user signed in and route valid)
- */
 export function useResourceProgress(facilityNorm, categoryKey, enabled = true) {
   const [completed, setCompleted] = useState(() => new Set());
   const completedRef = useRef(completed);

@@ -32,7 +32,6 @@ const {
 const router = express.Router();
 router.use(authRequired);
 
-/** Client may send `admin_grants` or `adminGrants`; treat key presence as intent (including explicit `null`). */
 function readAdminGrantsFromBody(body) {
   if (!body || typeof body !== "object") return { present: false, value: undefined };
   function normalizeAdminGrantsValue(v) {
@@ -73,6 +72,8 @@ function adminUsersListSql() {
         u.designation,
         u.admin_grants,
         COALESCE(u.facility_university_only, 0) AS facility_university_only,
+        COALESCE(u.is_new_hire, 0) AS is_new_hire,
+        u.new_hire_marked_at,
         u.invite_token_hash,
         u.invite_expires_at,
         m.name AS manager_name,
@@ -90,7 +91,6 @@ function readMeScope(req) {
   return "full";
 }
 
-// Logged-in user's profile
 router.get("/me", async (req, res) => {
   const scope = readMeScope(req);
   const profileOnly = scope === "profile";
@@ -104,7 +104,14 @@ router.get("/me", async (req, res) => {
 
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, birth_month, birth_day, join_month, join_day, join_year, phone, address, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
+      `SELECT u.id, u.name, u.email, u.role, u.business_unit, u.manager_id, u.profile_image_url, u.designation,
+              u.birth_month, u.birth_day, u.join_month, u.join_day, u.join_year, u.phone, u.address, u.created_at,
+              u.admin_grants, COALESCE(u.facility_university_only, 0) AS facility_university_only,
+              COALESCE(u.is_new_hire, 0) AS is_new_hire, u.new_hire_marked_at, m.name AS manager_name,
+              COALESCE(NULLIF(TRIM(u.department), ''), 'Production') AS department
+       FROM users u
+       LEFT JOIN users m ON m.id = u.manager_id
+       WHERE u.id = ?`
     )
     .get(req.user.id);
 
@@ -150,6 +157,7 @@ router.get("/me", async (req, res) => {
     admin_grants: adminGrantsOut,
     is_full_admin: isFullAdminUser(req.user),
     facility_university_only: Boolean(rest.facility_university_only),
+    is_new_hire: Boolean(rest.is_new_hire),
     facilities,
     departments,
   };
@@ -167,7 +175,6 @@ router.get("/me", async (req, res) => {
   return res.json(payload);
 });
 
-/** Track member portal visit (home/dashboard). */
 router.post("/me/portal-visit", async (req, res) => {
   try {
     await portalVisitsSvc.recordPortalVisit(req.user.id);
@@ -178,7 +185,6 @@ router.post("/me/portal-visit", async (req, res) => {
   }
 });
 
-// Update logged-in user's profile details
 router.put("/me", async (req, res) => {
   const existing = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
   if (!existing) return res.status(404).json({ message: "User not found" });
@@ -196,7 +202,6 @@ router.put("/me", async (req, res) => {
 
   if (!nextName || !nextEmail) return res.status(400).json({ message: "Missing name/email" });
 
-  // DOB (month/day only) is optional. If one is provided, both must be valid.
   const providedMonth = req.body?.birth_month;
   const providedDay = req.body?.birth_day;
   const wantsUpdateDob = providedMonth !== undefined || providedDay !== undefined;
@@ -302,7 +307,6 @@ router.put("/me", async (req, res) => {
   return res.json({ message: "Profile updated" });
 });
 
-// Leave requests (same /users/me prefix as profile — avoids 404 when /leave-requests isn’t routed).
 router.post("/me/leave-requests", async (req, res) => {
   try {
     const out = await leaveSvc.submitLeaveRequest(req.user.id, req.body);
@@ -351,6 +355,7 @@ router.get("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
       role: canonicalRole(rest.role),
       admin_grants: parseAdminGrantsColumn(rawGrants),
       facility_university_only: Boolean(rest.facility_university_only),
+      is_new_hire: Boolean(rest.is_new_hire),
       facilities,
       departments: departments.length > 0 ? departments : [rest.department || "Production"],
       department: departments[0] || rest.department || "Production",
@@ -360,7 +365,6 @@ router.get("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   res.json(rows);
 });
 
-// Manager leave inbox (under /users so routing matches profile API).
 router.get("/manager/leave-inbox", managerLeaveInboxWithTeam);
 
 router.patch("/manager/leave-requests/:id", supervisorRequired, async (req, res) => {
@@ -373,7 +377,6 @@ router.patch("/manager/leave-requests/:id", supervisorRequired, async (req, res)
   }
 });
 
-// Direct reports: leave history and course assignment progress (any user with people under them).
 router.get("/manager/team-overview", supervisorRequired, async (req, res) => {
   try {
     return res.json(await managerTeamSvc.getTeamOverview(req.user.id));
@@ -382,7 +385,6 @@ router.get("/manager/team-overview", supervisorRequired, async (req, res) => {
   }
 });
 
-/** Before GET /:id — explicit path so it is never shadowed. */
 router.post("/:id/resend-invite", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const userId = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(userId) || userId < 1) {
@@ -408,11 +410,10 @@ router.post("/:id/resend-invite", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), asy
   }
 });
 
-// Admin: fetch a specific user + facilities
 router.get("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(is_new_hire, 0) AS is_new_hire, new_hire_marked_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
     )
     .get(req.params.id);
   if (!user) return res.status(404).json({ message: "User not found" });
@@ -434,6 +435,7 @@ router.get("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
     role: canonicalRole(safe.role),
     admin_grants: parseAdminGrantsColumn(rawAg),
     facility_university_only: Boolean(safe.facility_university_only),
+    is_new_hire: Boolean(safe.is_new_hire),
     facilities,
     departments,
     invite_status,
@@ -452,6 +454,7 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
     department,
     departments,
     designation,
+    is_new_hire,
   } = req.body;
   const adminGrantsInBody = readAdminGrantsFromBody(req.body || {});
   const businessUnits = Array.isArray(business_units)
@@ -551,10 +554,13 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
     pwHash = bcrypt.hashSync(passwordTrim, 10);
   }
 
+  const isNewHireFlag = is_new_hire === true || is_new_hire === "true" || is_new_hire === 1 || is_new_hire === "1";
+  const newHireMarkedAt = isNewHireFlag ? new Date().toISOString() : null;
+
   try {
     const result = await db
       .prepare(
-        "INSERT INTO users(name, email, password, role, business_unit, manager_id, department, designation, invite_token_hash, invite_expires_at, admin_grants, facility_university_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO users(name, email, password, role, business_unit, manager_id, department, designation, invite_token_hash, invite_expires_at, admin_grants, facility_university_only, is_new_hire, new_hire_marked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         name,
@@ -568,7 +574,9 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
         inviteHash,
         inviteExpires,
         insertAdminGrants,
-        uniCheck.flag ? 1 : 0
+        uniCheck.flag ? 1 : 0,
+        isNewHireFlag ? 1 : 0,
+        newHireMarkedAt
       );
 
     const userId = result.lastInsertRowid;
@@ -638,12 +646,14 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
     department,
     departments,
     designation,
+    is_new_hire,
   } = req.body;
   const adminGrantsInBody = readAdminGrantsFromBody(req.body || {});
   const existing = await db
     .prepare(
       `SELECT id, name, email, role, business_unit, manager_id, password, department, designation, profile_image_url, created_at,
-              invite_token_hash, invite_expires_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only
+              invite_token_hash, invite_expires_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only,
+              COALESCE(is_new_hire, 0) AS is_new_hire, new_hire_marked_at
        FROM users WHERE id = ?`
     )
     .get(userId);
@@ -774,10 +784,22 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
   });
   if (!uniPut.ok) return res.status(400).json({ message: uniPut.message });
 
+  const existingIsNewHire = Boolean(Number(existing.is_new_hire) === 1);
+  let nextIsNewHire = existingIsNewHire;
+  let nextNewHireMarkedAt = existing.new_hire_marked_at ?? null;
+  if (Object.prototype.hasOwnProperty.call(req.body, "is_new_hire")) {
+    nextIsNewHire = is_new_hire === true || is_new_hire === "true" || is_new_hire === 1 || is_new_hire === "1";
+    if (nextIsNewHire && !existingIsNewHire) {
+      nextNewHireMarkedAt = new Date().toISOString();
+    } else if (!nextIsNewHire) {
+      nextNewHireMarkedAt = null;
+    }
+  }
+
   try {
     await db
       .prepare(
-        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, designation=?, invite_token_hash=?, invite_expires_at=?, admin_grants=?, facility_university_only=? WHERE id=?"
+        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, designation=?, invite_token_hash=?, invite_expires_at=?, admin_grants=?, facility_university_only=?, is_new_hire=?, new_hire_marked_at=? WHERE id=?"
       )
       .run(
         nextName,
@@ -792,6 +814,8 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
         nextInviteExpires,
         nextAdminGrantsDb,
         uniPut.flag ? 1 : 0,
+        nextIsNewHire ? 1 : 0,
+        nextNewHireMarkedAt,
         userId
       );
 
@@ -826,7 +850,9 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
         designation,
         manager_id,
         admin_grants,
-        COALESCE(facility_university_only, 0) AS facility_university_only
+        COALESCE(facility_university_only, 0) AS facility_university_only,
+        COALESCE(is_new_hire, 0) AS is_new_hire,
+        new_hire_marked_at
        FROM users WHERE id = ?`
     )
     .get(userId);
@@ -840,15 +866,12 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
       ...updatedRest,
       admin_grants: parseAdminGrantsColumn(rawAg2),
       facility_university_only: Boolean(updatedRest.facility_university_only),
+      is_new_hire: Boolean(updatedRest.is_new_hire),
       departments: departmentsOut,
     },
   });
 });
 
-/**
- * Remove a user and dependent rows. Uses explicit deletes + updates so it still works if an older
- * DB was created without ON DELETE CASCADE on every child FK (common cause of persistent 23503).
- */
 async function deleteAdminUserCascade(userId, actingAdminId) {
   if (isPostgres) {
     const pool = getPool();

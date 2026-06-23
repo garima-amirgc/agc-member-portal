@@ -7,7 +7,6 @@ import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
-import HomeSpotlightOrderPanel from "../components/HomeSpotlightOrderPanel";
 
 const UPLOAD_IMAGE_TIMEOUT_MS = 3 * 60 * 1000;
 
@@ -149,8 +148,6 @@ export default function AdminSpotlightFeedPage({ feed }) {
     <main className={PAGE_SHELL}>
       <PageHeader title={feed.pageTitle} />
       <DashboardAssignmentNotice user={user} />
-
-      <HomeSpotlightOrderPanel />
 
       <div className="card mt-6 space-y-4">
         <p className="text-sm text-slate-600 dark:text-slate-300">{feed.adminIntro}</p>

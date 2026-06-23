@@ -1,14 +1,8 @@
-/**
- * Convert SQLite-style `?` placeholders to PostgreSQL `$1`, `$2`, ...
- */
 function questionMarksToNumbered(sql) {
   let n = 0;
   return sql.replace(/\?/g, () => `$${++n}`);
 }
 
-/**
- * SQLite → PostgreSQL statement tweaks (call while SQL still uses `?`).
- */
 function rewriteSqliteToPostgres(sql) {
   let s = sql;
 
@@ -49,7 +43,6 @@ function rewriteSqliteToPostgres(sql) {
   return s;
 }
 
-/** Tables with no SERIAL `id` — only composite UNIQUE; RETURNING id would error on PostgreSQL. */
 function insertHasNoSerialId(sqlTrimmed) {
   return (
     /^\s*insert\s+into\s+user_facilities\b/i.test(sqlTrimmed) ||

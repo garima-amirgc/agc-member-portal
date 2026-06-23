@@ -1,4 +1,3 @@
-/** Portal help contacts — override names/emails via env on the API service. */
 function getHelpContacts() {
   return [
     {

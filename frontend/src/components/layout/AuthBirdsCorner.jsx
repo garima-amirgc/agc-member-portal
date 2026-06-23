@@ -1,13 +1,3 @@
-/**
-
- * Decorative birds on auth screens.
-
- * - hero: bottom of the blue brand panel (mobile / tablet)
-
- * - band: page footer on desktop (flush to bottom-right corner)
-
- */
-
 export default function AuthBirdsCorner({ placement = "band" }) {
 
   const imgClass =

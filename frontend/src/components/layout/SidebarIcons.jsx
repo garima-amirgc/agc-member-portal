@@ -1,4 +1,3 @@
-/** Small outline icons for sidebar nav (MemberPortal-style) */
 export function IconHome({ className = "h-5 w-5" }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>

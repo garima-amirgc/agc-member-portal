@@ -1,6 +1,5 @@
 import api from "./api";
 
-/** Large video/document uploads can take a long time on slow connections. */
 export const UPLOAD_TIMEOUT_MS = 45 * 60 * 1000;
 
 function reportProgress(onProgress, loaded, total) {
@@ -65,7 +64,6 @@ async function uploadViaBackend(path, fieldName, file, onProgress) {
   return data;
 }
 
-/** Upload lesson video — direct to Spaces/R2 when available, otherwise via API. */
 export async function uploadLessonVideo(file, { onProgress } = {}) {
   const presign = await uploadViaPresign("/upload/presign/video", file, onProgress);
   if (presign?.video_url) {
@@ -78,7 +76,6 @@ export async function uploadLessonVideo(file, { onProgress } = {}) {
   return uploadViaBackend("/upload", "video", file, onProgress);
 }
 
-/** Upload resource document — direct to Spaces/R2 when available, otherwise via API. */
 export async function uploadResourceDocumentFile(file, { onProgress } = {}) {
   const presign = await uploadViaPresign("/upload/presign/document", file, onProgress);
   if (presign?.file_url) {

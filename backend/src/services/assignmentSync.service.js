@@ -1,9 +1,6 @@
 const { db } = require("../config/db");
 const { clearAllTrainingMilestone } = require("./trainingCompletion.service");
 
-/**
- * Ensures the user has an `assignments` row for every course in their facilities.
- */
 async function syncUserAssignmentsForFacilities(userId) {
   const facilityRows = await db
     .prepare("SELECT business_unit FROM user_facilities WHERE user_id = ? ORDER BY business_unit ASC")

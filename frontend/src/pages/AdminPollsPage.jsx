@@ -9,7 +9,7 @@ import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 function emptyQuestion() {
   return {
     id: `q_${Math.random().toString(16).slice(2, 10)}`,
-    type: "radio", // radio | multiselect | text
+    type: "radio",
     label: "",
     required: true,
     options: [
@@ -64,7 +64,7 @@ export default function AdminPollsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [editing, setEditing] = useState(null); // { id?, title, description, active, definition }
+  const [editing, setEditing] = useState(null);
   const isEditingExisting = useMemo(() => Boolean(editing && editing.id), [editing]);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerFile, setBannerFile] = useState(null);
@@ -258,7 +258,6 @@ export default function AdminPollsPage() {
           const j = JSON.parse(text);
           if (j?.message) msg = j.message;
         } catch {
-          /* keep msg */
         }
       }
       window.alert(msg);

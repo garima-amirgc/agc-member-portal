@@ -61,7 +61,6 @@ export default function CalendarPage() {
   const [month0, setMonth0] = useState(now.getMonth());
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  /** { dateKey, dayEvents } when user opens a day with more events than fit in the cell */
   const [dayDetail, setDayDetail] = useState(null);
 
   const win = useMemo(() => monthWindow(year, month0), [year, month0]);

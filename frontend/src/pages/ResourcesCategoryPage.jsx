@@ -25,7 +25,7 @@ export default function ResourcesCategoryPage() {
   const facilityNorm = normalizeFacilityParam(facility);
   const key = (category || "").toLowerCase();
   const { user } = useAuth();
-  const [contentTab, setContentTab] = useState("videos"); // videos | documentation | reports
+  const [contentTab, setContentTab] = useState("videos");
   const [videosLoading, setVideosLoading] = useState(false);
   const [docsLoading, setDocsLoading] = useState(false);
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -337,7 +337,6 @@ export default function ResourcesCategoryPage() {
                           ? String(v.course_title).trim()
                           : null) ||
                         (v.meta != null && String(v.meta).trim() ? String(v.meta).trim() : "");
-                      /** Card heading = course title from Learning admin (not lesson/video filename). */
                       const heading =
                         courseTitle || (v.title != null && String(v.title).trim() ? String(v.title).trim() : "Training");
                       const courseDesc =

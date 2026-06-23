@@ -9,11 +9,6 @@ function getVisibleFromIso(ev) {
   return Number.isFinite(t) ? s : null;
 }
 
-/**
- * Published facility upcoming events.
- * @param {boolean} showFacility - when true, show AGC/AQM/… badge (e.g. merged home feed).
- * @param {boolean} compact - sidebars: smaller type; order is image (if any) → title → date → detail.
- */
 export default function UpcomingEventCards({
   items,
   loading,

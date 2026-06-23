@@ -134,7 +134,6 @@ router.get("/polls/:id", async (req, res) => {
   return res.json({ ...row, definition: def });
 });
 
-/** Export all submissions for a poll as an Excel workbook (.xlsx). */
 router.get("/polls/:id/submissions/export", async (req, res) => {
   const id = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid poll id" });
@@ -282,7 +281,6 @@ router.post("/polls/:id/activate", async (req, res) => {
   return res.json({ ok: true });
 });
 
-/** Reset: make every user see this poll again (delete submissions). */
 router.post("/polls/:id/reset", async (req, res) => {
   const id = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid poll id" });

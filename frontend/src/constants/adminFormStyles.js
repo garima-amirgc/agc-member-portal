@@ -1,4 +1,3 @@
-/** Shared Tailwind classes for admin form fields. */
 export const ADMIN_FIELD_LABEL =
   "mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400";
 

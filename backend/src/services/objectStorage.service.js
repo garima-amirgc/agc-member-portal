@@ -3,7 +3,6 @@ const path = require("path");
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
-/** Trim and strip a single pair of surrounding quotes from .env values. */
 function envCred(key) {
   const v = process.env[key];
   if (v == null) return "";
@@ -52,7 +51,6 @@ function isR2Enabled() {
   );
 }
 
-/** DigitalOcean Spaces (S3-compatible). */
 function isSpacesEnabled() {
   const hasApiTarget = Boolean(envCred("DO_SPACES_ENDPOINT") || envCred("DO_SPACES_REGION"));
   return Boolean(
@@ -108,20 +106,14 @@ function tryParseUrl(raw) {
   }
 }
 
-/**
- * Extract object key from a known public base URL + full object URL.
- * Returns null if the URL is not under the expected base.
- */
 function keyFromPublicUrl(objectUrl, publicBaseUrl) {
   const base = String(publicBaseUrl || "").trim().replace(/\/+$/, "");
   const obj = String(objectUrl || "").trim();
   if (!base || !obj) return null;
 
-  // Most common: stored URL is `${base}/${key}`
   const directPrefix = `${base}/`;
   if (obj.startsWith(directPrefix)) return trimSlashes(obj.slice(directPrefix.length));
 
-  // Handle minor variations (e.g. base has path, or URL parsing needed).
   const baseU = tryParseUrl(base);
   const objU = tryParseUrl(obj);
   if (!baseU || !objU) return null;
@@ -149,16 +141,11 @@ function isNotFoundDelete(err) {
   return /NoSuchKey|NotFound/i.test(name);
 }
 
-/**
- * Delete an uploaded lesson video if it belongs to our configured storage.
- * Safe no-op for local `/uploads/...` and external URLs.
- */
 async function deleteLessonVideoByUrl(videoUrl) {
   const raw = String(videoUrl || "").trim();
   if (!raw) return { deleted: false, skipped: true, reason: "empty_url" };
   if (raw.startsWith("/uploads/")) return { deleted: false, skipped: true, reason: "local_uploads" };
 
-  // Prefer Spaces if URL matches Spaces public base; otherwise try R2.
   const spacesBase = envCred("DO_SPACES_PUBLIC_URL") || process.env.DO_SPACES_PUBLIC_URL;
   const r2Base = envCred("R2_PUBLIC_URL") || process.env.R2_PUBLIC_URL;
 
@@ -207,7 +194,6 @@ function getSpacesClient() {
   const explicit = envCred("DO_SPACES_ENDPOINT");
   const endpoint = explicit || (regionSlug ? `https://${regionSlug}.digitaloceanspaces.com` : "");
   return new S3Client({
-    // DO Spaces docs: signing region is often us-east-1; endpoint carries real region.
     region: "us-east-1",
     endpoint: endpoint.replace(/\/+$/, ""),
     credentials: {
@@ -229,10 +215,6 @@ function logSpacesCredentialHintOnce() {
   );
 }
 
-/**
- * Upload lesson video to R2 or DigitalOcean Spaces (key: videos/&lt;filename&gt;).
- * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
- */
 async function uploadLessonVideoFromDisk(localPath, filename) {
   const key = `videos/${filename}`;
   const ext = path.extname(filename).toLowerCase();
@@ -240,8 +222,6 @@ async function uploadLessonVideoFromDisk(localPath, filename) {
   const { size: ContentLength } = fs.statSync(localPath);
   const stream = fs.createReadStream(localPath);
   try {
-    // Prefer Spaces when both are configured: stray R2_* in the OS env often breaks uploads
-    // (DO keys sent to Cloudflare → "The access key ID you provided does not exist in our records").
     if (isSpacesEnabled()) {
       logSpacesCredentialHintOnce();
       const bucket = envCred("DO_SPACES_BUCKET") || String(process.env.DO_SPACES_BUCKET || "").trim();
@@ -281,10 +261,6 @@ async function uploadLessonVideoFromDisk(localPath, filename) {
   throw new Error("No object storage (R2 or Spaces) is configured");
 }
 
-/**
- * Upload a resource document to R2 or DigitalOcean Spaces (key: docs/<filename>).
- * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
- */
 async function uploadResourceDocumentFromDisk(localPath, filename) {
   const key = `docs/${filename}`;
   const ext = path.extname(filename).toLowerCase();
@@ -331,10 +307,6 @@ async function uploadResourceDocumentFromDisk(localPath, filename) {
   throw new Error("No object storage (R2 or Spaces) is configured");
 }
 
-/**
- * Upload an upcoming-event image (key: upcoming/&lt;filename&gt;).
- * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
- */
 async function uploadUpcomingImageFromDisk(localPath, filename) {
   const key = `upcoming/${filename}`;
   const ext = path.extname(filename).toLowerCase();
@@ -383,10 +355,6 @@ async function uploadUpcomingImageFromDisk(localPath, filename) {
   throw new Error("No object storage (R2 or Spaces) is configured");
 }
 
-/**
- * Upload a poll banner image (key: polls/&lt;filename&gt;).
- * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
- */
 async function uploadPollBannerImageFromDisk(localPath, filename) {
   const key = `polls/${filename}`;
   const ext = path.extname(filename).toLowerCase();
@@ -435,10 +403,6 @@ async function uploadPollBannerImageFromDisk(localPath, filename) {
   throw new Error("No object storage (R2 or Spaces) is configured");
 }
 
-/**
- * Public-read image at an explicit object key (e.g. branding/amir-group-logo.png).
- * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
- */
 async function uploadPublicImageFromDisk(localPath, objectKey) {
   const key = String(objectKey || "").replace(/^\/+/, "");
   const ext = path.extname(key).toLowerCase();
@@ -487,10 +451,6 @@ async function uploadPublicImageFromDisk(localPath, objectKey) {
   throw new Error("No object storage (R2 or Spaces) is configured");
 }
 
-/**
- * Org chart headshots (key: org-chart/&lt;filename&gt;) — public read, long cache.
- * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
- */
 async function uploadOrgChartImageFromDisk(localPath, filename) {
   const key = `org-chart/${filename}`;
   const ext = path.extname(filename).toLowerCase();
@@ -539,10 +499,6 @@ async function uploadOrgChartImageFromDisk(localPath, filename) {
   throw new Error("No object storage (R2 or Spaces) is configured");
 }
 
-/**
- * Upload a profile/avatar image (key: avatars/&lt;filename&gt;).
- * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
- */
 async function uploadAvatarImageFromDisk(localPath, filename) {
   const key = `avatars/${filename}`;
   const ext = path.extname(filename).toLowerCase();
@@ -593,10 +549,6 @@ async function uploadAvatarImageFromDisk(localPath, filename) {
 
 const TICKET_ATTACHMENT_MIME = { ...DOC_EXT_TO_MIME, ...IMAGE_EXT_TO_MIME };
 
-/**
- * IT ticket attachments (key: tickets/&lt;filename&gt;) — images + office/pdf/txt.
- * @returns {Promise<{ url: string, provider: 'r2' | 'spaces' }>}
- */
 async function uploadTicketAttachmentFromDisk(localPath, filename) {
   const key = `tickets/${filename}`;
   const ext = path.extname(filename).toLowerCase();
@@ -701,9 +653,6 @@ async function presignPutObjectUpload({ key, contentType, contentLength, usePubl
   throw new Error("No object storage (R2 or Spaces) is configured");
 }
 
-/**
- * Presigned PUT so the browser uploads straight to object storage (skips backend disk hop).
- */
 async function createPresignedVideoUpload({ originalFilename, contentType, contentLength }) {
   const ext = path.extname(String(originalFilename || "")).toLowerCase();
   if (!VIDEO_UPLOAD_EXTS.has(ext)) throw new Error("INVALID_UPLOAD_EXT");

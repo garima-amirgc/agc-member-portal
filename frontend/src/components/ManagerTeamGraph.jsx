@@ -1,8 +1,5 @@
 import ProgressBar from "./ProgressBar";
 
-/**
- * Simple org-style graph: manager node on top, direct reports below with training progress.
- */
 export default function ManagerTeamGraph({ managerName, team }) {
   const list = Array.isArray(team) ? team : [];
 
@@ -14,7 +11,6 @@ export default function ManagerTeamGraph({ managerName, team }) {
       </p>
 
       <div className="flex min-w-[280px] flex-col items-center pb-2">
-        {/* Manager node */}
         <div className="relative z-10 rounded-portal border-2 border-brand-blue bg-brand-blue-soft px-8 py-4 text-center shadow-brand dark:border-brand-blue/70 dark:bg-white/10">
           <div className="text-[10px] font-bold uppercase tracking-wider text-brand-blue dark:text-brand-green">
             Manager
@@ -24,11 +20,8 @@ export default function ManagerTeamGraph({ managerName, team }) {
 
         {list.length > 0 && (
           <>
-            {/* Vertical connector */}
             <div className="h-6 w-0.5 shrink-0 bg-gradient-to-b from-brand-blue to-stone-300 dark:from-brand-green dark:to-stone-600" />
-            {/* Horizontal bar */}
             <div className="h-0.5 w-full max-w-2xl shrink-0 bg-slate-300 dark:bg-slate-600" />
-            {/* Ticks down to each employee */}
             <div className="flex w-full max-w-4xl flex-wrap justify-center gap-0 px-2">
               {list.map((emp) => (
                 <div key={emp.id} className="flex flex-col items-center" style={{ flex: "1 1 140px", maxWidth: 200 }}>

@@ -1,9 +1,5 @@
 import { getApiBaseURL } from "../services/api";
 
-/**
- * Turn stored `/uploads/...` paths into a browser-loadable URL.
- * In dev, API is often on :5000 while the page is on :5173 — relative `/uploads` would hit Vite; prefix the API origin when `apiBaseURL` is absolute.
- */
 export function resolvePublicMediaUrl(stored) {
   if (stored == null || typeof stored !== "string") return "";
   const s = stored.trim();

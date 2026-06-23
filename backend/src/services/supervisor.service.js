@@ -1,29 +1,14 @@
 const { db } = require("../config/db");
 
-/**
- * @param {number} userId
- * @returns {Promise<number>}
- */
 async function countDirectReports(userId) {
   const row = await db.prepare("SELECT COUNT(*) AS c FROM users WHERE manager_id = ?").get(userId);
   return Number(row?.c ?? 0);
 }
 
-/**
- * True when at least one user has manager_id = this user (team lead / supervisor).
- * @param {number} userId
- * @returns {Promise<boolean>}
- */
 async function hasDirectReports(userId) {
   return (await countDirectReports(userId)) > 0;
 }
 
-/**
- * Assigning supervisorId as manager of employeeId would create a cycle.
- * @param {number|null} employeeId null when creating a new user
- * @param {number} supervisorId
- * @returns {Promise<boolean>}
- */
 async function wouldCreateReportingCycle(employeeId, supervisorId) {
   if (supervisorId == null || supervisorId === "") return false;
   const sid = Number(supervisorId);
@@ -42,12 +27,6 @@ async function wouldCreateReportingCycle(employeeId, supervisorId) {
   return false;
 }
 
-/**
- * Normalize manager_id from API body; validate user exists, no self-report, no cycles.
- * @param {number|null} employeeId
- * @param {unknown} manager_id
- * @returns {Promise<{ ok: true, managerId: number|null } | { ok: false, message: string }>}
- */
 async function resolveReportsToId(employeeId, manager_id) {
   if (manager_id === undefined) {
     return { ok: true, managerId: undefined };

@@ -1,4 +1,3 @@
-/** Valid section keys for company_content_items. */
 const COMPANY_CONTENT_SECTIONS = Object.freeze([
   "policy",
   "benefits",
@@ -16,7 +15,6 @@ const DEFAULT_ABOUT_INTRO =
   "The Amir Group of Companies is a family of food businesses committed to quality, safety, and service. " +
   "Explore company policies, benefits, and forms below. Contact HR if you need help finding a document or link.";
 
-/** Seed rows inserted once when the table is empty. */
 const COMPANY_CONTENT_SEED = Object.freeze([
   { section: "forms", title: "Mileage Reporting Form", sort_order: 1 },
   { section: "forms", title: "Supply Request Form", sort_order: 2 },
@@ -91,7 +89,6 @@ function isValidCompanySection(section) {
   return COMPANY_CONTENT_SECTIONS.includes(String(section || "").trim());
 }
 
-/** URL slug or legacy keys → stored section key. */
 function normalizeCompanySectionKey(section) {
   const s = String(section || "").trim();
   if (s === "websites") return "links_websites";

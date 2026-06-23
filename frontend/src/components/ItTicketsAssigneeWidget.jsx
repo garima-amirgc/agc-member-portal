@@ -30,6 +30,10 @@ function issueTypeFromTitle(title) {
   return (m?.[1] || "").trim();
 }
 
+function dismissKey(userId) {
+  return `agc_it_tickets_widget_dismissed:${String(userId || "")}`;
+}
+
 function parseTicketAttachments(ticket) {
   const raw = ticket?.attachments;
   if (raw == null || raw === "") return [];
@@ -49,6 +53,21 @@ export default function ItTicketsAssigneeWidget() {
   const [submissionModalTicket, setSubmissionModalTicket] = useState(null);
   const seenActiveTicketIdsRef = useRef(new Set());
   const didInitRef = useRef(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return typeof sessionStorage !== "undefined" && sessionStorage.getItem(dismissKey(user?.id)) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const dismiss = useCallback(() => {
+    try {
+      sessionStorage.setItem(dismissKey(user?.id), "1");
+    } catch {
+    }
+    setDismissed(true);
+  }, [user?.id]);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -74,7 +93,6 @@ export default function ItTicketsAssigneeWidget() {
     return () => window.removeEventListener("agc-it-tickets-changed", onRefresh);
   }, [load]);
 
-  // Poll in case another user submits while this tab is open (silent — no layout jump).
   useEffect(() => {
     const tick = () => {
       if (document.hidden) return;
@@ -116,6 +134,8 @@ export default function ItTicketsAssigneeWidget() {
     ? ticketRequesterPhotoUrl(submissionModalTicket, user)
     : "";
 
+  if (dismissed) return null;
+
   return (
     <section className="card no-title-underline overflow-hidden p-0 ring-1 ring-[rgba(11,62,175,0.1)] dark:ring-[rgba(167,211,68,0.15)]">
       <div className="flex flex-wrap items-start justify-between gap-3 bg-gradient-to-r from-[#0B3EAF] to-[#1a5fd4] px-5 py-4 sm:px-6">
@@ -132,11 +152,24 @@ export default function ItTicketsAssigneeWidget() {
             .
           </p>
         </div>
-        {active.length > 0 ? (
-          <span className="rounded-full bg-[#A7D344] px-4 py-1.5 text-xs font-bold text-[#0a0a0a] shadow-sm">
-            {active.length} open
-          </span>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {active.length > 0 ? (
+            <span className="rounded-full bg-[#A7D344] px-4 py-1.5 text-xs font-bold text-[#0a0a0a] shadow-sm">
+              {active.length} open
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Dismiss this card"
+            title="Dismiss"
+            className="rounded-full p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="p-5 sm:p-6">

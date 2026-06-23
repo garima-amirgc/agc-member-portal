@@ -9,8 +9,7 @@ import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 import { SPOTLIGHT_FEED_CARD_MIN_H, SPOTLIGHT_FEED_HOME_DESC_MIN_H, SPOTLIGHT_FEED_HOME_LINE_CLAMP, spotlightFeedNeedsReadMore } from "../utils/spotlightFeedDisplay";
 
 const AUTO_ROTATE_MS = 6000;
-/** Fixed slide viewport — keeps card height stable while rotating. */
-const COMPACT_SLIDE_HEIGHT = "h-[12.25rem]";
+const COMPACT_SLIDE_HEIGHT = "h-[13rem]";
 
 const EOM_HISTORY_PATH = "/employee-of-month/history";
 
@@ -61,7 +60,7 @@ function ChevronIcon({ direction = "left" }) {
 function SlidePagination({ count, activeIndex, onSelect, labelPrefix = "Employee of the Month" }) {
   if (count <= 1) return null;
   return (
-    <div className="mt-3 flex flex-col items-center gap-2">
+    <div className="mt-5 flex flex-col items-center gap-2">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {activeIndex + 1} of {count}
       </p>
@@ -117,7 +116,10 @@ function EmployeeSlideBody({ entry, compact, stableLayout = false }) {
               </p>
             </div>
           </div>
-          <p className={`${SPOTLIGHT_FEED_HOME_LINE_CLAMP} ${SPOTLIGHT_FEED_HOME_DESC_MIN_H} text-sm leading-relaxed text-slate-700 dark:text-slate-300`}>
+          <p
+            className={`${SPOTLIGHT_FEED_HOME_DESC_MIN_H} overflow-hidden text-sm leading-relaxed text-slate-700 dark:text-slate-300`}
+            style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}
+          >
             {citation || "\u00A0"}
           </p>
         </>
@@ -232,7 +234,7 @@ function EmployeeOfMonthSlider({ list, activeIndex, onChange, compact }) {
       ) : null}
 
       <div
-        className={`overflow-hidden ${
+        className={`relative overflow-hidden ${
           compact ? (hasMultiple ? COMPACT_SLIDE_HEIGHT : "") : "min-h-[10rem]"
         }`}
         onTouchStart={onTouchStart}
@@ -241,6 +243,12 @@ function EmployeeOfMonthSlider({ list, activeIndex, onChange, compact }) {
         <div key={list[safeIndex]?.id ?? safeIndex} className={compact ? "h-full" : undefined}>
           <EmployeeSlideBody entry={list[safeIndex]} compact={compact} stableLayout={hasMultiple} />
         </div>
+        {compact && hasMultiple ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-white to-transparent dark:from-slate-900"
+            aria-hidden
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -292,9 +300,10 @@ export default function EmployeeOfMonthCard({ entry, entries, loading, compact =
   if (compact) {
     return (
       <div
-        className={`card relative overflow-hidden border-[#0B3EAF]/15 bg-gradient-to-br from-[#eef3ff] via-white to-[#f4fbe8] dark:border-[#A7D344]/20 dark:from-[#0B3EAF]/10 dark:via-slate-900/40 dark:to-[#A7D344]/10 ${SPOTLIGHT_FEED_CARD_MIN_H} flex flex-col`}
+        className={`card group relative overflow-hidden rounded-2xl border-[#0B3EAF]/12 bg-gradient-to-br from-[#eef3ff] via-white to-[#f4fbe8] transition duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-[#A7D344]/20 dark:from-[#0B3EAF]/10 dark:via-slate-900/40 dark:to-[#A7D344]/10 ${SPOTLIGHT_FEED_CARD_MIN_H} flex flex-col`}
         {...pauseProps}
       >
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0B3EAF] to-[#A7D344]" aria-hidden />
         <EmployeeOfMonthBackgroundStar className="right-10 top-1/2 h-32 w-32 -translate-y-1/2 text-[#0B3EAF]/[0.14] dark:text-[#A7D344]/[0.16]" />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/75 via-white/55 to-[#eef3ff]/40 dark:from-slate-900/70 dark:via-slate-900/45 dark:to-[#0B3EAF]/10" />
 
@@ -325,9 +334,10 @@ export default function EmployeeOfMonthCard({ entry, entries, loading, compact =
 
   return (
     <div
-      className="card no-title-underline relative overflow-hidden border-[#0B3EAF]/20 bg-gradient-to-br from-[#eef3ff] via-white to-[#f4fbe8] p-4 sm:p-5 dark:border-[#A7D344]/25 dark:from-[#0B3EAF]/10 dark:via-slate-900/40 dark:to-[#A7D344]/10"
+      className="card group no-title-underline relative overflow-hidden rounded-2xl border-[#0B3EAF]/12 bg-gradient-to-br from-[#eef3ff] via-white to-[#f4fbe8] p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5 dark:border-[#A7D344]/25 dark:from-[#0B3EAF]/10 dark:via-slate-900/40 dark:to-[#A7D344]/10"
       {...pauseProps}
     >
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0B3EAF] to-[#A7D344]" aria-hidden />
       <EmployeeOfMonthBackgroundStar className="right-4 top-1/2 h-36 w-36 -translate-y-1/2 text-[#0B3EAF]/[0.14] dark:text-[#A7D344]/[0.16]" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/80 via-white/60 to-[#eef3ff]/50 dark:from-slate-900/75 dark:via-slate-900/50 dark:to-[#0B3EAF]/10" />
 

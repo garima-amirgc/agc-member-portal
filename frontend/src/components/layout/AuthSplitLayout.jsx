@@ -1,6 +1,5 @@
 import AuthBirdsCorner from "./AuthBirdsCorner";
 
-/** White form card — matches login overlap layout */
 export const AUTH_FORM_CARD =
   "w-full min-w-0 rounded-2xl border border-black/[0.07] bg-white px-5 py-7 shadow-[0_8px_40px_rgba(11,62,175,0.12),0_2px_12px_rgba(0,0,0,0.06)] dark:border-stone-800 dark:bg-[#141414] sm:rounded-3xl sm:px-8 sm:py-9 md:px-9 md:py-10 lg:rounded-[1.75rem] lg:px-10 lg:py-11 lg:shadow-[0_16px_56px_rgba(11,62,175,0.2),0_6px_24px_rgba(15,23,42,0.1)] dark:lg:shadow-[0_20px_60px_rgba(0,0,0,0.55)]";
 
@@ -47,7 +46,6 @@ function HeroBackdrop() {
   );
 }
 
-/** Brand accent bars at bottom of hero panel */
 export function AuthHeroAccentBars() {
   return (
     <div className="relative z-10 mt-1 flex shrink-0 flex-wrap items-center gap-2 sm:gap-2.5">
@@ -58,9 +56,6 @@ export function AuthHeroAccentBars() {
   );
 }
 
-/**
- * Split auth screen: blue hero (left, rounded left only on desktop) + overlapping white card.
- */
 export default function AuthSplitLayout({ hero, children, heroHeadingId, contentPy = "lg:py-10" }) {
   return (
     <div className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-gradient-to-br from-[#eef2fb] via-[#f4f6fb] to-[#e2e8f3] dark:from-[#0a0a0a] dark:via-[#0c0c0c] dark:to-[#111111]">

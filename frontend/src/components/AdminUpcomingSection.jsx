@@ -3,12 +3,10 @@ import api from "../services/api";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 
 const FACILITIES = ["AGC", "AQM", "SCF", "ASP"];
-/** Image uploads to Spaces/local; allow a few minutes on slow links. */
 const UPLOAD_IMAGE_TIMEOUT_MS = 3 * 60 * 1000;
 
 const fieldLabelClass =
   "mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400 max-xl:text-[0.7rem]";
-/** `text-base` avoids iOS input zoom; `max-xl:text-sm` tightens on laptop. */
 const fieldInputClass =
   "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base shadow-sm transition-colors placeholder:text-slate-400 focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/15 dark:border-slate-600 dark:bg-slate-800 dark:placeholder:text-slate-500 dark:focus:border-brand-green dark:focus:ring-brand-green/20 max-xl:text-sm";
 const formPanelClass =
@@ -16,7 +14,6 @@ const formPanelClass =
 
 const ADD_FORM_STORAGE_KEY = "agc_admin_upcoming_facility_pick";
 
-/** Fresh add-form state; `businessUnits` keeps the same array identity semantics as before (new arrays each time). */
 function createEmptyAddForm(businessUnits) {
   const units =
     Array.isArray(businessUnits) && businessUnits.length > 0
@@ -57,17 +54,12 @@ function fmtDate(iso) {
   return d.toLocaleString();
 }
 
-/** Empty or whitespace → null so the API clears the field; otherwise trimmed string. */
 function trimDateField(s) {
   if (s == null) return null;
   const t = String(s).trim();
   return t === "" ? null : t;
 }
 
-/**
- * Sends schedule fields as UTC ISO so the backend always gets a single parseable shape
- * (covers datetime-local, ISO strings, and "YYYY-MM-DD HH:mm" quirks).
- */
 function scheduleFieldToApi(s) {
   const t = trimDateField(s);
   if (t === null) return null;
@@ -90,7 +82,6 @@ function assertScheduleField(label, raw, iso) {
   return true;
 }
 
-/** Read datetime-local values from the form node (avoids stale React state if submit races onChange). */
 function readScheduleFromFormEl(formEl) {
   if (!formEl) return null;
   try {
@@ -105,7 +96,6 @@ function readScheduleFromFormEl(formEl) {
   }
 }
 
-/** Read which facility checkboxes are actually checked in the DOM (authoritative for paint). */
 function readBusinessUnitsFromDom(formEl) {
   if (!formEl) return [];
   try {
@@ -122,10 +112,6 @@ function readBusinessUnitsFromDom(formEl) {
   }
 }
 
-/**
- * React state and the DOM can disagree briefly after "Select all" or fast toggles + Save.
- * `stateOrdered` should come from a ref updated in the same tick as toggles (not only from `useState`).
- */
 function mergeBusinessUnitPick(formEl, stateOrdered) {
   const fromDom = readBusinessUnitsFromDom(formEl);
   const fromState = FACILITIES.filter((f) => (stateOrdered ?? []).includes(f));
@@ -137,23 +123,22 @@ function mergeBusinessUnitPick(formEl, stateOrdered) {
 export default function AdminUpcomingSection({ className = "card mt-6" }) {
   const [events, setEvents] = useState([]);
   const initialAddForm = createEmptyAddForm(readStoredFacilityPick() ?? undefined);
-  /** Same tick as checkbox toggles — avoids React 18 batching where Save runs before state commits. */
   const addBusinessUnitsRef = useRef(initialAddForm.business_units);
   const [form, setForm] = useState(() => initialAddForm);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState(null);
-  const [editing, setEditing] = useState(null); // event object
+  const [editing, setEditing] = useState(null);
   const [editingSaving, setEditingSaving] = useState(false);
   const [uploadingFormImage, setUploadingFormImage] = useState(false);
   const [uploadingEditImage, setUploadingEditImage] = useState(false);
   const formImageInputRef = useRef(null);
   const editImageInputRef = useRef(null);
-  const addFormRef = useRef(/** @type {HTMLFormElement | null} */ (null));
+  const addFormRef = useRef(null);
   const editShowRef = useRef(null);
   const editEventRef = useRef(null);
   const editEndRef = useRef(null);
-  const editModalRef = useRef(/** @type {HTMLFormElement | null} */ (null));
-  const editBusinessUnitsRef = useRef(/** @type {string[]} */ ([]));
+  const editModalRef = useRef(null);
+  const editBusinessUnitsRef = useRef([]);
 
   const load = () => {
     return api
@@ -174,7 +159,6 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
     try {
       sessionStorage.setItem(ADD_FORM_STORAGE_KEY, JSON.stringify(form.business_units));
     } catch {
-      /* private mode / quota */
     }
   }, [form.business_units]);
 
@@ -182,10 +166,6 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
     window.dispatchEvent(new Event("facility-upcoming-updated"));
   };
 
-  /**
-   * @param {boolean | undefined} publishedOverride - if set, overrides the form checkbox (e.g. draft = false)
-   * @param {{ show_from_at?: string, event_at?: string, end_at?: string } | null} scheduleOverride - from DOM; preferred over React state
-   */
   const toggleAddFacility = (code) => {
     setForm((prev) => {
       const next = new Set(prev.business_units);
@@ -260,7 +240,6 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
     try {
       await api.post("/upcoming", {
         business_units: businessUnits,
-        // Legacy single-field compat (older backends only read `business_unit`)
         business_unit: businessUnits[0],
         title: form.title.trim(),
         detail: form.detail.trim() || undefined,
@@ -270,7 +249,6 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
         published,
         image_url: form.image_url?.trim() || undefined,
       });
-      // Clear title/schedule but keep the same facility selection (new object every time — no shared EMPTY_FORM refs).
       const nextForm = createEmptyAddForm(businessUnits);
       addBusinessUnitsRef.current = nextForm.business_units;
       setForm(nextForm);

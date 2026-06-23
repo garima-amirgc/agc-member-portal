@@ -2,9 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
-/**
- * Banner when the employee has completed all assigned training (persistent until dismissed).
- */
 export default function TrainingCompletionNotice({ user }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);

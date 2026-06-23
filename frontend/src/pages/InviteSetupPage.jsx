@@ -8,7 +8,6 @@ import { postAuthLandingPath } from "../utils/facilityUniversityOnly";
 import api, { getApiBaseURL } from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
-/** Shared focus ring for accent inputs */
 const inputWrapFocus = "focus-within:ring-2 focus-within:ring-brand-blue/25 dark:focus-within:ring-brand-green/20";
 
 export default function InviteSetupPage() {
@@ -17,7 +16,7 @@ export default function InviteSetupPage() {
   const navigate = useNavigate();
   const { establishSession, refreshMe } = useAuth();
 
-  const [status, setStatus] = useState("checking"); // checking | ready | invalid
+  const [status, setStatus] = useState("checking");
   const [maskedEmail, setMaskedEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -65,7 +64,6 @@ export default function InviteSetupPage() {
       try {
         nextUser = JSON.parse(localStorage.getItem("user") || "null") || nextUser;
       } catch {
-        /* keep nextUser */
       }
       navigate(postAuthLandingPath(nextUser), { replace: true });
       refreshMe().catch(() => {});

@@ -25,7 +25,6 @@ function normalizeDateInput(v) {
   return new Date(ms).toISOString();
 }
 
-/** Parse `business_units` JSON from DB; fallback to legacy `business_unit` column. */
 function normalizeBusinessUnitsArray(row) {
   if (row.business_units != null && String(row.business_units).trim() !== "") {
     try {
@@ -35,14 +34,12 @@ function normalizeBusinessUnitsArray(row) {
         return BUSINESS_UNITS.filter((u) => set.has(u));
       }
     } catch {
-      /* ignore */
     }
   }
   const bu = row.business_unit != null ? String(row.business_unit).trim().toUpperCase() : "";
   return bu && BUSINESS_UNITS.includes(bu) ? [bu] : [];
 }
 
-/** sql.js rows + JSON: ensure stable keys for the React admin UI. */
 function shapeUpcomingRow(row) {
   if (!row || typeof row !== "object") return row;
   const business_units = normalizeBusinessUnitsArray(row);
@@ -56,11 +53,6 @@ function shapeUpcomingRow(row) {
   };
 }
 
-/**
- * Published, non-expired events for the merged home/dashboard feed.
- * Intentionally not filtered by user facility: every role (Employee / Manager / Admin) gets the same list
- * so the home page always matches the global “Upcoming” intent. Facility pages use GET /upcoming?business_unit=…
- */
 router.get("/feed", authRequired, async (req, res) => {
   const nowIso = new Date().toISOString();
   if (isPostgres) {
@@ -168,7 +160,6 @@ function normalizeImageUrl(v) {
   return s.slice(0, 2048);
 }
 
-/** Resolve one or many facilities from body: `business_units` (preferred) or legacy `business_unit`. */
 function resolveBusinessUnitsFromBody(body) {
   let raw = body?.business_units;
   if (raw != null && !Array.isArray(raw)) {
@@ -177,7 +168,6 @@ function resolveBusinessUnitsFromBody(body) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) raw = parsed;
       } catch {
-        /* ignore */
       }
     }
     if (!Array.isArray(raw) && typeof raw === "object") {

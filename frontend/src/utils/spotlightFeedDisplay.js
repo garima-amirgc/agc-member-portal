@@ -1,13 +1,11 @@
 export const SPOTLIGHT_FEED_PREVIEW_CHARS = 100;
 
 export const SPOTLIGHT_FEED_HOME_LINE_CLAMP = "line-clamp-2";
-/** ~2 lines at text-sm leading-relaxed */
 export const SPOTLIGHT_FEED_HOME_DESC_MIN_H = "min-h-[3.25rem]";
 
 export const SPOTLIGHT_FEED_CARD_MIN_H = "min-h-[22rem]";
 export const SPOTLIGHT_FEED_GRID_CARD_MIN_H = "min-h-[18rem]";
 
-/** @deprecated use SPOTLIGHT_FEED_* */
 export const LEADERSHIP_UPDATE_PREVIEW_CHARS = SPOTLIGHT_FEED_PREVIEW_CHARS;
 export const LEADERSHIP_UPDATE_CARD_MIN_H = SPOTLIGHT_FEED_CARD_MIN_H;
 export const LEADERSHIP_UPDATE_GRID_CARD_MIN_H = SPOTLIGHT_FEED_GRID_CARD_MIN_H;

@@ -1,7 +1,5 @@
-/** Must match backend `config/adminGrants.js` ADMIN_GRANT_KEYS values. */
 export const ADMIN_GRANT_KEYS = Object.freeze({
   ENGAGEMENT_CALENDAR: "engagement_calendar",
-  /** @deprecated Legacy DB value — maps to facility upcoming events only. */
   UPCOMING: "upcoming",
   UPCOMING_EVENTS: "upcoming_events",
   EMPLOYEE_OF_MONTH: "employee_of_month",
@@ -15,9 +13,9 @@ export const ADMIN_GRANT_KEYS = Object.freeze({
   SYSTEM: "system",
   FEEDBACK_POLLS: "feedback_polls",
   COMPANY_CONTENT: "company_content",
+  IT_TICKETS: "it_tickets",
 });
 
-/** Home spotlight feed admin areas (each assigned separately). */
 export const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
   ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH,
   ADMIN_GRANT_KEYS.LEADERSHIP_UPDATES,
@@ -26,7 +24,6 @@ export const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
   ADMIN_GRANT_KEYS.COMMUNITY_INVOLVEMENT,
 ]);
 
-/** Grouped checkboxes when assigning optional administration access (matches sidebar groups). */
 export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
   {
     groupKey: "hr",
@@ -58,6 +55,7 @@ export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
       { key: ADMIN_GRANT_KEYS.USERS, label: "Users (create, edit, invites)" },
       { key: ADMIN_GRANT_KEYS.REPORTS, label: "Manage Power BI reports" },
       { key: ADMIN_GRANT_KEYS.SYSTEM, label: "System status" },
+      { key: ADMIN_GRANT_KEYS.IT_TICKETS, label: "IT Tickets — view all tickets (full visibility)" },
     ],
   },
   {
@@ -72,7 +70,6 @@ export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
   },
 ]);
 
-/** Flat list (all assignable areas). */
 export const ADMIN_GRANT_OPTIONS = Object.freeze(
   ADMIN_GRANT_OPTION_GROUPS.flatMap((group) => group.options)
 );
@@ -85,7 +82,6 @@ export function adminGrantLabel(key) {
   return found?.label || String(key || "");
 }
 
-/** Map legacy `upcoming` to `upcoming_events` for checkbox UI and saves. */
 export function normalizeAdminGrantsForUi(grants) {
   const out = [];
   const seen = new Set();

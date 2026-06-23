@@ -3,10 +3,6 @@ function initials(name = "") {
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
 }
 
-/**
- * Public Spaces origin for org-chart headshots. Override with `VITE_ORG_CHART_ASSETS_BASE` (no trailing slash).
- * Matches the project’s default bucket when env is not set, so photos still load in local dev.
- */
 const DEFAULT_ORG_CHART_ASSETS_BASE = "https://agc-university-resources.tor1.digitaloceanspaces.com";
 
 function orgChartAssetUrl(relativeKey) {
@@ -18,9 +14,6 @@ function orgChartAssetUrl(relativeKey) {
 
 const LINE = "bg-slate-400 dark:bg-slate-500";
 
-/**
- * @param {{ name: string; title: string; photoSrc?: string; compact?: boolean }} props
- */
 function OrgPersonNode({ name, title, photoSrc, compact }) {
   const ini = initials(name);
   return (
@@ -114,9 +107,6 @@ function HBar({ className = "" }) {
   return <div className={[`h-px shrink-0 ${LINE}`, className].filter(Boolean).join(" ")} aria-hidden />;
 }
 
-/**
- * @param {{ row: { name: string; title: string; photoSrc?: string; reports?: Array<{ name: string; title: string; photoSrc?: string }> }; align: 'start' | 'end' }} props
- */
 function SpinePersonBlock({ row, align }) {
   const colAlign = align === "end" ? "items-end" : "items-start";
   return (
@@ -176,9 +166,6 @@ function SpineList() {
 }
 
 export default function AgcFacilityOrgChart() {
-  // The AGC leadership spine (col 2) carries far more entries than the Finance branch (col 1) or
-  // the empty third track, so it gets a wider share of the row — an even three-way split was
-  // squeezing long titles like "Director of Human Resources — AGC" until names got clipped.
   const colGrid = "mx-auto grid w-full max-w-5xl grid-cols-1 gap-8 sm:gap-10 lg:grid-cols-[0.9fr_2.1fr_0.6fr] lg:gap-6";
 
   return (
@@ -187,12 +174,6 @@ export default function AgcFacilityOrgChart() {
         <h2 className="text-sm font-bold text-slate-900 dark:text-white">AGC leadership</h2>
       </div>
 
-      {/*
-        Mobile (<sm): the zigzag connector spine below gets ambiguous and the long job titles
-        overflow once everything is squeezed to phone width, so phones get an explicit indented
-        "reports to" list instead — the same approach already used for the AQM and ASP charts.
-        Tablet/desktop keep the connector-line spine.
-      */}
       <div className="block rounded-xl border border-slate-200/80 bg-slate-50/90 p-3 sm:hidden dark:border-slate-700 dark:bg-slate-900/40">
         <div className="mb-2 rounded-lg border border-dashed border-slate-300 p-2 dark:border-slate-600">
           <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -205,7 +186,6 @@ export default function AgcFacilityOrgChart() {
           </div>
         </div>
 
-        {/* Reports to Sherry Aziz */}
         <div className="ml-2 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
           <OrgPersonNode
             compact
@@ -229,7 +209,6 @@ export default function AgcFacilityOrgChart() {
           </div>
         </div>
 
-        {/* Reports to Tony Aziz */}
         <div className="ml-2 mt-3 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
           <div className="flex flex-col items-stretch gap-2">
             {SPINE_ROWS.map((row) => (
@@ -309,7 +288,6 @@ export default function AgcFacilityOrgChart() {
             </div>
           </section>
 
-          {/* Third track: keeps column alignment under Tom; no stub line */}
           <section
             className="flex min-w-0 flex-col items-center border-t border-slate-200/80 pt-6 lg:border-t-0 lg:pt-0 dark:border-slate-700/80"
             aria-hidden

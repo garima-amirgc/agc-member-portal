@@ -1,4 +1,3 @@
-/** Portal calendar dates always use Toronto (America/Toronto). */
 export const TORONTO_TZ = "America/Toronto";
 
 const ymdFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -14,7 +13,6 @@ const monthYearFormatter = new Intl.DateTimeFormat("en-CA", {
   month: "numeric",
 });
 
-/** @returns {string | null} `YYYY-MM-DD` in Toronto */
 export function ymdInToronto(value) {
   if (value == null || value === "") return null;
   const raw = String(value).trim();
@@ -37,7 +35,6 @@ export function torontoTodayYmd() {
   return ymdInToronto(new Date());
 }
 
-/** @returns {{ year: number, month0: number }} */
 export function torontoYearMonth() {
   const parts = monthYearFormatter.formatToParts(new Date());
   const year = Number(parts.find((p) => p.type === "year")?.value);

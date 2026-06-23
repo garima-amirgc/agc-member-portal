@@ -5,7 +5,6 @@ function portalTimezone() {
   return tz || "America/Toronto";
 }
 
-/** Calendar date parts for "today" in the portal timezone (matches local dev for Amir GC). */
 function portalTodayParts(ref = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: portalTimezone(),
@@ -26,7 +25,6 @@ function utcMs(y, m, d) {
   return Date.UTC(y, m - 1, d);
 }
 
-/** Days from ref calendar day until the next occurrence of month/day (0 = same day). */
 function daysUntilMonthDay(ref, month, day) {
   const mo = Number(month);
   const da = Number(day);

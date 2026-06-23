@@ -25,7 +25,6 @@ function normalizeKind(k) {
 function normalizeColor(c) {
   const v = String(c || "").trim();
   if (!v) return null;
-  // allow hex, rgb(), or any css color string — UI will use it as-is.
   if (v.length > 64) return null;
   return v;
 }
@@ -93,10 +92,6 @@ function validateUpdate(body) {
   return { value: patch };
 }
 
-/**
- * List events in a date window. Inclusive bounds.
- * Query: from=YYYY-MM-DD, to=YYYY-MM-DD
- */
 router.get("/events", authRequired, async (req, res) => {
   const from = String(req.query?.from || "").trim();
   const to = String(req.query?.to || "").trim();
@@ -138,7 +133,6 @@ router.get("/events", authRequired, async (req, res) => {
   }
 });
 
-/** Create event (admin). */
 router.post(
   "/events",
   authRequired,
@@ -184,7 +178,6 @@ router.post(
   }
 );
 
-/** Update event (admin). */
 router.put(
   "/events/:id",
   authRequired,
@@ -198,7 +191,6 @@ router.put(
     const patch = v.value;
     if (!patch || Object.keys(patch).length === 0) return res.json({ ok: true });
 
-    // date consistency if both present in patch (or only one; fetch row for other).
     try {
       let existing;
       if (isPostgres) {
@@ -262,7 +254,6 @@ router.put(
   }
 );
 
-/** Delete event (admin). */
 router.delete(
   "/events/:id",
   authRequired,

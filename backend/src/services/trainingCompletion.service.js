@@ -2,10 +2,6 @@ const { db } = require("../config/db");
 
 const RESOURCE_CATEGORIES = ["finance", "sales", "hr", "safety", "production", "it"];
 
-/**
- * @param {number} userId
- * @returns {Promise<string[]>}
- */
 async function getUserFacilities(userId) {
   const facilityRows = await db
     .prepare("SELECT business_unit FROM user_facilities WHERE user_id = ? ORDER BY business_unit ASC")
@@ -19,11 +15,6 @@ async function getUserFacilities(userId) {
   return facilities;
 }
 
-/**
- * Facility-scoped assignments for an employee (same rules as GET /assignments/me).
- * @param {number} userId
- * @returns {Promise<Array<{ id: number, status: string, progress: number }>>}
- */
 async function getFacilityScopedAssignments(userId) {
   const facilities = await getUserFacilities(userId);
   if (facilities.length === 0) return [];
@@ -39,10 +30,6 @@ async function getFacilityScopedAssignments(userId) {
     .all(userId, ...facilities);
 }
 
-/**
- * Progress from facility Resources (videos + documents marked complete).
- * @param {number} userId
- */
 async function getResourceTrainingSummary(userId) {
   const facilities = await getUserFacilities(userId);
   if (facilities.length === 0) {
@@ -105,10 +92,6 @@ async function getResourceTrainingSummary(userId) {
   };
 }
 
-/**
- * Combined course assignments + facility resource progress (what employees see in the portal).
- * @param {number} userId
- */
 async function getTrainingSummary(userId) {
   const assignments = await getFacilityScopedAssignments(userId);
   const assignmentTotal = assignments.length;
@@ -148,11 +131,6 @@ async function getTrainingSummary(userId) {
   };
 }
 
-/**
- * Clears the all-training milestone when new assignments are added so employees
- * can be notified again after completing newly assigned courses.
- * @param {number} userId
- */
 async function clearAllTrainingMilestone(userId) {
   await db.prepare("DELETE FROM all_training_milestones WHERE employee_id = ?").run(userId);
 }

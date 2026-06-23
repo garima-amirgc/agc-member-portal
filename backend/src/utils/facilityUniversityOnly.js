@@ -8,9 +8,6 @@ function parseFacilityUniversityOnlyFlag(raw, roleNorm) {
   return false;
 }
 
-/**
- * @param {{ flag: boolean, roleNorm: string, businessUnits: string[], adminGrantsDb: string | null | undefined }} opts
- */
 function validateFacilityUniversityOnlyForUser(opts) {
   const { flag, roleNorm, businessUnits, adminGrantsDb } = opts;
   if (!flag) return { ok: true, flag: false };

@@ -41,7 +41,6 @@ function normalizeFacilities(arr) {
 
 function reportFacilities(r) {
   const bu = normalizeFacilities(r?.business_units);
-  // Empty means "all facilities" in this portal.
   return bu.length ? bu : FACILITIES;
 }
 
@@ -52,6 +51,21 @@ export default function ReportsPage() {
   const [activeId, setActiveId] = useState(null);
   const [activeFacility, setActiveFacility] = useState(null);
   const [reportScale, setReportScale] = useState(1.7);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [expanded]);
 
   useEffect(() => {
     let stale = false;
@@ -93,16 +107,13 @@ export default function ReportsPage() {
     return FACILITIES.filter((f) => seen.has(f));
   }, [reports]);
 
-  // Keep facility selection stable and aligned to the active report.
   useEffect(() => {
     if (facilityTabs.length === 0) {
       if (activeFacility !== null) setActiveFacility(null);
       return;
     }
-    // If current facility is valid, keep it.
     if (activeFacility && facilityTabs.includes(activeFacility)) return;
 
-    // Prefer facility inferred from active report.
     const inferred = active ? reportFacilities(active)[0] : null;
     setActiveFacility(inferred && facilityTabs.includes(inferred) ? inferred : facilityTabs[0]);
   }, [active, activeFacility, facilityTabs]);
@@ -113,7 +124,6 @@ export default function ReportsPage() {
     return list;
   }, [reports, activeFacility]);
 
-  // If the active report doesn't belong to the selected facility, switch to the first report under that facility.
   useEffect(() => {
     if (!activeFacility) return;
     if (!activeId) {
@@ -209,7 +219,7 @@ export default function ReportsPage() {
               {active ? (
                 <>
                   <div className="mb-3">
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap items-end justify-end gap-2">
                       <div className="shrink-0">
                         <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Report size
@@ -235,6 +245,17 @@ export default function ReportsPage() {
                           })}
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(true)}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-portal border border-slate-200 bg-white/70 px-3 py-[9px] text-xs font-bold text-slate-700 shadow-sm transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900/25 dark:text-white/85 dark:hover:bg-white/5 dark:focus-visible:ring-brand-green/30"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m11-5v3a2 2 0 0 1-2 2h-3" />
+                        </svg>
+                        Expand
+                      </button>
                     </div>
                   </div>
 
@@ -262,6 +283,37 @@ export default function ReportsPage() {
               )}
             </section>
           </section>
+        )}
+
+        {expanded && active && (
+          <div className="fixed inset-0 z-[80] flex flex-col bg-white dark:bg-slate-950">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 sm:px-4 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                className="inline-flex items-center gap-1.5 rounded-portal border border-slate-200 bg-white/70 px-3 py-1.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900/40 dark:text-white/85 dark:hover:bg-white/5 dark:focus-visible:ring-brand-green/30"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+                </svg>
+                Back to portal
+              </button>
+              <div className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-white">
+                {safeTitle(active.title)}
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1">
+              <iframe
+                title={safeTitle(active.title)}
+                src={reportEmbedSrc(active.embed_src)}
+                className="h-full w-full border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                allowFullScreen
+              />
+            </div>
+          </div>
         )}
     </main>
   );

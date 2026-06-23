@@ -28,9 +28,6 @@ function Node({ name, title, subtitle }) {
   );
 }
 
-/**
- * @param {{ facility?: string }} props
- */
 export default function OrgChart({ facility }) {
   const fac = String(facility || "").toUpperCase();
   if (fac === "AGC") {
@@ -56,7 +53,6 @@ export default function OrgChart({ facility }) {
         </div>
 
         <div className="relative w-full min-w-0">
-          {/* CEO */}
           <div className="flex flex-col items-center">
             <div className="w-full max-w-[200px]">
               <Node name="Tony Aziz" title="Chief Executive Officer" subtitle="CEO" />
@@ -64,7 +60,6 @@ export default function OrgChart({ facility }) {
             <div className="h-3 w-px shrink-0 bg-slate-300 dark:bg-slate-600" />
           </div>
 
-          {/* Direct reports (3 columns) */}
           <div className="relative mt-1 w-full min-w-0">
             <div className="absolute left-[8%] right-[8%] top-0 h-px bg-slate-300 dark:bg-slate-600" />
 
@@ -91,7 +86,6 @@ export default function OrgChart({ facility }) {
             </div>
           </div>
 
-          {/* Facility managers row */}
           <div className="mt-6 grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2">
             <div className="min-w-0 rounded-xl border bg-white p-2 dark:border-slate-700 dark:bg-slate-800">
               <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">

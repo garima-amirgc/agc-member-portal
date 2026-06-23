@@ -11,7 +11,6 @@ export function isFacilityUniversityOnlyPortal(user) {
   return true;
 }
 
-/** Facility landing route for training hub (uses /users/me `facilities` when present). */
 export function getFacilityUniversityHomePath(user) {
   if (!user) return "/facilities/AGC";
   const facs = Array.isArray(user.facilities)

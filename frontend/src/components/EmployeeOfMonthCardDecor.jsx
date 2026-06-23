@@ -1,4 +1,3 @@
-/** Shared blue card shell + background star (home spotlight & past winners). */
 export function EmployeeOfMonthBackgroundStar({ className = "" }) {
   return (
     <div
@@ -15,8 +14,9 @@ export function EmployeeOfMonthBackgroundStar({ className = "" }) {
 export function EmployeeOfMonthCardShell({ children, className = "", showBackgroundStar = true }) {
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border border-[#0B3EAF]/15 bg-gradient-to-br from-[#eef3ff] via-[#f5f8ff] to-[#f4fbe8] shadow-sm dark:border-[#A7D344]/20 dark:from-[#0B3EAF]/10 dark:via-slate-900/40 dark:to-[#A7D344]/10 ${className}`}
+      className={`group relative overflow-hidden rounded-2xl border border-[#0B3EAF]/12 bg-gradient-to-br from-[#eef3ff] via-white to-[#f4fbe8] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-[#A7D344]/20 dark:from-[#0B3EAF]/10 dark:via-slate-900/40 dark:to-[#A7D344]/10 ${className}`}
     >
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0B3EAF] to-[#A7D344]" aria-hidden />
       {showBackgroundStar ? (
         <EmployeeOfMonthBackgroundStar className="right-3 top-1/2 h-28 w-28 -translate-y-1/2 text-[#0B3EAF]/[0.14] dark:text-[#A7D344]/[0.16]" />
       ) : null}

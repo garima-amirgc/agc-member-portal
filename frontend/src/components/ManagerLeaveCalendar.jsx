@@ -8,7 +8,6 @@ function ymd(year, monthIndex, day) {
   return `${year}-${pad2(monthIndex + 1)}-${pad2(day)}`;
 }
 
-/** @param {string} d - YYYY-MM-DD */
 function whoOnLeave(team, d) {
   const out = [];
   for (const emp of team || []) {

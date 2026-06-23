@@ -39,7 +39,6 @@ const HEADER_COL_BG = {
   actions: "bg-slate-200/60 dark:bg-slate-800",
 };
 
-/** Per-column soft background + row alternation (always visible, not hover-only). */
 function bodyColBg(col, rowIdx) {
   const alt = rowIdx % 2 === 1;
   const map = {
@@ -256,9 +255,6 @@ function FilterGroup({ label, children }) {
   );
 }
 
-/**
- * Table board for monitoring IT tickets (issues, status, assignee, dates).
- */
 export default function ItTicketsMonitorTable({
   tickets,
   loading,

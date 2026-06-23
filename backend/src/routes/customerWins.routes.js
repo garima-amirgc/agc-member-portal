@@ -4,6 +4,7 @@ const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 const { moveSpotlightEntry, nextSortOrder } = require("../utils/spotlightFeedDb");
+const { BUSINESS_UNITS } = require("../config/constants");
 
 const TABLE = "customer_wins";
 const PUBLISHED_ORDER = "sort_order ASC, created_at DESC, id DESC";
@@ -18,6 +19,7 @@ function shapeRow(row) {
     description: row.description != null ? String(row.description) : "",
     link_url: row.link_url != null ? String(row.link_url).trim() : "",
     image_url: row.image_url != null ? String(row.image_url) : "",
+    facility: row.facility != null ? String(row.facility).trim() : "",
     published: Number(row.published) === 1,
     sort_order: Number(row.sort_order) || 0,
     created_by: row.created_by,
@@ -38,6 +40,16 @@ function parseLinkUrl(body) {
   if (body?.link_url == null) return undefined;
   const url = String(body.link_url).trim();
   return url || null;
+}
+
+function parseFacility(body) {
+  if (body?.facility === null || body?.facility === "") return null;
+  if (body?.facility == null) return undefined;
+  const value = String(body.facility).trim().toUpperCase();
+  if (!BUSINESS_UNITS.includes(value)) {
+    return { error: "Please select a valid facility." };
+  }
+  return { value };
 }
 
 router.get("/current", authRequired, async (_req, res) => {
@@ -115,16 +127,18 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.CUSTOMER_WINS)
     const description = req.body?.description != null ? String(req.body.description).trim() : "";
     const linkUrl = parseLinkUrl(req.body) ?? null;
     const imageUrl = parseImageUrl(req.body) ?? null;
+    const facility = parseFacility(req.body);
+    if (facility?.error) return res.status(400).json({ message: facility.error });
     const published = req.body?.published === false || req.body?.published === 0 ? 0 : 1;
     const sortOrder = await nextSortOrder(db, TABLE);
     const now = new Date().toISOString();
 
     const result = await db
       .prepare(
-        `INSERT INTO ${TABLE} (title, description, link_url, image_url, published, sort_order, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO ${TABLE} (title, description, link_url, image_url, facility, published, sort_order, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(title, description || null, linkUrl, imageUrl, published, sortOrder, req.user.id, now, now);
+      .run(title, description || null, linkUrl, imageUrl, facility?.value ?? null, published, sortOrder, req.user.id, now, now);
 
     const row = await db.prepare(`SELECT * FROM ${TABLE} WHERE id = ?`).get(result.lastInsertRowid);
     return res.status(201).json(shapeRow(row));
@@ -148,13 +162,15 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.CUSTOMER_WIN
     const description = req.body?.description != null ? String(req.body.description).trim() : "";
     const linkUrl = parseLinkUrl(req.body);
     const imageUrl = parseImageUrl(req.body);
+    const facility = parseFacility(req.body);
+    if (facility?.error) return res.status(400).json({ message: facility.error });
     const published = req.body?.published === false || req.body?.published === 0 ? 0 : 1;
     const now = new Date().toISOString();
 
     await db
       .prepare(
         `UPDATE ${TABLE}
-         SET title = ?, description = ?, link_url = ?, image_url = ?, published = ?, updated_at = ?
+         SET title = ?, description = ?, link_url = ?, image_url = ?, facility = ?, published = ?, updated_at = ?
          WHERE id = ?`
       )
       .run(
@@ -162,6 +178,7 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.CUSTOMER_WIN
         description || null,
         linkUrl !== undefined ? linkUrl : existing.link_url,
         imageUrl !== undefined ? imageUrl : existing.image_url,
+        facility !== undefined ? facility?.value ?? null : existing.facility,
         published,
         now,
         id

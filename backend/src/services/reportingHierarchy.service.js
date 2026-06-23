@@ -2,11 +2,6 @@ const { db } = require("../config/db");
 
 const USER_ROW = "SELECT id, name, email, role, business_unit, manager_id FROM users WHERE id = ?";
 
-/**
- * Reporting line from org root down to this user, plus their direct reports (if any).
- * @param {number} userId
- * @returns {Promise<{ chain: object[], direct_reports: object[], team_under_manager: object|null }>}
- */
 async function buildReportingHierarchy(userId) {
   const chainUp = [];
   let id = userId;

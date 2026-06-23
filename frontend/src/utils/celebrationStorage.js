@@ -1,6 +1,5 @@
 const AUTO_DISMISS_BIRTHDAY = "agc_celebration_auto_birthday";
 const AUTO_DISMISS_ANNIVERSARY = "agc_celebration_auto_anniversary";
-/** @deprecated legacy — treat as both dismissed */
 const AUTO_DISMISS_LEGACY = "agc_celebration_auto_dismissed";
 
 function read(key) {
@@ -15,7 +14,6 @@ function write(key) {
   try {
     sessionStorage.setItem(key, "1");
   } catch {
-    /* ignore */
   }
 }
 
@@ -35,7 +33,6 @@ export function markAnniversaryAutoDismissed() {
   write(AUTO_DISMISS_ANNIVERSARY);
 }
 
-/** @deprecated use kind-specific helpers */
 export function wasCelebrationAutoDismissed() {
   return wasBirthdayAutoDismissed() && wasAnniversaryAutoDismissed();
 }

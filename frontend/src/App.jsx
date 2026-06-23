@@ -13,29 +13,25 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import DashboardIndex from "./pages/DashboardIndex";
 import { ADMIN_GRANT_KEYS } from "./constants/adminGrants";
 
-// Route-based code splitting: everything below the auth screens is fetched on demand
-// instead of being bundled into the initial app download (App.jsx is wrapped in
-// <Suspense> below, so each of these loads only when its route is visited).
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const UpcomingPage = lazy(() => import("./pages/UpcomingPage"));
 const UpcomingEventDetailPage = lazy(() =>
   import("./pages/UpcomingPage").then((m) => ({ default: m.UpcomingEventDetailPage }))
 );
 const AdminUpcomingPage = lazy(() => import("./pages/AdminUpcomingPage"));
-const AdminEmployeeOfMonthPage = lazy(() => import("./pages/AdminEmployeeOfMonthPage"));
-const AdminLeadershipUpdatesPage = lazy(() => import("./pages/AdminLeadershipUpdatesPage"));
+const AdminCompanyNewsPage = lazy(() => import("./pages/AdminCompanyNewsPage"));
 const AdminNewHiresPage = lazy(() => import("./pages/AdminNewHiresPage"));
+const CompanyNewsArchivePage = lazy(() => import("./pages/CompanyNewsArchivePage"));
 const EmployeeOfMonthHistoryPage = lazy(() => import("./pages/EmployeeOfMonthHistoryPage"));
+const EmployeeOfMonthDetailPage = lazy(() => import("./pages/EmployeeOfMonthDetailPage"));
 const LeadershipUpdatesPage = lazy(() => import("./pages/LeadershipUpdatesPage"));
 const LeadershipUpdateDetailPage = lazy(() => import("./pages/LeadershipUpdateDetailPage"));
 const NewHiresPage = lazy(() => import("./pages/NewHiresPage"));
 const NewHireDetailPage = lazy(() => import("./pages/NewHireDetailPage"));
 const CustomerWinsPage = lazy(() => import("./pages/CustomerWinsPage"));
 const CustomerWinDetailPage = lazy(() => import("./pages/CustomerWinDetailPage"));
-const AdminCustomerWinsPage = lazy(() => import("./pages/AdminCustomerWinsPage"));
 const CommunityInvolvementPage = lazy(() => import("./pages/CommunityInvolvementPage"));
 const CommunityInvolvementDetailPage = lazy(() => import("./pages/CommunityInvolvementDetailPage"));
-const AdminCommunityInvolvementPage = lazy(() => import("./pages/AdminCommunityInvolvementPage"));
 const AdminAboutCompanyPage = lazy(() => import("./pages/AdminAboutCompanyPage"));
 const AboutCompanyPage = lazy(() => import("./pages/AboutCompanyPage"));
 const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
@@ -64,7 +60,6 @@ function pickFacilityForLegacyResources(me) {
     const lastU = last ? String(last).toUpperCase() : null;
     if (lastU && FACILITY_CODES.includes(lastU)) return lastU;
   } catch {
-    /* ignore */
   }
   const facs = Array.isArray(me?.facilities) ? me.facilities.map((f) => String(f).toUpperCase()) : [];
   const firstKnown = facs.find((f) => FACILITY_CODES.includes(f));
@@ -124,7 +119,9 @@ export default function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="upcoming" element={<UpcomingPage />} />
         <Route path="upcoming/:eventId" element={<UpcomingEventDetailPage />} />
+        <Route path="company-news" element={<CompanyNewsArchivePage />} />
         <Route path="employee-of-month/history" element={<EmployeeOfMonthHistoryPage />} />
+        <Route path="employee-of-month/:id" element={<EmployeeOfMonthDetailPage />} />
         <Route path="leadership-updates" element={<LeadershipUpdatesPage />} />
         <Route path="leadership-updates/:id" element={<LeadershipUpdateDetailPage />} />
         <Route path="new-hires" element={<NewHiresPage />} />
@@ -200,18 +197,17 @@ export default function App() {
           }
         />
         <Route
-          path="admin/employee-of-month"
+          path="admin/company-news"
           element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH}>
-              <AdminEmployeeOfMonthPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="admin/leadership-updates"
-          element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.LEADERSHIP_UPDATES}>
-              <AdminLeadershipUpdatesPage />
+            <ProtectedRoute
+              adminGrants={[
+                ADMIN_GRANT_KEYS.EMPLOYEE_OF_MONTH,
+                ADMIN_GRANT_KEYS.LEADERSHIP_UPDATES,
+                ADMIN_GRANT_KEYS.CUSTOMER_WINS,
+                ADMIN_GRANT_KEYS.COMMUNITY_INVOLVEMENT,
+              ]}
+            >
+              <AdminCompanyNewsPage />
             </ProtectedRoute>
           }
         />
@@ -220,22 +216,6 @@ export default function App() {
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.NEW_HIRES}>
               <AdminNewHiresPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="admin/customer-wins"
-          element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.CUSTOMER_WINS}>
-              <AdminCustomerWinsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="admin/community-involvement"
-          element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.COMMUNITY_INVOLVEMENT}>
-              <AdminCommunityInvolvementPage />
             </ProtectedRoute>
           }
         />

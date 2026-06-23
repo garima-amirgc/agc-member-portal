@@ -11,7 +11,6 @@ function generateInviteRawToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-/** Unknown bcrypt placeholder so invited users cannot log in until they complete setup. */
 function randomPasswordPlaceholder() {
   return bcrypt.hashSync(crypto.randomBytes(32).toString("hex"), 10);
 }
@@ -55,11 +54,6 @@ function maskEmail(email) {
   return `${show}@${domain}`;
 }
 
-/**
- * On Render, the API service URL is often `https://name.onrender.com` and the static SPA is
- * `https://name-web.onrender.com`. When APP_BASE_URL is unset, derive the SPA URL from
- * `RENDER_EXTERNAL_URL` (set automatically on Render).
- */
 function inferFrontendUrlFromRenderApi() {
   const external = process.env.RENDER_EXTERNAL_URL && String(process.env.RENDER_EXTERNAL_URL).trim();
   if (!external) return null;

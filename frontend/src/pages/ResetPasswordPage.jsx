@@ -8,7 +8,6 @@ import { postAuthLandingPath } from "../utils/facilityUniversityOnly";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
-/** Shared focus ring for accent inputs */
 const inputWrapFocus = "focus-within:ring-2 focus-within:ring-brand-blue/25 dark:focus-within:ring-brand-green/20";
 
 export default function ResetPasswordPage() {

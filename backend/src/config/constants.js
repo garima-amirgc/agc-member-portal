@@ -4,7 +4,6 @@ const ROLES = {
   EMPLOYEE: "Employee",
 };
 
-/** Normalize role strings from DB or clients (any casing) to ROLES.* values. */
 function canonicalRole(raw) {
   const s = raw != null ? String(raw).trim() : "";
   const sl = s.toLowerCase();
@@ -19,7 +18,6 @@ function canonicalRole(raw) {
 const BUSINESS_UNITS = ["AGC", "AQM", "SCF", "ASP"];
 const ASSIGNMENT_STATUS = ["pending", "in_progress", "completed"];
 
-/** Org department (user directory + IT ticket routing) */
 const DEPARTMENTS = ["IT", "Finance", "Sales", "Purchase", "Safety", "Production"];
 
 const TICKET_STATUS = ["open", "in_progress", "closed"];

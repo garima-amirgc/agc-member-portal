@@ -22,9 +22,7 @@ function normalizeBusinessUnits(input) {
 function extractIframeSrc(iframeCode) {
   const s = String(iframeCode || "").trim();
   if (!s) return null;
-  // If they pasted a URL directly, accept it.
   if (/^https?:\/\//i.test(s) && !s.includes("<")) return s;
-  // Common Power BI embed snippets include src="...".
   const m = /src\s*=\s*["']([^"']+)["']/i.exec(s);
   if (m && m[1]) return String(m[1]).trim();
   return null;
@@ -47,7 +45,6 @@ function parseBusinessUnitsJson(text) {
     if (!Array.isArray(arr)) return [];
     return arr.map((x) => String(x || "").trim().toUpperCase()).filter(Boolean);
   } catch {
-    // Legacy / manual values: comma-separated
     return raw
       .split(",")
       .map((s) => s.trim().toUpperCase())
@@ -86,7 +83,6 @@ async function reportsWithAnyAllowlist() {
   return (rows || []).map((r) => Number(r.report_id)).filter((n) => Number.isFinite(n) && n > 0);
 }
 
-/** List reports visible to the logged-in user (by facility). */
 router.get("/", async (req, res) => {
   try {
     const myFacilities = await facilitiesForUser(req.user.id);
@@ -112,13 +108,10 @@ router.get("/", async (req, res) => {
         updated_at: r.updated_at,
       }))
       .filter((r) => {
-        // Facility-based visibility first.
         const facilityOk = r.business_units.length === 0 || intersects(myFacilities, r.business_units);
         if (!facilityOk) return false;
-        // New rule: reports are hidden until at least one user is assigned.
         const rid = Number(r.id);
         if (!restrictedIds.has(rid)) return false;
-        // If a report has any allowlist, require explicit membership.
         return allowedIds.has(rid);
       });
 
@@ -129,7 +122,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-/** Admin: list all reports (ignores facility filtering). */
 router.get("/admin/all", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (_req, res) => {
   try {
     const rows = await db
@@ -140,7 +132,7 @@ router.get("/admin/all", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (_re
       )
       .all();
     const access = await db.prepare("SELECT report_id, user_id FROM report_access_users").all();
-    const allowByReport = new Map(); // report_id -> number[]
+    const allowByReport = new Map();
     for (const row of access || []) {
       const rid = Number(row.report_id);
       const uid = Number(row.user_id);
@@ -162,7 +154,6 @@ router.get("/admin/all", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (_re
   }
 });
 
-/** Admin: minimal user list for report access-control picker (Reports grant only — not full Users admin). */
 router.get("/admin/access-users", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (_req, res) => {
   try {
     const rows = await db
@@ -180,7 +171,6 @@ router.get("/admin/access-users", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), a
   }
 });
 
-/** Super admin only: top member portal visitors (dashboard usage). */
 router.get("/admin/top-portal-visitors", async (req, res) => {
   if (!isFullAdminUser(req.user)) return res.status(403).json({ message: "Forbidden" });
   try {
@@ -196,7 +186,6 @@ router.get("/admin/top-portal-visitors", async (req, res) => {
   }
 });
 
-/** Admin: create. Accepts either `embed_src` or `iframe_code`. */
 router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res) => {
   const title = String(req.body?.title || "").trim();
   const description = req.body?.description != null ? String(req.body.description) : "";
@@ -229,7 +218,6 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res) =
             .prepare("INSERT INTO report_access_users(report_id, user_id, created_at) VALUES (?, ?, ?)")
             .run(id, uid, now);
         } catch {
-          /* ignore duplicates */
         }
       }
     }
@@ -241,7 +229,6 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res) =
   }
 });
 
-/** Admin: update. Accepts either `embed_src` or `iframe_code`. */
 router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res) => {
   const id = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid id" });
@@ -290,7 +277,6 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res)
             .prepare("INSERT INTO report_access_users(report_id, user_id, created_at) VALUES (?, ?, ?)")
             .run(id, uid, now);
         } catch {
-          /* ignore duplicates */
         }
       }
     }
@@ -301,7 +287,6 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res)
   }
 });
 
-/** Admin: delete. */
 router.delete("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.REPORTS), async (req, res) => {
   const id = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid id" });
