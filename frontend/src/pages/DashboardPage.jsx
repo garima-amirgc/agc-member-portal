@@ -15,7 +15,6 @@ import BirthdaysCard from "../components/BirthdaysCard";
 import QuickActionsRow from "../components/QuickActionsRow";
 import WelcomeBanner from "../components/WelcomeBanner";
 import HelpfulResourcesCard from "../components/HelpfulResourcesCard";
-import UpcomingMiniCalendar from "../components/UpcomingMiniCalendar";
 
 function parseSpotlightFeedEntries(data) {
   if (Array.isArray(data)) {
@@ -234,12 +233,6 @@ export default function DashboardPage() {
                 canManageNewHires={canManageNewHires}
               />
 
-              <BirthdaysCard
-                birthdayCards={birthdayCards}
-                anniversaryCards={anniversaryCards}
-                birthdaysLoading={birthdaysLoading}
-                onCelebrationClick={openCelebration}
-              />
             </div>
 
           </div>
@@ -262,13 +255,14 @@ export default function DashboardPage() {
                 <UpcomingEventsList events={upcoming} loading={upcomingLoading} />
               </div>
 
-              <HelpfulResourcesCard />
-
-              <UpcomingMiniCalendar
-                events={upcoming}
-                loading={upcomingLoading}
-                onEventClick={openCelebration}
+              <BirthdaysCard
+                birthdayCards={birthdayCards}
+                anniversaryCards={anniversaryCards}
+                birthdaysLoading={birthdaysLoading}
+                onCelebrationClick={openCelebration}
               />
+
+              <HelpfulResourcesCard />
             </div>
           </aside>
         </section>

@@ -103,7 +103,7 @@ function SearchDropdown({ results, loading, query, onNavigate }) {
   );
 }
 
-const SIDEBAR_WIDTH_PX = 200;
+const SIDEBAR_WIDTH_PX = 224;
 const sidebarShellStyle = {
   width: SIDEBAR_WIDTH_PX,
   minWidth: SIDEBAR_WIDTH_PX,
