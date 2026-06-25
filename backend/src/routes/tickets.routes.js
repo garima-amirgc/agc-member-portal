@@ -85,6 +85,15 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+// ── Unread message counts ────────────────────────────────────────────────────
+router.get("/unread-counts", async (req, res) => {
+  try {
+    return res.json(await itTickets.getUnreadCounts(req.user.id));
+  } catch (e) {
+    return res.status(500).json({ message: e.message || "Server error" });
+  }
+});
+
 // ── Ticket Messages (chat thread) ───────────────────────────────────────────
 
 async function canAccessTicketMessages(user, ticketId) {
@@ -103,6 +112,8 @@ router.get("/:id/messages", async (req, res) => {
     if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid ticket id" });
     if (!(await canAccessTicketMessages(req.user, id))) return res.status(403).json({ message: "Forbidden" });
     const msgs = await itTickets.getTicketMessages(id);
+    // Mark messages as read for this user (fire-and-forget — don't block the response)
+    itTickets.markMessagesRead(id, req.user.id).catch(() => {});
     return res.json(msgs);
   } catch (e) {
     return res.status(e.statusCode || 500).json({ message: e.message || "Server error" });
@@ -145,6 +156,38 @@ router.post("/:id/messages", async (req, res) => {
     }
 
     return res.status(201).json(msg);
+  } catch (e) {
+    return res.status(e.statusCode || 500).json({ message: e.message || "Server error" });
+  }
+});
+
+router.patch("/:id/messages/:msgId", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const msgId = Number(req.params.msgId);
+    if (!Number.isFinite(id) || id < 1 || !Number.isFinite(msgId) || msgId < 1)
+      return res.status(400).json({ message: "Invalid id" });
+    if (!(await canAccessTicketMessages(req.user, id)))
+      return res.status(403).json({ message: "Forbidden" });
+    const body = String(req.body?.body || "").trim();
+    if (!body) return res.status(400).json({ message: "Message body cannot be empty" });
+    const updated = await itTickets.editTicketMessage(id, msgId, req.user.id, body);
+    return res.json(updated);
+  } catch (e) {
+    return res.status(e.statusCode || 500).json({ message: e.message || "Server error" });
+  }
+});
+
+router.delete("/:id/messages/:msgId", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const msgId = Number(req.params.msgId);
+    if (!Number.isFinite(id) || id < 1 || !Number.isFinite(msgId) || msgId < 1)
+      return res.status(400).json({ message: "Invalid id" });
+    if (!(await canAccessTicketMessages(req.user, id)))
+      return res.status(403).json({ message: "Forbidden" });
+    await itTickets.deleteTicketMessage(id, msgId, req.user.id);
+    return res.status(204).end();
   } catch (e) {
     return res.status(e.statusCode || 500).json({ message: e.message || "Server error" });
   }

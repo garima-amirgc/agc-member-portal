@@ -468,28 +468,33 @@ async function createTicketAndNotify(userId, body) {
 
 // ─── Ticket Messages (chat thread) ───────────────────────────────────────────
 
-async function getTicketMessages(ticketId) {
-  const tid = Number(ticketId);
-  if (!Number.isFinite(tid) || tid < 1) return [];
-  const rows = await db
-    .prepare(
-      `SELECT tm.id, tm.ticket_id, tm.sender_id, tm.body, tm.sent_at,
-              u.name AS sender_name, u.profile_image_url AS sender_image_url
-       FROM ticket_messages tm
-       JOIN users u ON u.id = tm.sender_id
-       WHERE tm.ticket_id = ?
-       ORDER BY tm.sent_at ASC, tm.id ASC`
-    )
-    .all(tid);
-  return (rows || []).map((r) => ({
+const MSG_SELECT = `
+  SELECT tm.id, tm.ticket_id, tm.sender_id, tm.body, tm.sent_at, tm.edited_at,
+         u.name AS sender_name, u.profile_image_url AS sender_image_url
+  FROM ticket_messages tm
+  JOIN users u ON u.id = tm.sender_id`;
+
+function mapMessage(r) {
+  if (!r) return null;
+  return {
     id: Number(r.id),
     ticket_id: Number(r.ticket_id),
     sender_id: Number(r.sender_id),
     body: String(r.body || ""),
     sent_at: r.sent_at || null,
+    edited_at: r.edited_at || null,
     sender_name: String(r.sender_name || ""),
     sender_image_url: r.sender_image_url || null,
-  }));
+  };
+}
+
+async function getTicketMessages(ticketId) {
+  const tid = Number(ticketId);
+  if (!Number.isFinite(tid) || tid < 1) return [];
+  const rows = await db
+    .prepare(`${MSG_SELECT} WHERE tm.ticket_id = ? ORDER BY tm.sent_at ASC, tm.id ASC`)
+    .all(tid);
+  return (rows || []).map(mapMessage);
 }
 
 async function postTicketMessage(ticketId, senderId, body) {
@@ -507,30 +512,93 @@ async function postTicketMessage(ticketId, senderId, body) {
   }
   const now = new Date().toISOString();
   const ins = await db
-    .prepare(
-      "INSERT INTO ticket_messages (ticket_id, sender_id, body, sent_at) VALUES (?, ?, ?, ?)"
-    )
+    .prepare("INSERT INTO ticket_messages (ticket_id, sender_id, body, sent_at) VALUES (?, ?, ?, ?)")
     .run(tid, sid, text, now);
   const newId = Number(ins.lastInsertRowid || ins.id || 0);
-  const row = await db
-    .prepare(
+  const row = await db.prepare(`${MSG_SELECT} WHERE tm.id = ?`).get(newId);
+  if (!row) return { id: newId, ticket_id: tid, sender_id: sid, body: text, sent_at: now, edited_at: null };
+  return mapMessage(row);
+}
+
+async function editTicketMessage(ticketId, msgId, userId, newBody) {
+  const tid = Number(ticketId);
+  const mid = Number(msgId);
+  const uid = Number(userId);
+  const text = String(newBody || "").trim();
+  if (!text) { const e = new Error("Message cannot be empty"); e.statusCode = 400; throw e; }
+  const existing = await db.prepare("SELECT sender_id FROM ticket_messages WHERE id = ? AND ticket_id = ?").get(mid, tid);
+  if (!existing) { const e = new Error("Message not found"); e.statusCode = 404; throw e; }
+  if (Number(existing.sender_id) !== uid) { const e = new Error("Forbidden"); e.statusCode = 403; throw e; }
+  const now = new Date().toISOString();
+  try {
+    await db.prepare("UPDATE ticket_messages SET body = ?, edited_at = ? WHERE id = ?").run(text, now, mid);
+  } catch {
+    // Fallback if edited_at column not yet migrated (server not restarted)
+    await db.prepare("UPDATE ticket_messages SET body = ? WHERE id = ?").run(text, mid);
+  }
+  let row;
+  try {
+    row = await db.prepare(`${MSG_SELECT} WHERE tm.id = ?`).get(mid);
+  } catch {
+    // Fallback select without edited_at
+    row = await db.prepare(
       `SELECT tm.id, tm.ticket_id, tm.sender_id, tm.body, tm.sent_at,
               u.name AS sender_name, u.profile_image_url AS sender_image_url
+       FROM ticket_messages tm JOIN users u ON u.id = tm.sender_id WHERE tm.id = ?`
+    ).get(mid);
+  }
+  return mapMessage(row);
+}
+
+async function deleteTicketMessage(ticketId, msgId, userId) {
+  const tid = Number(ticketId);
+  const mid = Number(msgId);
+  const uid = Number(userId);
+  const existing = await db.prepare("SELECT sender_id FROM ticket_messages WHERE id = ? AND ticket_id = ?").get(mid, tid);
+  if (!existing) { const e = new Error("Message not found"); e.statusCode = 404; throw e; }
+  if (Number(existing.sender_id) !== uid) { const e = new Error("Forbidden"); e.statusCode = 403; throw e; }
+  await db.prepare("DELETE FROM ticket_messages WHERE id = ?").run(mid);
+}
+
+// Mark all current messages in a ticket as read for a user.
+// Called whenever a user fetches the message list (GET /:id/messages).
+async function markMessagesRead(ticketId, userId) {
+  const tid = Number(ticketId);
+  const uid = Number(userId);
+  if (!Number.isFinite(tid) || tid < 1 || !Number.isFinite(uid) || uid < 1) return;
+  const sql = isPostgres
+    ? `INSERT INTO ticket_message_reads (ticket_id, user_id, last_read_message_id)
+       SELECT $1, $2, COALESCE(MAX(id), 0) FROM ticket_messages WHERE ticket_id = $1
+       ON CONFLICT (ticket_id, user_id) DO UPDATE SET last_read_message_id = EXCLUDED.last_read_message_id`
+    : `INSERT OR REPLACE INTO ticket_message_reads (ticket_id, user_id, last_read_message_id)
+       SELECT ?, ?, COALESCE(MAX(id), 0) FROM ticket_messages WHERE ticket_id = ?`;
+  await db.prepare(sql).run(tid, uid, tid);
+}
+
+// Returns { [ticket_id]: unreadCount } for messages the user has NOT yet read
+// (excludes the user's own messages — you never get a badge for your own sends).
+async function getUnreadCounts(userId) {
+  const uid = Number(userId);
+  if (!Number.isFinite(uid) || uid < 1) return {};
+  const sql = isPostgres
+    ? `SELECT tm.ticket_id, COUNT(*) AS count
        FROM ticket_messages tm
-       JOIN users u ON u.id = tm.sender_id
-       WHERE tm.id = ?`
-    )
-    .get(newId);
-  if (!row) return { id: newId, ticket_id: tid, sender_id: sid, body: text, sent_at: now };
-  return {
-    id: Number(row.id),
-    ticket_id: Number(row.ticket_id),
-    sender_id: Number(row.sender_id),
-    body: String(row.body || ""),
-    sent_at: row.sent_at || null,
-    sender_name: String(row.sender_name || ""),
-    sender_image_url: row.sender_image_url || null,
-  };
+       LEFT JOIN ticket_message_reads tmr ON tmr.ticket_id = tm.ticket_id AND tmr.user_id = $1
+       WHERE tm.sender_id != $1
+         AND tm.id > COALESCE(tmr.last_read_message_id, 0)
+       GROUP BY tm.ticket_id`
+    : `SELECT tm.ticket_id, COUNT(*) AS count
+       FROM ticket_messages tm
+       LEFT JOIN ticket_message_reads tmr ON tmr.ticket_id = tm.ticket_id AND tmr.user_id = ?
+       WHERE tm.sender_id != ?
+         AND tm.id > COALESCE(tmr.last_read_message_id, 0)
+       GROUP BY tm.ticket_id`;
+  const rows = await db.prepare(sql).all(uid, uid);
+  const result = {};
+  for (const r of rows || []) {
+    result[Number(r.ticket_id)] = Number(r.count);
+  }
+  return result;
 }
 
 module.exports = {
@@ -547,4 +615,8 @@ module.exports = {
   normalizeDept,
   getTicketMessages,
   postTicketMessage,
+  markMessagesRead,
+  getUnreadCounts,
+  editTicketMessage,
+  deleteTicketMessage,
 };

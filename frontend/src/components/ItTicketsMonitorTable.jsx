@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import api from "../services/api";
 import { ticketRequesterPhotoUrl } from "../utils/ticketUserAvatar";
 import {
   IT_FILTER_TABS,
@@ -270,6 +271,7 @@ export default function ItTicketsMonitorTable({
   const [filter, setFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
+  const [unreadCounts, setUnreadCounts] = useState({});
 
   const showActionsColumn = useMemo(() => {
     if (isIT || isAdmin) return true;
@@ -285,6 +287,29 @@ export default function ItTicketsMonitorTable({
       setExpandedId(null);
     }
   }, [tickets, expandedId]);
+
+  // Fetch unread counts on mount and every 30 s
+  const fetchUnreadCounts = useCallback(async () => {
+    try {
+      const r = await api.get("/tickets/unread-counts");
+      if (r.data && typeof r.data === "object") setUnreadCounts(r.data);
+    } catch {
+      // ignore — badge is non-critical
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchUnreadCounts();
+    const interval = setInterval(fetchUnreadCounts, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchUnreadCounts]);
+
+  // Clear badge immediately when user opens a ticket (chat will mark as read on load)
+  useEffect(() => {
+    if (expandedId) {
+      setUnreadCounts((prev) => ({ ...prev, [expandedId]: 0 }));
+    }
+  }, [expandedId]);
 
   const filtered = useMemo(() => {
     let list = Array.isArray(tickets) ? [...tickets] : [];
@@ -435,7 +460,7 @@ export default function ItTicketsMonitorTable({
                         <button
                           type="button"
                           onClick={() => setExpandedId(expanded ? null : t.id)}
-                          className={["inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide transition",
+                          className={["relative inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide transition",
                             expanded
                               ? "bg-[#A7D344]/20 text-[#3a6600] dark:bg-[#A7D344]/25 dark:text-[#A7D344]"
                               : "bg-[#A7D344]/15 text-[#3a6600] hover:bg-[#A7D344]/30 dark:bg-[#A7D344]/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/25",
@@ -445,6 +470,11 @@ export default function ItTicketsMonitorTable({
                             <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6A1.5 1.5 0 0 1 12.5 11H9.707l-2.147 2.146A.5.5 0 0 1 7 12.793V11H3.5A1.5 1.5 0 0 1 2 9.5v-6Z" />
                           </svg>
                           Notes
+                          {unreadCounts[t.id] > 0 ? (
+                            <span className="absolute -right-1 -top-1 flex h-3.5 min-w-[0.875rem] items-center justify-center rounded-full bg-red-500 px-0.5 text-[7px] font-bold leading-none text-white">
+                              {unreadCounts[t.id] > 9 ? "9+" : unreadCounts[t.id]}
+                            </span>
+                          ) : null}
                         </button>
                       </div>
 
@@ -577,7 +607,7 @@ export default function ItTicketsMonitorTable({
                               type="button"
                               onClick={() => setExpandedId(expanded ? null : t.id)}
                               title="Open notes"
-                              className={["inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide transition",
+                              className={["relative inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide transition",
                                 expanded
                                   ? "bg-[#A7D344]/20 text-[#3a6600] dark:bg-[#A7D344]/25 dark:text-[#A7D344]"
                                   : "bg-[#A7D344]/15 text-[#3a6600] hover:bg-[#A7D344]/30 dark:bg-[#A7D344]/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/25",
@@ -587,6 +617,11 @@ export default function ItTicketsMonitorTable({
                                 <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6A1.5 1.5 0 0 1 12.5 11H9.707l-2.147 2.146A.5.5 0 0 1 7 12.793V11H3.5A1.5 1.5 0 0 1 2 9.5v-6Z" />
                               </svg>
                               Notes
+                              {unreadCounts[t.id] > 0 ? (
+                                <span className="absolute -right-1 -top-1 flex h-3.5 min-w-[0.875rem] items-center justify-center rounded-full bg-red-500 px-0.5 text-[7px] font-bold leading-none text-white">
+                                  {unreadCounts[t.id] > 9 ? "9+" : unreadCounts[t.id]}
+                                </span>
+                              ) : null}
                             </button>
                           </div>
                         </td>

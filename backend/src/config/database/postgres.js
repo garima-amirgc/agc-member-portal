@@ -370,6 +370,13 @@ CREATE TABLE IF NOT EXISTS ticket_messages (
   body TEXT NOT NULL,
   sent_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS ticket_message_reads (
+  ticket_id INTEGER NOT NULL REFERENCES it_tickets(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_read_message_id INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (ticket_id, user_id)
+);
 `;
 
 async function runDDL(client) {
@@ -595,6 +602,13 @@ async function migrateColumns(client) {
       sent_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )`,
     "CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket_id ON ticket_messages (ticket_id)",
+    `CREATE TABLE IF NOT EXISTS ticket_message_reads (
+      ticket_id INTEGER NOT NULL REFERENCES it_tickets(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      last_read_message_id INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (ticket_id, user_id)
+    )`,
+    "ALTER TABLE ticket_messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ DEFAULT NULL",
   ];
   for (const q of alters) {
     try {

@@ -454,6 +454,16 @@ const SCHEMA = `
     FOREIGN KEY(ticket_id) REFERENCES it_tickets(id) ON DELETE CASCADE,
     FOREIGN KEY(sender_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  -- Tracks the last message each user has read per ticket (for unread badge counts).
+  CREATE TABLE IF NOT EXISTS ticket_message_reads (
+    ticket_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    last_read_message_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (ticket_id, user_id),
+    FOREIGN KEY(ticket_id) REFERENCES it_tickets(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `;
 
 async function initDb() {
@@ -1149,9 +1159,23 @@ async function initDb() {
         FOREIGN KEY(sender_id) REFERENCES users(id) ON DELETE CASCADE
       );
       CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket_id ON ticket_messages (ticket_id);
+      CREATE TABLE IF NOT EXISTS ticket_message_reads (
+        ticket_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        last_read_message_id INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (ticket_id, user_id),
+        FOREIGN KEY(ticket_id) REFERENCES it_tickets(id) ON DELETE CASCADE,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
     `);
   } catch (e) {
     console.error("[db] ticket_messages table:", e.message || e);
+  }
+
+  try {
+    rawDb.exec(`ALTER TABLE ticket_messages ADD COLUMN edited_at TEXT DEFAULT NULL`);
+  } catch (e) {
+    if (!String(e.message || "").includes("duplicate column")) console.error("[db] ticket_messages edited_at:", e.message || e);
   }
 
   try {
