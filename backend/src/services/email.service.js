@@ -730,6 +730,57 @@ async function sendHelpReportEmail({
   return sendMail({ to: list.join(", "), subject: mailSubject, text, html });
 }
 
+async function sendTicketMessageEmail({
+  to,
+  recipientName,
+  senderName,
+  ticketId,
+  ticketTitle,
+  messageBody,
+}) {
+  if (!to) return { skipped: true };
+
+  const subject = `[AGC IT] New message on ticket #${ticketId}: ${ticketTitle}`;
+
+  const text = [
+    `Hello${recipientName ? ` ${recipientName}` : ""},`,
+    "",
+    `${senderName || "Someone"} left a note on IT ticket #${ticketId}.`,
+    "",
+    `Ticket: ${ticketTitle}`,
+    "",
+    `Message:`,
+    messageBody,
+    "",
+    `Log in to the AGC Member Portal to reply.`,
+    "",
+    `${APP_MAIL_BRAND} — IT ticketing`,
+  ].join("\n");
+
+  const bodyHtml = `
+  <p style="margin:0 0 12px 0;font-size:18px;font-weight:600;color:#0f172a;">New note on your IT ticket</p>
+  <p style="margin:0 0 16px 0;">Hello${recipientName ? ` ${escapeHtml(recipientName)}` : ""},</p>
+  <p style="margin:0 0 8px 0;"><strong>${escapeHtml(senderName || "Someone")}</strong> sent a message on ticket <strong>#${escapeHtml(String(ticketId))}</strong>:</p>
+  <p style="margin:0 0 4px 0;font-size:12px;color:#5c5f66;">${escapeHtml(ticketTitle)}</p>
+  <div style="margin:16px 0;padding:14px 16px;background:#eef2fb;border-left:4px solid #0B3EAF;white-space:pre-wrap;font-size:14px;line-height:1.6;">${escapeHtml(messageBody)}</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+    <tr>
+      <td align="center" bgcolor="#0B3EAF" style="border-radius:8px;">
+        <a href="${escapeHtml(String(process.env.APP_BASE_URL || process.env.FRONTEND_URL || "").trim().replace(/\/+$/, ""))}/it-tickets" style="display:inline-block;padding:12px 22px;font-family:Segoe UI, Arial, sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">Open ticket &amp; reply</a>
+      </td>
+    </tr>
+  </table>
+  <p style="margin:0;font-size:12px;color:#5c5f66;">${escapeHtml(new Date().toLocaleString())}</p>`;
+
+  const html = emailShell({
+    title: subject,
+    preheader: `${senderName || "Someone"} left a note on ticket #${ticketId}`,
+    bodyHtml,
+  });
+
+  return sendMail({ to, subject, text, html });
+}
+
 module.exports = {
   EMAIL_TEMPLATE_VERSION,
   isEmailConfigured,
@@ -742,6 +793,7 @@ module.exports = {
   sendITTicketCreatedEmail,
   sendITTicketUpdatedEmail,
   sendITTicketResolvedEmail,
+  sendTicketMessageEmail,
   sendAccountInviteEmail,
   deliverAccountInviteEmail,
   sendPasswordResetEmail,

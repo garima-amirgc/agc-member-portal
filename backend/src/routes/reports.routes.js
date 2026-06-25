@@ -175,7 +175,8 @@ router.get("/admin/top-portal-visitors", async (req, res) => {
   if (!isFullAdminUser(req.user)) return res.status(403).json({ message: "Forbidden" });
   try {
     const days = Number(req.query?.days) || portalVisitsSvc.PORTAL_VISIT_WINDOW_DAYS;
-    const out = await portalVisitsSvc.topPortalVisitors(5, days);
+    const limit = Number(req.query?.limit) || 50;
+    const out = await portalVisitsSvc.topPortalVisitors(limit, days);
     return res.json({
       window_days: days,
       visitors: out,

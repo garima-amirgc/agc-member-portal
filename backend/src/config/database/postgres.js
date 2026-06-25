@@ -362,6 +362,14 @@ CREATE TABLE IF NOT EXISTS resource_progress (
   completed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(user_id, business_unit, category, resource_kind, resource_id)
 );
+
+CREATE TABLE IF NOT EXISTS ticket_messages (
+  id SERIAL PRIMARY KEY,
+  ticket_id INTEGER NOT NULL REFERENCES it_tickets(id) ON DELETE CASCADE,
+  sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  sent_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
 `;
 
 async function runDDL(client) {
@@ -579,6 +587,14 @@ async function migrateColumns(client) {
     "CREATE INDEX IF NOT EXISTS idx_manager_notifications_manager_id ON manager_notifications (manager_id)",
     "CREATE INDEX IF NOT EXISTS idx_manager_all_training_alerts_manager_id ON manager_all_training_alerts (manager_id)",
     "CREATE INDEX IF NOT EXISTS idx_resource_documents_business_unit_category ON resource_documents (business_unit, category)",
+    `CREATE TABLE IF NOT EXISTS ticket_messages (
+      id SERIAL PRIMARY KEY,
+      ticket_id INTEGER NOT NULL REFERENCES it_tickets(id) ON DELETE CASCADE,
+      sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      sent_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket_id ON ticket_messages (ticket_id)",
   ];
   for (const q of alters) {
     try {

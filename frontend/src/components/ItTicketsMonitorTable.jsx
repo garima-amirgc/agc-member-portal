@@ -10,6 +10,7 @@ import {
   ticketMatchesIssueTypeFilter,
 } from "../utils/itTicketStyles";
 import { canUserEditTicket } from "../utils/ticketForm";
+import TicketChatThread from "./TicketChatThread";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -246,11 +247,11 @@ function StatPill({ label, value, accent }) {
   );
 }
 
-function FilterGroup({ label, children }) {
+function FilterGroup({ label, children, align = "start" }) {
   return (
-    <div>
+    <div className={align === "end" ? "text-right" : ""}>
       <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-white/70">{label}</p>
-      <div className="flex flex-wrap gap-1">{children}</div>
+      <div className={["flex flex-wrap gap-1", align === "end" ? "justify-end" : ""].join(" ")}>{children}</div>
     </div>
   );
 }
@@ -334,7 +335,7 @@ export default function ItTicketsMonitorTable({
             </div>
           </div>
 
-          <div className="grid gap-3 border-t border-white/15 pt-3 sm:grid-cols-2">
+          <div className="grid gap-3 border-t border-white/15 pt-3 sm:grid-cols-2 sm:[&>*:last-child]:justify-self-end">
             <FilterGroup label="Status">
               {IT_FILTER_TABS.map((tab) => {
                 const count = counts[tab.key] ?? 0;
@@ -357,7 +358,7 @@ export default function ItTicketsMonitorTable({
               })}
             </FilterGroup>
 
-            <FilterGroup label="Category">
+            <FilterGroup label="Category" align="end">
               {IT_TYPE_FILTER_TABS.map((tab) => {
                 const count = typeCounts[tab.key] ?? 0;
                 const isActive = typeFilter === tab.key;
@@ -401,217 +402,299 @@ export default function ItTicketsMonitorTable({
           </p>
         </div>
       ) : (
-        <div className="min-w-0 overflow-hidden">
-          <table className="w-full table-fixed border-collapse border border-slate-200 text-xs dark:border-slate-600/50">
-            {showActionsColumn ? (
-              <colgroup>
-                <col className="w-[4%]" />
-                <col className="w-[13%]" />
-                <col className="w-[20%]" />
-                <col className="w-[8%]" />
-                <col className="w-[8%]" />
-                <col className="w-[9%]" />
-                <col className="w-[11%]" />
-                <col className="w-[10%]" />
-                <col className="w-[16%]" />
-              </colgroup>
-            ) : (
-              <colgroup>
-                <col className="w-[5%]" />
-                <col className="w-[15%]" />
-                <col className="w-[24%]" />
-                <col className="w-[9%]" />
-                <col className="w-[9%]" />
-                <col className="w-[10%]" />
-                <col className="w-[13%]" />
-                <col className="w-[15%]" />
-              </colgroup>
-            )}
-            <thead className="sticky top-0 z-10 border-b-2 border-slate-300 backdrop-blur-sm dark:border-slate-600">
-              <tr>
-                <th className={thClass("id", "text-center")}>ID</th>
-                <th className={thClass("requester")}>Requester</th>
-                <th className={thClass("issue")}>Issue</th>
-                <th className={thClass("status")}>Status</th>
-                <th className={thClass("priority")}>Priority</th>
-                <th className={thClass("category")}>Category</th>
-                <th className={thClass("assignee")}>Assignee</th>
-                <th className={thClass("submitted", "", !showActionsColumn)}>Submitted</th>
-                {showActionsColumn ? <th className={thClass("actions", "text-center", true)}>Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
-              {filtered.map((t, rowIdx) => {
-                const typeLabel = issueTypeFromTicketTitle(t.title);
-                const issueName = titleWithoutTypePrefix(t.title);
-                const attCount = parseTicketAttachments(t).length;
-                const expanded = expandedId === t.id;
-                const canEdit = canUserEditTicket(t, currentUser, { isIT, isAdmin });
-                const hasRowActions = isIT || isAdmin || canEdit;
-                const lastCol = !showActionsColumn;
-                return (
-                  <Fragment key={t.id}>
-                    <tr className="group border-b border-slate-200/80 transition-colors dark:border-slate-700/50">
-                      <td className={tdClass("id", rowIdx, "text-center")}>
+        <>
+          {/* ── Mobile card list (< md) ──────────────────────────────── */}
+          <div className="md:hidden divide-y divide-slate-200/80 dark:divide-white/10">
+            {filtered.map((t, rowIdx) => {
+              const typeLabel = issueTypeFromTicketTitle(t.title);
+              const issueName = titleWithoutTypePrefix(t.title);
+              const attCount = parseTicketAttachments(t).length;
+              const expanded = expandedId === t.id;
+              const canEdit = canUserEditTicket(t, currentUser, { isIT, isAdmin });
+              const hasRowActions = isIT || isAdmin || canEdit;
+              return (
+                <Fragment key={t.id}>
+                  <div className={`${bodyColBg("issue", rowIdx)} px-3 py-3`}>
+                    <div className="flex items-start gap-2">
+                      {/* ID + Notes pill */}
+                      <div className="flex shrink-0 flex-col items-center gap-1">
                         <button
                           type="button"
-                          className={[
-                            "inline-flex h-7 min-w-[1.75rem] items-center justify-center gap-0.5 rounded text-[10px] font-bold tabular-nums transition",
+                          className={["inline-flex h-7 min-w-[1.75rem] items-center justify-center gap-0.5 rounded text-[10px] font-bold tabular-nums transition",
                             expanded
                               ? "bg-[#0B3EAF] text-white dark:bg-[#A7D344] dark:text-[#0a0a0a]"
                               : "bg-slate-100 text-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:bg-white/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]",
                           ].join(" ")}
                           onClick={() => setExpandedId(expanded ? null : t.id)}
-                          title={expanded ? "Hide details" : "View details"}
                           aria-expanded={expanded}
-                          aria-label={expanded ? `Hide details for ticket ${t.id}` : `View details for ticket ${t.id}`}
+                          aria-label={expanded ? `Hide ticket ${t.id}` : `View ticket ${t.id}`}
                         >
                           <span>{t.id}</span>
-                          <span
-                            className={["text-[9px] leading-none", expanded ? "rotate-180" : ""].join(" ")}
-                            aria-hidden
-                          >
-                            ▾
-                          </span>
+                          <span className={["text-[9px] leading-none", expanded ? "rotate-180" : ""].join(" ")} aria-hidden>▾</span>
                         </button>
-                      </td>
-                      <td className={tdClass("requester", rowIdx, "overflow-hidden")}>
-                        <RequesterCell ticket={t} currentUser={currentUser} compact />
-                      </td>
-                      <td className={tdClass("issue", rowIdx, "align-top")}>
-                        <div className="min-w-0 overflow-hidden">
-                          <div className="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-900 dark:text-white" title={issueName}>
-                            {issueName}
-                          </div>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(expanded ? null : t.id)}
+                          className={["inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide transition",
+                            expanded
+                              ? "bg-[#A7D344]/20 text-[#3a6600] dark:bg-[#A7D344]/25 dark:text-[#A7D344]"
+                              : "bg-[#A7D344]/15 text-[#3a6600] hover:bg-[#A7D344]/30 dark:bg-[#A7D344]/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/25",
+                          ].join(" ")}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-2.5 w-2.5" aria-hidden>
+                            <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6A1.5 1.5 0 0 1 12.5 11H9.707l-2.147 2.146A.5.5 0 0 1 7 12.793V11H3.5A1.5 1.5 0 0 1 2 9.5v-6Z" />
+                          </svg>
+                          Notes
+                        </button>
+                      </div>
+
+                      {/* Issue + badges + requester */}
+                      <div className="min-w-0 flex-1">
+                        <div className="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-900 dark:text-white">{issueName}</div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                          <span className={`${BADGE} ${statusBadgeClass(t.status)}`}>{statusBadgeLabel(t.status)}</span>
+                          <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`}>{priorityBadgeLabel(t.priority)}</span>
+                          {typeLabel ? <span className={`${BADGE} ${issueTypeBadgeClass(typeLabel)}`}>{typeLabel}</span> : null}
                           {attCount > 0 ? (
-                            <div className="mt-0.5 inline-flex rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
-                              {attCount} attachment{attCount === 1 ? "" : "s"}
-                            </div>
+                            <span className="inline-flex rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+                              {attCount} file{attCount === 1 ? "" : "s"}
+                            </span>
                           ) : null}
                         </div>
-                      </td>
-                      <td className={tdClass("status", rowIdx)}>
-                        <span className={`${BADGE} ${statusBadgeClass(t.status)}`} title={statusBadgeLabel(t.status)}>
-                          {statusBadgeLabel(t.status)}
-                        </span>
-                      </td>
-                      <td className={tdClass("priority", rowIdx)}>
-                        <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`} title={priorityBadgeLabel(t.priority)}>
-                          {priorityBadgeLabel(t.priority)}
-                        </span>
-                      </td>
-                      <td className={tdClass("category", rowIdx)}>
-                        {typeLabel ? (
-                          <span
-                            className={`${BADGE} truncate ${issueTypeBadgeClass(typeLabel)}`}
-                            title={typeLabel}
-                          >
-                            {typeLabel}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                      <td className={tdClass("assignee", rowIdx, "overflow-hidden")}>
-                        <span className="block truncate text-[11px] font-medium text-slate-800 dark:text-slate-200" title={t.assignee_name?.trim() || ""}>
-                          {t.assignee_name?.trim() || "—"}
-                        </span>
-                      </td>
-                      <td className={tdClass("submitted", rowIdx, "", lastCol)}>
-                        <div className="tabular-nums">
-                          <div className="text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-200">
-                            {formatSubmittedDate(t.created_at)}
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <RequesterCell ticket={t} currentUser={currentUser} compact />
+                          {t.assignee_name?.trim() ? (
+                            <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400">→ {t.assignee_name}</span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      {hasRowActions ? (
+                        <div className="shrink-0">
+                          <TicketRowActions
+                            ticket={t}
+                            canEdit={canEdit}
+                            isIT={isIT}
+                            isAdmin={isAdmin}
+                            deletingId={deletingId}
+                            onEdit={onEdit}
+                            onStatusChange={onStatusChange}
+                            onDelete={onDelete}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* Mobile expanded panel */}
+                  {expanded ? (
+                    <div className={`${bodyColBg("issue", rowIdx)} border-t border-slate-200/60 px-3 py-3 dark:border-slate-600/40`}>
+                      <div className="rounded-lg border border-[#0B3EAF]/20 border-l-4 border-l-[#0B3EAF] bg-[#c2d9f2] px-3 py-3 text-xs shadow-sm dark:border-[#5b8fd9]/30 dark:border-l-[#5b8fd9] dark:bg-[#111c2e]/80">
+                        <div className="grid gap-5 sm:grid-cols-2">
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">Requester</div>
+                            <div className="mt-2"><RequesterCell ticket={t} currentUser={currentUser} /></div>
+                            {(isIT || isAdmin) && t.user_email ? (
+                              <a href={`mailto:${t.user_email}`} className="mt-2 inline-block text-sm font-medium text-[#0B3EAF] underline-offset-2 hover:underline dark:text-[#A7D344]">{t.user_email}</a>
+                            ) : null}
                           </div>
-                          <div className="text-[9px] leading-tight text-slate-500 dark:text-slate-400">
-                            {formatSubmittedTime(t.created_at)}
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">Description</div>
+                            <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{t.description?.trim() || "—"}</div>
                           </div>
                         </div>
-                      </td>
-                      {showActionsColumn ? (
-                        <td className={tdClass("actions", rowIdx, "", true)}>
-                          {hasRowActions ? (
-                            <div className="flex justify-end">
-                              <TicketRowActions
-                                ticket={t}
-                                canEdit={canEdit}
-                                isIT={isIT}
-                                isAdmin={isAdmin}
-                                deletingId={deletingId}
-                                onEdit={onEdit}
-                                onStatusChange={onStatusChange}
-                                onDelete={onDelete}
-                              />
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
-                        </td>
-                      ) : null}
-                    </tr>
-                    {expanded ? (
-                      <tr className="group border-b border-slate-200/80 dark:border-slate-700/50">
-                        <td
-                          colSpan={colCount}
-                          className={`px-3 py-3 ${bodyColBg("issue", rowIdx)} border-t border-slate-200/60 dark:border-slate-600/40`}
-                        >
-                          <div className="rounded-lg border border-slate-200 border-l-4 border-l-[#0B3EAF] bg-white px-3 py-3 text-xs shadow-sm dark:border-slate-700 dark:border-l-[#5b8fd9] dark:bg-[#1c1c1c]">
-                            <div className="grid gap-5 sm:grid-cols-2">
-                              <div>
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">
-                                  Requester
-                                </div>
-                                <div className="mt-2">
-                                  <RequesterCell ticket={t} currentUser={currentUser} />
-                                </div>
-                                {(isIT || isAdmin) && t.user_email ? (
-                                  <a
-                                    href={`mailto:${t.user_email}`}
-                                    className="mt-2 inline-block text-sm font-medium text-[#0B3EAF] underline-offset-2 hover:underline dark:text-[#A7D344]"
-                                  >
-                                    {t.user_email}
+                        {parseTicketAttachments(t).length > 0 ? (
+                          <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">Attachments</div>
+                            <ul className="mt-2 flex flex-wrap gap-2">
+                              {parseTicketAttachments(t).map((a, i) => (
+                                <li key={`${t.id}-att-${i}`}>
+                                  <a href={a.url} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex rounded-md border border-[rgba(11,62,175,0.2)] bg-white px-3 py-2 text-xs font-semibold text-[#0B3EAF] shadow-sm transition hover:border-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:border-[#A7D344]/30 dark:bg-[#1a1a1a] dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]">
+                                    {a.name || `File ${i + 1}`}
                                   </a>
-                                ) : null}
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">
-                                  Description
-                                </div>
-                                <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
-                                  {t.description?.trim() || "—"}
-                                </div>
-                              </div>
-                            </div>
-                            {parseTicketAttachments(t).length > 0 ? (
-                              <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700">
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">
-                                  Attachments
-                                </div>
-                                <ul className="mt-2 flex flex-wrap gap-2">
-                                  {parseTicketAttachments(t).map((a, i) => (
-                                    <li key={`${t.id}-att-${i}`}>
-                                      <a
-                                        href={a.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex rounded-md border border-[rgba(11,62,175,0.2)] bg-white px-3 py-2 text-xs font-semibold text-[#0B3EAF] shadow-sm transition hover:border-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:border-[#A7D344]/30 dark:bg-[#1a1a1a] dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]"
-                                      >
-                                        {a.name || `File ${i + 1}`}
-                                      </a>
-                                    </li>
-                                  ))}
-                                </ul>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        <TicketChatThread ticketId={t.id} currentUser={currentUser} />
+                      </div>
+                    </div>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+          </div>
+
+          {/* ── Desktop / tablet table (md and above) ───────────────── */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse border border-slate-200 text-xs dark:border-slate-600/50">
+              <thead className="sticky top-0 z-10 border-b-2 border-slate-300 backdrop-blur-sm dark:border-slate-600">
+                <tr>
+                  <th className={thClass("id", "text-center w-[5%]")}>ID</th>
+                  <th className={thClass("requester", "w-[14%]")}>Requester</th>
+                  <th className={thClass("issue", "w-[22%]")}>Issue</th>
+                  <th className={thClass("status", "w-[9%]")}>Status</th>
+                  <th className={thClass("priority", "w-[9%]")}>Priority</th>
+                  <th className={thClass("category", "hidden lg:table-cell w-[9%]")}>Category</th>
+                  <th className={thClass("assignee", "w-[13%]")}>Assignee</th>
+                  <th className={thClass("submitted", "hidden lg:table-cell w-[10%]", !showActionsColumn)}>Submitted</th>
+                  {showActionsColumn ? <th className={thClass("actions", "text-center w-[9%]", true)}>Actions</th> : null}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
+                {filtered.map((t, rowIdx) => {
+                  const typeLabel = issueTypeFromTicketTitle(t.title);
+                  const issueName = titleWithoutTypePrefix(t.title);
+                  const attCount = parseTicketAttachments(t).length;
+                  const expanded = expandedId === t.id;
+                  const canEdit = canUserEditTicket(t, currentUser, { isIT, isAdmin });
+                  const hasRowActions = isIT || isAdmin || canEdit;
+                  const lastCol = !showActionsColumn;
+                  return (
+                    <Fragment key={t.id}>
+                      <tr className="group border-b border-slate-200/80 transition-colors dark:border-slate-700/50">
+                        <td className={tdClass("id", rowIdx, "text-center")}>
+                          <div className="inline-flex flex-col items-center gap-1">
+                            <button
+                              type="button"
+                              className={["inline-flex h-7 min-w-[1.75rem] items-center justify-center gap-0.5 rounded text-[10px] font-bold tabular-nums transition",
+                                expanded
+                                  ? "bg-[#0B3EAF] text-white dark:bg-[#A7D344] dark:text-[#0a0a0a]"
+                                  : "bg-slate-100 text-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:bg-white/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]",
+                              ].join(" ")}
+                              onClick={() => setExpandedId(expanded ? null : t.id)}
+                              title={expanded ? "Collapse" : "View details & notes"}
+                              aria-expanded={expanded}
+                              aria-label={expanded ? `Hide details for ticket ${t.id}` : `View details for ticket ${t.id}`}
+                            >
+                              <span>{t.id}</span>
+                              <span className={["text-[9px] leading-none", expanded ? "rotate-180" : ""].join(" ")} aria-hidden>▾</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedId(expanded ? null : t.id)}
+                              title="Open notes"
+                              className={["inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide transition",
+                                expanded
+                                  ? "bg-[#A7D344]/20 text-[#3a6600] dark:bg-[#A7D344]/25 dark:text-[#A7D344]"
+                                  : "bg-[#A7D344]/15 text-[#3a6600] hover:bg-[#A7D344]/30 dark:bg-[#A7D344]/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/25",
+                              ].join(" ")}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-2.5 w-2.5" aria-hidden>
+                                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6A1.5 1.5 0 0 1 12.5 11H9.707l-2.147 2.146A.5.5 0 0 1 7 12.793V11H3.5A1.5 1.5 0 0 1 2 9.5v-6Z" />
+                              </svg>
+                              Notes
+                            </button>
+                          </div>
+                        </td>
+                        <td className={tdClass("requester", rowIdx, "overflow-hidden")}>
+                          <RequesterCell ticket={t} currentUser={currentUser} compact />
+                        </td>
+                        <td className={tdClass("issue", rowIdx, "align-top")}>
+                          <div className="min-w-0 overflow-hidden">
+                            <div className="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-900 dark:text-white" title={issueName}>{issueName}</div>
+                            {attCount > 0 ? (
+                              <div className="mt-0.5 inline-flex rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+                                {attCount} attachment{attCount === 1 ? "" : "s"}
                               </div>
                             ) : null}
                           </div>
                         </td>
+                        <td className={tdClass("status", rowIdx)}>
+                          <span className={`${BADGE} ${statusBadgeClass(t.status)}`}>{statusBadgeLabel(t.status)}</span>
+                        </td>
+                        <td className={tdClass("priority", rowIdx)}>
+                          <span className={`${BADGE} ${priorityBadgeClass(t.priority)}`}>{priorityBadgeLabel(t.priority)}</span>
+                        </td>
+                        <td className={`${tdClass("category", rowIdx)} hidden lg:table-cell`}>
+                          {typeLabel ? (
+                            <span className={`${BADGE} truncate ${issueTypeBadgeClass(typeLabel)}`} title={typeLabel}>{typeLabel}</span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className={tdClass("assignee", rowIdx, "overflow-hidden")}>
+                          <span className="block truncate text-[11px] font-medium text-slate-800 dark:text-slate-200" title={t.assignee_name?.trim() || ""}>
+                            {t.assignee_name?.trim() || "—"}
+                          </span>
+                        </td>
+                        <td className={`${tdClass("submitted", rowIdx, "", lastCol)} hidden lg:table-cell`}>
+                          <div className="tabular-nums">
+                            <div className="text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-200">{formatSubmittedDate(t.created_at)}</div>
+                            <div className="text-[9px] leading-tight text-slate-500 dark:text-slate-400">{formatSubmittedTime(t.created_at)}</div>
+                          </div>
+                        </td>
+                        {showActionsColumn ? (
+                          <td className={tdClass("actions", rowIdx, "", true)}>
+                            {hasRowActions ? (
+                              <div className="flex justify-end">
+                                <TicketRowActions
+                                  ticket={t}
+                                  canEdit={canEdit}
+                                  isIT={isIT}
+                                  isAdmin={isAdmin}
+                                  deletingId={deletingId}
+                                  onEdit={onEdit}
+                                  onStatusChange={onStatusChange}
+                                  onDelete={onDelete}
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
+                          </td>
+                        ) : null}
                       </tr>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      {expanded ? (
+                        <tr className="group border-b border-[#0B3EAF]/20 dark:border-slate-700/50">
+                          <td
+                            colSpan={99}
+                            className={`px-3 py-3 ${bodyColBg("issue", rowIdx)} border-t border-slate-200/60 dark:border-slate-600/40`}
+                          >
+                            <div className="rounded-lg border border-[#0B3EAF]/20 border-l-4 border-l-[#0B3EAF] bg-[#c2d9f2] px-3 py-3 text-xs shadow-sm dark:border-[#5b8fd9]/30 dark:border-l-[#5b8fd9] dark:bg-[#111c2e]/80">
+                              <div className="grid gap-5 sm:grid-cols-2">
+                                <div>
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">Requester</div>
+                                  <div className="mt-2"><RequesterCell ticket={t} currentUser={currentUser} /></div>
+                                  {(isIT || isAdmin) && t.user_email ? (
+                                    <a href={`mailto:${t.user_email}`} className="mt-2 inline-block text-sm font-medium text-[#0B3EAF] underline-offset-2 hover:underline dark:text-[#A7D344]">{t.user_email}</a>
+                                  ) : null}
+                                </div>
+                                <div>
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">Description</div>
+                                  <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{t.description?.trim() || "—"}</div>
+                                </div>
+                              </div>
+                              {parseTicketAttachments(t).length > 0 ? (
+                                <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700">
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#0B3EAF] dark:text-[#A7D344]">Attachments</div>
+                                  <ul className="mt-2 flex flex-wrap gap-2">
+                                    {parseTicketAttachments(t).map((a, i) => (
+                                      <li key={`${t.id}-att-${i}`}>
+                                        <a href={a.url} target="_blank" rel="noopener noreferrer"
+                                          className="inline-flex rounded-md border border-[rgba(11,62,175,0.2)] bg-white px-3 py-2 text-xs font-semibold text-[#0B3EAF] shadow-sm transition hover:border-[#0B3EAF] hover:bg-[#0B3EAF] hover:text-white dark:border-[#A7D344]/30 dark:bg-[#1a1a1a] dark:text-[#A7D344] dark:hover:bg-[#A7D344] dark:hover:text-[#0a0a0a]">
+                                          {a.name || `File ${i + 1}`}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+                              <TicketChatThread ticketId={t.id} currentUser={currentUser} />
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   );

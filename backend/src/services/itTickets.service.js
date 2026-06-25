@@ -466,6 +466,73 @@ async function createTicketAndNotify(userId, body) {
   return ticket;
 }
 
+// ─── Ticket Messages (chat thread) ───────────────────────────────────────────
+
+async function getTicketMessages(ticketId) {
+  const tid = Number(ticketId);
+  if (!Number.isFinite(tid) || tid < 1) return [];
+  const rows = await db
+    .prepare(
+      `SELECT tm.id, tm.ticket_id, tm.sender_id, tm.body, tm.sent_at,
+              u.name AS sender_name, u.profile_image_url AS sender_image_url
+       FROM ticket_messages tm
+       JOIN users u ON u.id = tm.sender_id
+       WHERE tm.ticket_id = ?
+       ORDER BY tm.sent_at ASC, tm.id ASC`
+    )
+    .all(tid);
+  return (rows || []).map((r) => ({
+    id: Number(r.id),
+    ticket_id: Number(r.ticket_id),
+    sender_id: Number(r.sender_id),
+    body: String(r.body || ""),
+    sent_at: r.sent_at || null,
+    sender_name: String(r.sender_name || ""),
+    sender_image_url: r.sender_image_url || null,
+  }));
+}
+
+async function postTicketMessage(ticketId, senderId, body) {
+  const tid = Number(ticketId);
+  const sid = Number(senderId);
+  const text = String(body || "").trim();
+  if (!Number.isFinite(tid) || tid < 1) {
+    const e = new Error("Invalid ticket"); e.statusCode = 400; throw e;
+  }
+  if (!Number.isFinite(sid) || sid < 1) {
+    const e = new Error("Invalid sender"); e.statusCode = 400; throw e;
+  }
+  if (!text) {
+    const e = new Error("Message body cannot be empty"); e.statusCode = 400; throw e;
+  }
+  const now = new Date().toISOString();
+  const ins = await db
+    .prepare(
+      "INSERT INTO ticket_messages (ticket_id, sender_id, body, sent_at) VALUES (?, ?, ?, ?)"
+    )
+    .run(tid, sid, text, now);
+  const newId = Number(ins.lastInsertRowid || ins.id || 0);
+  const row = await db
+    .prepare(
+      `SELECT tm.id, tm.ticket_id, tm.sender_id, tm.body, tm.sent_at,
+              u.name AS sender_name, u.profile_image_url AS sender_image_url
+       FROM ticket_messages tm
+       JOIN users u ON u.id = tm.sender_id
+       WHERE tm.id = ?`
+    )
+    .get(newId);
+  if (!row) return { id: newId, ticket_id: tid, sender_id: sid, body: text, sent_at: now };
+  return {
+    id: Number(row.id),
+    ticket_id: Number(row.ticket_id),
+    sender_id: Number(row.sender_id),
+    body: String(row.body || ""),
+    sent_at: row.sent_at || null,
+    sender_name: String(row.sender_name || ""),
+    sender_image_url: row.sender_image_url || null,
+  };
+}
+
 module.exports = {
   listItAssignees,
   createTicket,
@@ -478,4 +545,6 @@ module.exports = {
   updateTicketByOwner,
   deleteTicket,
   normalizeDept,
+  getTicketMessages,
+  postTicketMessage,
 };

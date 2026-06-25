@@ -335,7 +335,7 @@ export default function LoginPage() {
           </form>
         </div>
       </div>
-      <div className="absolute bottom-0 right-0 z-10 hidden lg:block">
+      <div className="pointer-events-none absolute bottom-0 right-0 z-10 hidden lg:block">
         <AuthBirdsCorner placement="band" />
       </div>
     </div>

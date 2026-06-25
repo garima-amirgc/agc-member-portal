@@ -5,6 +5,7 @@ const userDeptSvc = require("../services/userDepartments.service");
 const ticketUpload = require("./upload.routes");
 const { ROLES, canonicalRole } = require("../config/constants");
 const { hasAdminGrant, ADMIN_GRANT_KEYS } = require("../config/adminGrants");
+const email = require("../services/email.service");
 
 const router = express.Router();
 router.use(authRequired);
@@ -81,6 +82,71 @@ router.patch("/:id", async (req, res) => {
   } catch (e) {
     const code = e.statusCode || 500;
     return res.status(code).json({ message: e.message || "Server error" });
+  }
+});
+
+// ── Ticket Messages (chat thread) ───────────────────────────────────────────
+
+async function canAccessTicketMessages(user, ticketId) {
+  const isFullAdmin = canonicalRole(user.role) === ROLES.ADMIN &&
+    (user.adminGrants == null || (Array.isArray(user.adminGrants) && user.adminGrants.length === 0));
+  if (isFullAdmin || hasAdminGrant(user, ADMIN_GRANT_KEYS.IT_TICKETS)) return true;
+  if (await userDeptSvc.hasDepartment(user.id, "IT")) return true;
+  const ticket = await itTickets.getTicketById(ticketId);
+  if (!ticket) return false;
+  return Number(ticket.user_id) === Number(user.id) || Number(ticket.assignee_id) === Number(user.id);
+}
+
+router.get("/:id/messages", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid ticket id" });
+    if (!(await canAccessTicketMessages(req.user, id))) return res.status(403).json({ message: "Forbidden" });
+    const msgs = await itTickets.getTicketMessages(id);
+    return res.json(msgs);
+  } catch (e) {
+    return res.status(e.statusCode || 500).json({ message: e.message || "Server error" });
+  }
+});
+
+router.post("/:id/messages", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid ticket id" });
+    if (!(await canAccessTicketMessages(req.user, id))) return res.status(403).json({ message: "Forbidden" });
+    const body = String(req.body?.body || "").trim();
+    if (!body) return res.status(400).json({ message: "Message body cannot be empty" });
+    const msg = await itTickets.postTicketMessage(id, req.user.id, body);
+
+    // Notify the other party by email (fire-and-forget)
+    try {
+      const ticket = await itTickets.getTicketById(id);
+      if (ticket) {
+        const senderId = Number(req.user.id);
+        const requesterId = Number(ticket.user_id);
+        const assigneeId = Number(ticket.assignee_id);
+        // If sender is the requester → notify assignee; otherwise → notify requester
+        const isRequester = senderId === requesterId;
+        const toEmail = isRequester ? ticket.assignee_email : ticket.user_email;
+        const toName  = isRequester ? ticket.assignee_name  : ticket.user_name;
+        if (toEmail) {
+          await email.sendTicketMessageEmail({
+            to: toEmail,
+            recipientName: toName,
+            senderName: req.user.name,
+            ticketId: id,
+            ticketTitle: ticket.title,
+            messageBody: body,
+          });
+        }
+      }
+    } catch (emailErr) {
+      console.error("[IT_TICKET] Message email notify failed:", emailErr?.message || emailErr);
+    }
+
+    return res.status(201).json(msg);
+  } catch (e) {
+    return res.status(e.statusCode || 500).json({ message: e.message || "Server error" });
   }
 });
 

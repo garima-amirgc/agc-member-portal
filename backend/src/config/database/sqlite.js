@@ -443,6 +443,17 @@ const SCHEMA = `
     visited_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  -- Per-ticket chat messages (WhatsApp-style thread between requester and IT).
+  CREATE TABLE IF NOT EXISTS ticket_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id INTEGER NOT NULL,
+    sender_id INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(ticket_id) REFERENCES it_tickets(id) ON DELETE CASCADE,
+    FOREIGN KEY(sender_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `;
 
 async function initDb() {
@@ -1124,6 +1135,23 @@ async function initDb() {
     await migrateLegacyUpcomingGrantKey(db);
   } catch (e) {
     console.error("[db] admin_grants upcoming migration:", e.message || e);
+  }
+
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS ticket_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id INTEGER NOT NULL,
+        sender_id INTEGER NOT NULL,
+        body TEXT NOT NULL,
+        sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(ticket_id) REFERENCES it_tickets(id) ON DELETE CASCADE,
+        FOREIGN KEY(sender_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket_id ON ticket_messages (ticket_id);
+    `);
+  } catch (e) {
+    console.error("[db] ticket_messages table:", e.message || e);
   }
 
   try {

@@ -45,7 +45,7 @@ export default function AdminSystemStatusPage() {
   useEffect(() => {
     setTopVisitorsLoading(true);
     api
-      .get("/reports/admin/top-portal-visitors", { params: { days: 7 } })
+      .get("/reports/admin/top-portal-visitors", { params: { days: 7, limit: 50 } })
       .then((r) => {
         const payload = r.data;
         const list = Array.isArray(payload?.visitors) ? payload.visitors : Array.isArray(payload) ? payload : [];
@@ -109,7 +109,7 @@ export default function AdminSystemStatusPage() {
                 No home visits in the last 7 days yet.
               </p>
             ) : (
-              topVisitors.slice(0, 10).map((u, idx) => {
+              topVisitors.map((u, idx) => {
                 const img = u.profile_image_url ? resolvePublicMediaUrl(u.profile_image_url) : "";
                 return (
                   <div

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../services/api";
 import { PAGE_PADDING, PAGE_SHELL } from "../constants/pageLayout";
 import { useAuth } from "../context/AuthContext";
@@ -92,6 +92,7 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [editing, setEditing] = useState(false);
+  const editSectionRef = useRef(null);
 
   const syncFormFromProfile = useCallback((profile) => {
     setForm({
@@ -223,6 +224,9 @@ export default function ProfilePage() {
     setError("");
     setSuccess("");
     setEditing(true);
+    setTimeout(() => {
+      editSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   };
 
   const cancelEditing = () => {
@@ -296,7 +300,7 @@ export default function ProfilePage() {
       </section>
 
       {editing ? (
-        <section className="card">
+        <section className="card" ref={editSectionRef}>
           <h2 className="mb-4 text-lg font-semibold">Edit Profile</h2>
 
           <div className="mb-6 rounded-2xl border p-4 dark:border-slate-700">
