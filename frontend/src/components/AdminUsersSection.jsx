@@ -35,6 +35,7 @@ export default function AdminUsersSection({ className = "card" }) {
   const [creating, setCreating] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null); // user object awaiting confirmation
   const [form, setForm] = useState(EMPTY_USER);
   const [editing, setEditing] = useState(null);
   const editingRef = useRef(null);
@@ -409,7 +410,7 @@ export default function AdminUsersSection({ className = "card" }) {
   };
 
   const deleteUser = async (u) => {
-    if (!window.confirm(`Delete user ${u.name} (${u.email})?`)) return;
+    setPendingDelete(null);
     setDeletingId(u.id);
     try {
       await api.delete(`/users/${u.id}`);
@@ -850,7 +851,7 @@ export default function AdminUsersSection({ className = "card" }) {
                         updatingId === u.id ||
                         (isAdminRole(u.role) && !canManageAdminGrants(me))
                       }
-                      onClick={() => deleteUser(u)}
+                      onClick={() => setPendingDelete(u)}
                       className="btn-danger"
                     >
                       {deletingId === u.id ? "Removing…" : "Remove"}
@@ -862,6 +863,63 @@ export default function AdminUsersSection({ className = "card" }) {
           </div>
         </section>
       </div>
+
+      {/* ── Delete confirmation modal ─────────────────────────── */}
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-delete-title"
+          onClick={() => setPendingDelete(null)}
+        >
+          <div
+            className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-950/40">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 text-red-600 dark:text-red-400">
+                  <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <h3 id="confirm-delete-title" className="text-base font-semibold text-slate-900 dark:text-white">
+                Remove user?
+              </h3>
+            </div>
+            {/* Body */}
+            <div className="px-5 py-4">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-slate-900 dark:text-white">{pendingDelete.name}</span>
+                {pendingDelete.email ? (
+                  <> (<span className="text-slate-500 dark:text-slate-400">{pendingDelete.email}</span>)</>
+                ) : null}
+                ? This action cannot be undone.
+              </p>
+            </div>
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteUser(pendingDelete)}
+                className="btn-danger"
+                disabled={deletingId === pendingDelete.id}
+              >
+                {deletingId === pendingDelete.id ? "Removing…" : "Yes, remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <div

@@ -50,7 +50,8 @@ router.get("/", async (req, res) => {
     const isFullAdmin = canonicalRole(req.user.role) === ROLES.ADMIN &&
       (req.user.adminGrants == null || (Array.isArray(req.user.adminGrants) && req.user.adminGrants.length === 0));
     const hasTicketVisibility = hasAdminGrant(req.user, ADMIN_GRANT_KEYS.IT_TICKETS);
-    if (isFullAdmin || hasTicketVisibility) {
+    const isITDept = await userDeptSvc.hasDepartment(req.user.id, "IT");
+    if (isFullAdmin || hasTicketVisibility || isITDept) {
       return res.json(await itTickets.listAllTicketsForIT());
     }
     return res.json(await itTickets.listTicketsForUser(req.user.id));

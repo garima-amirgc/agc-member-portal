@@ -72,7 +72,7 @@ export default function ItTicketsPage() {
   const isIT = userHasDepartment(user, "IT");
   const isAdmin = isAdministrator(user);
   const hasTicketVisibility = hasAdminGrant(user, ADMIN_GRANT_KEYS.IT_TICKETS);
-  const canSeeAll = isAdmin || hasTicketVisibility;
+  const canSeeAll = isAdmin || hasTicketVisibility || isIT;
 
   const [tickets, setTickets] = useState([]);
   const [assignees, setAssignees] = useState([]);
