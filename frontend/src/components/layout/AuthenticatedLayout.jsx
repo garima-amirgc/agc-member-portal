@@ -151,7 +151,13 @@ export default function AuthenticatedLayout({ darkMode, setDarkMode }) {
         <div className="agc-main-column relative flex min-w-0 flex-1 flex-col">
           <AppTopBar darkMode={darkMode} setDarkMode={setDarkMode} />
           <div className="min-h-0 min-w-0 flex-1 pb-2 sm:pb-3">
-            <Suspense fallback={null}>
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center p-12">
+                  <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-[#0B3EAF] dark:border-slate-700 dark:border-t-[#A7D344]" />
+                </div>
+              }
+            >
               <Outlet />
             </Suspense>
           </div>

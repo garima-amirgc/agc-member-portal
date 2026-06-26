@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import api from "../services/api";
 import { dispatchTrainingComplete, dispatchTrainingProgressUpdated } from "../utils/trainingProgressEvents";
 import { PAGE_PADDING } from "../constants/pageLayout";
 
@@ -48,7 +49,7 @@ export default function CoursePlayerPage() {
 
   return (
     <main
-      className={`${PAGE_PADDING} grid w-full min-w-0 gap-4 lg:grid-cols-[2fr,1fr]`}
+      className={`${PAGE_PADDING} grid w-full min-w-0 gap-4 md:grid-cols-[2fr,1fr]`}
     >
       <section className="card">
         <h1 className="mb-4 text-2xl font-bold">{course.title}</h1>
@@ -74,9 +75,9 @@ export default function CoursePlayerPage() {
                   : `${import.meta.env.VITE_API_URL || "http://localhost:5000"}${currentLesson.video_url.startsWith("/") ? "" : "/"}${currentLesson.video_url}`
               }
             />
-            <div className="mt-3 flex items-center justify-between">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-semibold">{currentLesson.title}</h2>
-              <button type="button" className="btn-primary" onClick={markComplete}>
+              <button type="button" className="btn-primary shrink-0" onClick={markComplete}>
                 Mark as Completed
               </button>
             </div>

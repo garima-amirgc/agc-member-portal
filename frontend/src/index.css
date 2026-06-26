@@ -470,6 +470,21 @@ h6 {
   }
 }
 
+@keyframes agc-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.agc-main-column > div > * {
+  animation: agc-page-in 0.18s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .celebration-modal-backdrop,
   .celebration-modal-card,
@@ -478,7 +493,8 @@ h6 {
   .celebration-sparkle,
   .celebration-avatar-ring,
   .celebration-headline,
-  .celebration-badge {
+  .celebration-badge,
+  .agc-main-column > div > * {
     animation: none !important;
   }
 }

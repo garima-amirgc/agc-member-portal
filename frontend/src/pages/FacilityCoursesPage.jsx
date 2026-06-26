@@ -227,7 +227,7 @@ export default function FacilityCoursesPage() {
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/55 to-slate-950/20" />
-          <div className="relative p-8">
+          <div className="relative p-5 sm:p-8">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-100/90">
               {facilityBanner.title}
             </div>
@@ -237,12 +237,12 @@ export default function FacilityCoursesPage() {
       </section>
 
       <section className="min-w-0">
-        <div className="relative flex items-end gap-3">
+        <div className="relative flex flex-wrap items-end gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setActiveTab("resources")}
             className={[
-              "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+              "relative -mb-px rounded-t-2xl border px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 sm:text-base",
               "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
               "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
               activeTab === "resources"
@@ -258,7 +258,7 @@ export default function FacilityCoursesPage() {
             type="button"
             onClick={() => setActiveTab("org")}
             className={[
-              "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+              "relative -mb-px rounded-t-2xl border px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 sm:text-base",
               "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
               "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
               activeTab === "org"

@@ -257,16 +257,16 @@ export default function ResourcesCategoryPage() {
         )}
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr,176px]">
+      <div className="grid gap-4 md:grid-cols-[1fr,176px]">
         <section className="min-w-0">
           {showTabs ? (
-            <div className="relative flex items-end gap-3">
+            <div className="relative flex flex-wrap items-end gap-2 sm:gap-3">
               {hasVideos ? (
                 <button
                   type="button"
                   onClick={() => setContentTab("videos")}
                   className={[
-                    "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+                    "relative -mb-px rounded-t-2xl border px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 sm:text-base",
                     "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
                     "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
                     contentTab === "videos"
@@ -284,7 +284,7 @@ export default function ResourcesCategoryPage() {
                   type="button"
                   onClick={() => setContentTab("documentation")}
                   className={[
-                    "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+                    "relative -mb-px rounded-t-2xl border px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 sm:text-base",
                     "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
                     "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
                     contentTab === "documentation"
@@ -302,7 +302,7 @@ export default function ResourcesCategoryPage() {
                   type="button"
                   onClick={() => setContentTab("reports")}
                   className={[
-                    "relative -mb-px rounded-t-2xl border px-4 py-2.5 text-base font-semibold transition",
+                    "relative -mb-px rounded-t-2xl border px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 sm:text-base",
                     "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
                     "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
                     contentTab === "reports"
@@ -502,7 +502,7 @@ export default function ResourcesCategoryPage() {
           </div>
         </section>
 
-        <aside className="card p-3">
+        <aside className="card order-first p-3 md:order-last">
           <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Categories</h2>
           <div className="flex flex-col gap-2">
             {categoryCountsLoading ? (

@@ -55,7 +55,7 @@ export default function HelpPage() {
   const supportContacts = useMemo(() => {
     if (contacts.length > 0) return contacts;
     return [
-      { id: "garima", name: "Garima Singh", role: "Portal support", email: null },
+      { id: "garima", name: "Garima", role: "Portal support", email: null },
       { id: "ashhar", name: "Ashhar", role: "Portal support", email: null },
     ];
   }, [contacts]);
