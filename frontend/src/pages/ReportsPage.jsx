@@ -5,6 +5,21 @@ import { PAGE_SHELL } from "../constants/pageLayout";
 import api from "../services/api";
 
 const FACILITIES = ["AGC", "AQM", "SCF", "ASP"];
+const YVF_SCF_TAB = "YVF & SCF";
+const YVF_SCF_LINKS = [
+  {
+    label: "YVF Reporting Dashboard",
+    url: "https://yvf.sierracustomfoods.com/",
+    desc: "Yorkshire Valley Farms — orders, shipments, yield reports",
+    preview: "/dashboard-preview-yvf.png",
+  },
+  {
+    label: "SCF & AQM Reporting Dashboard",
+    url: "https://amirgc-scf.onrender.com/",
+    desc: "SCF & AQM — shipments, inventory, yield, production",
+    preview: "/dashboard-preview-scf.png",
+  },
+];
 const REPORT_SIZE_OPTIONS = [
   { label: "Normal", value: 1 },
   { label: "Fit", value: 1.35 },
@@ -44,6 +59,62 @@ function reportFacilities(r) {
   return bu.length ? bu : FACILITIES;
 }
 
+const ExternalLinkIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6v6" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10 14L21 3" />
+  </svg>
+);
+
+function DashboardLinkCard({ link }) {
+  const [imgOk, setImgOk] = useState(true);
+
+  return (
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm no-underline transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-900"
+    >
+      {/* Screenshot preview */}
+      <div className="relative h-44 w-full overflow-hidden bg-slate-100 dark:bg-slate-800 sm:h-52">
+        {imgOk ? (
+          <img
+            src={link.preview}
+            alt={link.label}
+            className="h-full w-full object-cover object-top transition duration-300 group-hover:scale-[1.02]"
+            onError={() => setImgOk(false)}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <div className="text-center">
+              <svg viewBox="0 0 24 24" className="mx-auto mb-2 h-10 w-10 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+                <rect x="3" y="3" width="18" height="14" rx="2" />
+                <path d="M3 17l4-4 3 3 4-5 5 6" />
+              </svg>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Preview not available</p>
+            </div>
+          </div>
+        )}
+        <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm backdrop-blur-sm dark:bg-slate-900/80 dark:text-white">
+          <ExternalLinkIcon />
+          Open
+        </span>
+      </div>
+
+      {/* Label + desc */}
+      <div className="flex flex-1 flex-col gap-1 p-4">
+        <div className="text-base font-bold text-[#0B3EAF] group-hover:underline dark:text-[#A7D344]">
+          {link.label}
+        </div>
+        <div className="text-sm text-slate-500 dark:text-slate-400">{link.desc}</div>
+        <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">{link.url}</div>
+      </div>
+    </a>
+  );
+}
+
 export default function ReportsPage() {
   const [searchParams] = useSearchParams();
   const [reports, setReports] = useState([]);
@@ -52,6 +123,7 @@ export default function ReportsPage() {
   const [activeFacility, setActiveFacility] = useState(null);
   const [reportScale, setReportScale] = useState(1.7);
   const [expanded, setExpanded] = useState(false);
+  const [mainTab, setMainTab] = useState("reports");
 
   useEffect(() => {
     if (!expanded) return;
@@ -141,7 +213,46 @@ export default function ReportsPage() {
   return (
     <main className={PAGE_SHELL}>
       <PageHeader title="Reports" />
-        {loading ? (
+
+      {/* Top-level tab switcher */}
+      <div className="inline-flex w-full overflow-x-auto rounded-portal border border-slate-200 bg-white/70 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/25 sm:w-auto">
+        <button
+          type="button"
+          onClick={() => setMainTab("reports")}
+          className={[
+            "shrink-0 rounded-[10px] px-4 py-1.5 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:focus-visible:ring-brand-green/30",
+            mainTab === "reports"
+              ? "bg-[#0B3EAF] text-white shadow-sm dark:bg-[#A7D344] dark:text-[#0a0a0a]"
+              : "text-slate-700 hover:bg-white/80 dark:text-white/85 dark:hover:bg-white/5",
+          ].join(" ")}
+        >
+          Power BI Reports
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainTab("yvf-scf")}
+          className={[
+            "shrink-0 rounded-[10px] px-4 py-1.5 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:focus-visible:ring-brand-green/30",
+            mainTab === "yvf-scf"
+              ? "bg-[#0B3EAF] text-white shadow-sm dark:bg-[#A7D344] dark:text-[#0a0a0a]"
+              : "text-slate-700 hover:bg-white/80 dark:text-white/85 dark:hover:bg-white/5",
+          ].join(" ")}
+        >
+          {YVF_SCF_TAB}
+        </button>
+      </div>
+
+      {/* YVF & SCF Dashboard tab */}
+      {mainTab === "yvf-scf" && (
+        <section className="grid gap-5 sm:grid-cols-2">
+          {YVF_SCF_LINKS.map((link) => (
+            <DashboardLinkCard key={link.url} link={link} />
+          ))}
+        </section>
+      )}
+
+      {/* Power BI Reports tab */}
+      {mainTab === "reports" && (loading ? (
           <div className="card">
             <div className="text-sm text-slate-600 dark:text-slate-300">Loading reports…</div>
           </div>
@@ -283,7 +394,8 @@ export default function ReportsPage() {
               )}
             </section>
           </section>
-        )}
+        )
+      )}
 
         {expanded && active && (
           <div className="fixed inset-0 z-[80] flex flex-col bg-white dark:bg-slate-950">
