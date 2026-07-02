@@ -11,6 +11,8 @@ const PUBLISHED_ORDER = "sort_order ASC, created_at DESC, id DESC";
 
 const router = express.Router();
 
+const VALID_POST_TYPES = ["leadership_update", "promotions_achievements"];
+
 function shapeRow(row) {
   if (!row) return null;
   return {
@@ -20,6 +22,7 @@ function shapeRow(row) {
     link_url: row.link_url != null ? String(row.link_url).trim() : "",
     image_url: row.image_url != null ? String(row.image_url) : "",
     facility: row.facility != null ? String(row.facility).trim() : "",
+    post_type: VALID_POST_TYPES.includes(row.post_type) ? row.post_type : "leadership_update",
     published: Number(row.published) === 1,
     sort_order: Number(row.sort_order) || 0,
     created_by: row.created_by,
@@ -130,15 +133,16 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEADERSHIP_UPD
     const facility = parseFacility(req.body);
     if (facility?.error) return res.status(400).json({ message: facility.error });
     const published = req.body?.published === false || req.body?.published === 0 ? 0 : 1;
+    const postType = VALID_POST_TYPES.includes(req.body?.post_type) ? req.body.post_type : "leadership_update";
     const sortOrder = await nextSortOrder(db, TABLE);
     const now = new Date().toISOString();
 
     const result = await db
       .prepare(
-        `INSERT INTO ${TABLE} (title, description, link_url, image_url, facility, published, sort_order, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO ${TABLE} (title, description, link_url, image_url, facility, post_type, published, sort_order, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(title, description || null, linkUrl, imageUrl, facility?.value ?? null, published, sortOrder, req.user.id, now, now);
+      .run(title, description || null, linkUrl, imageUrl, facility?.value ?? null, postType, published, sortOrder, req.user.id, now, now);
 
     const row = await db.prepare(`SELECT * FROM ${TABLE} WHERE id = ?`).get(result.lastInsertRowid);
     return res.status(201).json(shapeRow(row));
@@ -165,12 +169,13 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEADERSHIP_U
     const facility = parseFacility(req.body);
     if (facility?.error) return res.status(400).json({ message: facility.error });
     const published = req.body?.published === false || req.body?.published === 0 ? 0 : 1;
+    const postType = VALID_POST_TYPES.includes(req.body?.post_type) ? req.body.post_type : (existing.post_type || "leadership_update");
     const now = new Date().toISOString();
 
     await db
       .prepare(
         `UPDATE ${TABLE}
-         SET title = ?, description = ?, link_url = ?, image_url = ?, facility = ?, published = ?, updated_at = ?
+         SET title = ?, description = ?, link_url = ?, image_url = ?, facility = ?, post_type = ?, published = ?, updated_at = ?
          WHERE id = ?`
       )
       .run(
@@ -179,6 +184,7 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEADERSHIP_U
         linkUrl !== undefined ? linkUrl : existing.link_url,
         imageUrl !== undefined ? imageUrl : existing.image_url,
         facility !== undefined ? facility?.value ?? null : existing.facility,
+        postType,
         published,
         now,
         id

@@ -762,6 +762,10 @@ async function initDb() {
   } catch {
   }
   try {
+    rawDb.exec("ALTER TABLE leadership_updates ADD COLUMN post_type TEXT NOT NULL DEFAULT 'leadership_update'");
+  } catch {
+  }
+  try {
     rawDb.exec("ALTER TABLE customer_wins ADD COLUMN facility TEXT");
   } catch {
   }
@@ -1194,6 +1198,37 @@ async function initDb() {
     `);
   } catch (e) {
     console.error("[db] performance indexes:", e.message || e);
+  }
+
+  // Customer inquiry workflow (public-facing form → FSQA → Management)
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS customer_inquiries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_name TEXT NOT NULL,
+        customer_company TEXT,
+        customer_email TEXT NOT NULL,
+        customer_phone TEXT,
+        inquiry_type TEXT NOT NULL DEFAULT 'general',
+        product TEXT,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        incident_date TEXT,
+        status TEXT NOT NULL DEFAULT 'new',
+        fsqa_comment TEXT,
+        fsqa_reviewer TEXT,
+        fsqa_reviewed_at TEXT,
+        management_comment TEXT,
+        management_reviewer TEXT,
+        management_reviewed_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_customer_inquiries_status ON customer_inquiries (status);
+      CREATE INDEX IF NOT EXISTS idx_customer_inquiries_created_at ON customer_inquiries (created_at);
+    `);
+  } catch (e) {
+    console.error("[db] customer_inquiries table:", e.message || e);
   }
 
   persist();

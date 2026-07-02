@@ -475,6 +475,11 @@ function EmployeeOfMonthPanel() {
   );
 }
 
+const POST_TYPE_OPTIONS = [
+  { value: "leadership_update", label: "Leadership Update" },
+  { value: "promotions_achievements", label: "Promotions & Achievements" },
+];
+
 function emptyGenericForm() {
   return {
     title: "",
@@ -482,6 +487,7 @@ function emptyGenericForm() {
     link_url: "",
     image_url: "",
     facility: "",
+    post_type: "leadership_update",
     published: true,
   };
 }
@@ -534,6 +540,7 @@ function GenericFeedPanel({ feed }) {
       link_url: entry.link_url || "",
       image_url: entry.image_url || "",
       facility: entry.facility || "",
+      post_type: entry.post_type || "leadership_update",
       published: entry.published !== false,
     });
   };
@@ -572,6 +579,7 @@ function GenericFeedPanel({ feed }) {
         link_url: form.link_url?.trim() || null,
         image_url: form.image_url?.trim() || null,
         facility: form.facility || null,
+        post_type: form.post_type || "leadership_update",
         published: form.published,
       };
       if (editId) {
@@ -681,6 +689,26 @@ function GenericFeedPanel({ feed }) {
             </select>
           </div>
 
+          {feed.apiBase === "/leadership-updates" ? (
+            <div className="md:col-span-2">
+              <label className={fieldLabel} htmlFor={`${formId}-post-type`}>
+                Post Type
+              </label>
+              <select
+                id={`${formId}-post-type`}
+                className={fieldInput}
+                value={form.post_type}
+                onChange={(e) => setForm((f) => ({ ...f, post_type: e.target.value }))}
+              >
+                {POST_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
           <div className="md:col-span-2">
             <label className={fieldLabel}>{feed.imageFieldLabel}</label>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -755,6 +783,7 @@ function GenericFeedPanel({ feed }) {
                   <th className="px-2 py-2">Sort</th>
                   <th className="px-2 py-2">{feed.tableDateHeader}</th>
                   <th className="px-2 py-2">{feed.tableTitleHeader}</th>
+                  {feed.apiBase === "/leadership-updates" ? <th className="px-2 py-2">Type</th> : null}
                   <th className="px-2 py-2">Published</th>
                   <th className="px-2 py-2 text-right">Actions</th>
                 </tr>
@@ -786,6 +815,11 @@ function GenericFeedPanel({ feed }) {
                     </td>
                     <td className="px-2 py-3 font-medium">{formatDate(entry.created_at)}</td>
                     <td className="px-2 py-3">{entry.title || "—"}</td>
+                    {feed.apiBase === "/leadership-updates" ? (
+                      <td className="px-2 py-3 text-xs">
+                        {entry.post_type === "promotions_achievements" ? "Promotions & Achievements" : "Leadership Update"}
+                      </td>
+                    ) : null}
                     <td className="px-2 py-3">{entry.published ? "Yes" : "No"}</td>
                     <td className="px-2 py-3 text-right">
                       <button type="button" className="mr-3 text-brand-blue dark:text-brand-green" onClick={() => startEdit(entry)}>

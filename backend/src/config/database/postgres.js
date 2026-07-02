@@ -501,6 +501,7 @@ async function migrateColumns(client) {
     "ALTER TABLE leadership_updates ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE new_hires ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE leadership_updates ADD COLUMN IF NOT EXISTS facility TEXT",
+    "ALTER TABLE leadership_updates ADD COLUMN IF NOT EXISTS post_type TEXT NOT NULL DEFAULT 'leadership_update'",
     "ALTER TABLE customer_wins ADD COLUMN IF NOT EXISTS facility TEXT",
     "ALTER TABLE community_involvement ADD COLUMN IF NOT EXISTS facility TEXT",
     `CREATE TABLE IF NOT EXISTS portal_settings (
@@ -609,6 +610,30 @@ async function migrateColumns(client) {
       PRIMARY KEY (ticket_id, user_id)
     )`,
     "ALTER TABLE ticket_messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ DEFAULT NULL",
+    // Customer inquiry workflow (public-facing form → FSQA → Management)
+    `CREATE TABLE IF NOT EXISTS customer_inquiries (
+      id SERIAL PRIMARY KEY,
+      customer_name TEXT NOT NULL,
+      customer_company TEXT,
+      customer_email TEXT NOT NULL,
+      customer_phone TEXT,
+      inquiry_type TEXT NOT NULL DEFAULT 'general',
+      product TEXT,
+      subject TEXT NOT NULL,
+      message TEXT NOT NULL,
+      incident_date TEXT,
+      status TEXT NOT NULL DEFAULT 'new',
+      fsqa_comment TEXT,
+      fsqa_reviewer TEXT,
+      fsqa_reviewed_at TIMESTAMPTZ,
+      management_comment TEXT,
+      management_reviewer TEXT,
+      management_reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_customer_inquiries_status ON customer_inquiries (status)",
+    "CREATE INDEX IF NOT EXISTS idx_customer_inquiries_created_at ON customer_inquiries (created_at)",
   ];
   for (const q of alters) {
     try {
