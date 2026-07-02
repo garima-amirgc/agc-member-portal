@@ -104,7 +104,7 @@ function SlideCard({ item }) {
         {/* Top: badge + facility */}
         <div className="flex flex-wrap items-start gap-1.5">
           <span
-            className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm"
+            className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-normal whitespace-nowrap text-white shadow-sm"
             style={{ background: item.accent }}
           >
             {item.category}
