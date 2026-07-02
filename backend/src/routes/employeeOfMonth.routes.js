@@ -253,8 +253,13 @@ async function resolveFeaturedPeriod() {
 router.get("/current", authRequired, async (_req, res) => {
   try {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
+    // Show last month's winners — the most recently completed month
+    let year = now.getFullYear();
+    let month = now.getMonth(); // getMonth() is 0-based, so this gives last month (1-based)
+    if (month === 0) { // January → go back to December of previous year
+      month = 12;
+      year -= 1;
+    }
 
     const rows = await db
       .prepare(
@@ -274,8 +279,13 @@ router.get("/current", authRequired, async (_req, res) => {
 router.get("/history", authRequired, async (_req, res) => {
   try {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
+    // Exclude last month (which is shown as "current") from history
+    let year = now.getFullYear();
+    let month = now.getMonth(); // 0-based → last month in 1-based
+    if (month === 0) {
+      month = 12;
+      year -= 1;
+    }
 
     const rows = await db
       .prepare(
