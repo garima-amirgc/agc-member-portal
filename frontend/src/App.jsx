@@ -7,6 +7,8 @@ import AuthenticatedLayout from "./components/layout/AuthenticatedLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import SsoCallbackPage from "./pages/SsoCallbackPage";
+import CustomerInquiryPage from "./pages/CustomerInquiryPage";
+import CustomerReviewPage from "./pages/CustomerReviewPage";
 import InviteSetupPage from "./pages/InviteSetupPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -109,6 +111,10 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Public customer-facing routes — completely outside portal auth */}
+      <Route path="/customers" element={<CustomerInquiryPage />} />
+      <Route path="/customers/review" element={<CustomerReviewPage />} />
+
       <Route path="/login" element={<LoginPage />} />
       <Route path="/login/sso" element={<SsoCallbackPage />} />
       <Route path="/invite" element={<InviteSetupPage />} />

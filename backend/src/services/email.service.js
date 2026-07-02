@@ -781,6 +781,71 @@ async function sendTicketMessageEmail({
   return sendMail({ to, subject, text, html });
 }
 
+// ── Customer Inquiry Emails ───────────────────────────────────────────────────
+
+async function sendCustomerInquiryToFsqa({ to, inquiry }) {
+  if (!to) return { skipped: true };
+  const reviewUrl = String(process.env.APP_BASE_URL || "").trim().replace(/\/+$/, "") + "/customers/review";
+  const html = emailShell({
+    title: "New Customer Inquiry — Action Required",
+    preheader: `New inquiry from ${escapeHtml(inquiry.customer_name)} (${escapeHtml(inquiry.inquiry_type)})`,
+    bodyHtml: `
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr><td style="padding:28px 32px 0;">
+          <h2 style="margin:0 0 6px;font-size:20px;font-weight:700;color:#0B3EAF;">New Customer Inquiry</h2>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;">A customer has submitted an inquiry and it requires your FSQA review.</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f8fafc;border-radius:10px;padding:16px 20px;border:1px solid #e2e8f0;margin-bottom:20px;">
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;width:140px;vertical-align:top;">Ref #</td><td style="padding:5px 0;font-size:13px;color:#0f172a;font-weight:600;">#${escapeHtml(String(inquiry.id))}</td></tr>
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Name</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(inquiry.customer_name)}</td></tr>
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Company</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(inquiry.customer_company || "—")}</td></tr>
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Email</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(inquiry.customer_email)}</td></tr>
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Type</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(inquiry.inquiry_type)}</td></tr>
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Subject</td><td style="padding:5px 0;font-size:13px;color:#0f172a;font-weight:600;">${escapeHtml(inquiry.subject)}</td></tr>
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Message</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(inquiry.message)}</td></tr>
+          </table>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:28px;">
+            <tr><td align="center">
+              <a href="${escapeHtml(reviewUrl)}" style="display:inline-block;padding:12px 28px;background:#0B3EAF;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Review Inquiry →</a>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>`,
+  });
+  return sendMail({ to, subject: `[FSQA Review Required] New Customer Inquiry #${inquiry.id} — ${inquiry.subject}`, html });
+}
+
+async function sendCustomerInquiryToManagement({ to, inquiry }) {
+  if (!to) return { skipped: true };
+  const reviewUrl = String(process.env.APP_BASE_URL || "").trim().replace(/\/+$/, "") + "/customers/review";
+  const html = emailShell({
+    title: "Customer Inquiry — Management Review Required",
+    preheader: `FSQA has reviewed inquiry #${inquiry.id} and forwarded it to management`,
+    bodyHtml: `
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr><td style="padding:28px 32px 0;">
+          <h2 style="margin:0 0 6px;font-size:20px;font-weight:700;color:#0B3EAF;">Customer Inquiry — Management Review</h2>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;">FSQA has reviewed the following inquiry and forwarded it for your management decision.</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f8fafc;border-radius:10px;padding:16px 20px;border:1px solid #e2e8f0;margin-bottom:16px;">
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;width:140px;vertical-align:top;">Ref #</td><td style="padding:5px 0;font-size:13px;color:#0f172a;font-weight:600;">#${escapeHtml(String(inquiry.id))}</td></tr>
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Customer</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(inquiry.customer_name)}${inquiry.customer_company ? ` — ${escapeHtml(inquiry.customer_company)}` : ""}</td></tr>
+            <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Subject</td><td style="padding:5px 0;font-size:13px;color:#0f172a;font-weight:600;">${escapeHtml(inquiry.subject)}</td></tr>
+          </table>
+          ${inquiry.fsqa_comment ? `
+          <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
+            <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">FSQA Comment</div>
+            <div style="font-size:13px;color:#0f172a;">${escapeHtml(inquiry.fsqa_comment)}</div>
+          </div>` : ""}
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:28px;">
+            <tr><td align="center">
+              <a href="${escapeHtml(reviewUrl)}" style="display:inline-block;padding:12px 28px;background:#0B3EAF;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Review &amp; Close →</a>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>`,
+  });
+  return sendMail({ to, subject: `[Management Review] Customer Inquiry #${inquiry.id} — ${inquiry.subject}`, html });
+}
+
 module.exports = {
   EMAIL_TEMPLATE_VERSION,
   isEmailConfigured,
@@ -798,4 +863,6 @@ module.exports = {
   deliverAccountInviteEmail,
   sendPasswordResetEmail,
   sendHelpReportEmail,
+  sendCustomerInquiryToFsqa,
+  sendCustomerInquiryToManagement,
 };

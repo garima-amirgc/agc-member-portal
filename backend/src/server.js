@@ -84,6 +84,7 @@ async function start() {
   const pollsRoutes = require("./routes/polls.routes");
   const helpRoutes = require("./routes/help.routes");
   const searchRoutes = require("./routes/search.routes");
+  const customerInquiriesRoutes = require("./routes/customer-inquiries.routes");
   const { authRequired } = require("./middleware/auth");
   const leaveSvc = require("./services/leaveRequests.service");
   const managerTeamSvc = require("./services/managerTeam.service");
@@ -184,6 +185,7 @@ async function start() {
     ["/polls", pollsRoutes],
     ["/help", helpRoutes],
     ["/search", searchRoutes],
+    ["/customer-inquiries", customerInquiriesRoutes],
   ];
 
   function mountRoutes(router) {
