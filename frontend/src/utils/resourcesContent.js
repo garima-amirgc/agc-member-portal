@@ -5,6 +5,7 @@ export const CATEGORIES = [
   { key: "safety", label: "Safety" },
   { key: "production", label: "Production" },
   { key: "it", label: "IT" },
+  { key: "fsqa", label: "FSQA" },
 ];
 
 export function storageKey(userId, categoryKey, facilityCode) {

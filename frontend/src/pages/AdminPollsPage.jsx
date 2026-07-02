@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import PageHeader from "../components/PageHeader";
 import { PAGE_SHELL } from "../constants/pageLayout";
@@ -66,6 +66,8 @@ export default function AdminPollsPage() {
 
   const [editing, setEditing] = useState(null);
   const isEditingExisting = useMemo(() => Boolean(editing && editing.id), [editing]);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerFile, setBannerFile] = useState(null);
 
@@ -118,6 +120,8 @@ export default function AdminPollsPage() {
 
   const save = async () => {
     if (!editing) return;
+    if (savingRef.current) return; // block double-clicks synchronously
+
     const title = String(editing.title || "").trim();
     if (!title) {
       window.alert("Title is required.");
@@ -152,6 +156,9 @@ export default function AdminPollsPage() {
       banner_image_url: String(editing.banner_image_url || "").trim() || null,
       definition: def,
     };
+
+    savingRef.current = true;
+    setSaving(true);
     try {
       if (isEditingExisting) {
         await api.put(`/admin/polls/${editing.id}`, payload);
@@ -162,6 +169,9 @@ export default function AdminPollsPage() {
       load();
     } catch (e) {
       window.alert(friendlyErrorMessage(e, "Could not save poll."));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -356,8 +366,8 @@ export default function AdminPollsPage() {
                 <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>
                   Close
                 </button>
-                <button type="button" className="btn-primary" onClick={save}>
-                  Save
+                <button type="button" className="btn-primary" onClick={save} disabled={saving}>
+                  {saving ? "Saving…" : "Save"}
                 </button>
               </div>
             </div>

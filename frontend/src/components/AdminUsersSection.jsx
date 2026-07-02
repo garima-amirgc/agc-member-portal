@@ -33,6 +33,7 @@ export default function AdminUsersSection({ className = "card" }) {
   const { user: me, refreshMe } = useAuth();
   const [users, setUsers] = useState([]);
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null); // user object awaiting confirmation
@@ -69,6 +70,8 @@ export default function AdminUsersSection({ className = "card" }) {
   const createUser = async (e) => {
     e.preventDefault();
     if (!form.name.trim() || !form.email.trim()) return;
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setCreating(true);
     setInviteBanner(null);
     try {
@@ -173,6 +176,7 @@ export default function AdminUsersSection({ className = "card" }) {
       const detail = d?.detail ? ` ${d.detail}` : "";
       window.alert(st ? `Create failed (HTTP ${st}): ${msg}${detail}` : `${msg}${detail}`);
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   };

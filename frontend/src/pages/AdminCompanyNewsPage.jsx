@@ -59,6 +59,7 @@ function EmployeeOfMonthPanel() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState(emptyEomForm);
   const [editId, setEditId] = useState(null);
@@ -158,6 +159,8 @@ function EmployeeOfMonthPanel() {
       window.alert("Please select an employee.");
       return;
     }
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setError("");
     try {
@@ -181,6 +184,7 @@ function EmployeeOfMonthPanel() {
     } catch (err) {
       setError(friendlyErrorMessage(err, "Could not save entry."));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -503,6 +507,7 @@ function GenericFeedPanel({ feed }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState(emptyGenericForm);
   const [editId, setEditId] = useState(null);
@@ -570,6 +575,8 @@ function GenericFeedPanel({ feed }) {
       window.alert(`Please enter a ${feed.titleFieldLabel.toLowerCase()}.`);
       return;
     }
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setError("");
     try {
@@ -592,6 +599,7 @@ function GenericFeedPanel({ feed }) {
     } catch (err) {
       setError(friendlyErrorMessage(err, "Could not save entry."));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

@@ -18,7 +18,7 @@ function canonicalRole(raw) {
 const BUSINESS_UNITS = ["AGC", "AQM", "SCF", "ASP"];
 const ASSIGNMENT_STATUS = ["pending", "in_progress", "completed"];
 
-const DEPARTMENTS = ["IT", "Finance", "Sales", "Purchase", "Safety", "Production"];
+const DEPARTMENTS = ["IT", "Finance", "Sales", "Purchase", "Safety", "Production", "FSQA"];
 
 const TICKET_STATUS = ["open", "in_progress", "closed"];
 const TICKET_PRIORITIES = ["low", "medium", "high", "urgent"];
