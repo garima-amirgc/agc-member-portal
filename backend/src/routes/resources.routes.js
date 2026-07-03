@@ -19,7 +19,7 @@ const { clearAllTrainingMilestone, getTrainingSummary } = require("../services/t
 const { syncUserAssignmentsForFacilities } = require("../services/assignmentSync.service");
 
 const FACILITIES = new Set(["AGC", "AQM", "SCF", "ASP"]);
-const RESOURCE_CATEGORIES = new Set(["finance", "sales", "hr", "safety", "production", "it"]);
+const RESOURCE_CATEGORIES = new Set(["finance", "sales", "hr", "safety", "production", "it", "fsqa"]);
 
 function documentDisplayAddedAt(fileUploadedAt, createdAt) {
   if (fileUploadedAt != null && String(fileUploadedAt).trim()) return fileUploadedAt;
@@ -169,6 +169,31 @@ router.put("/me/progress", async (req, res) => {
       ? "Congratulations! You have completed all of your assigned training."
       : undefined,
   });
+});
+
+// ── GET /facility/:facility/counts  — total videos + docs for a facility ──────
+router.get("/facility/:facility/counts", async (req, res) => {
+  const facility = String(req.params.facility || "").toUpperCase();
+  if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
+  try {
+    const [videoRow, docRow] = await Promise.all([
+      db.prepare(
+        `SELECT COUNT(l.id) AS cnt
+         FROM lessons l
+         INNER JOIN courses c ON c.id = l.course_id
+         WHERE c.business_unit = ?`
+      ).get(facility),
+      db.prepare(
+        `SELECT COUNT(id) AS cnt FROM resource_documents WHERE business_unit = ?`
+      ).get(facility),
+    ]);
+    const videos = Number(videoRow?.cnt || 0);
+    const docs = Number(docRow?.cnt || 0);
+    return res.json({ videos, docs, total: videos + docs });
+  } catch (e) {
+    console.error("[resources] counts:", e);
+    return res.status(500).json({ message: "Server error" });
+  }
 });
 
 router.get("/facility/:facility/category/:category", async (req, res) => {

@@ -8,6 +8,7 @@ import ProgressBar from "../components/ProgressBar";
 export default function FacilitiesPage() {
   const [me, setMe] = useState(null);
   const [assignments, setAssignments] = useState([]);
+  const [facilityCounts, setFacilityCounts] = useState({});
   const [notice, setNotice] = useState(null); // string | null
 
   useEffect(() => {
@@ -16,6 +17,20 @@ export default function FacilitiesPage() {
       setMe(meRes.data);
       setAssignments(assignmentsRes.data);
     })();
+  }, []);
+
+  // Fetch real video + doc counts for all facilities
+  useEffect(() => {
+    Promise.all(
+      FACILITY_CODES.map(async (f) => {
+        try {
+          const { data } = await api.get(`/resources/facility/${f}/counts`);
+          return [f, data];
+        } catch {
+          return [f, { videos: 0, docs: 0, total: 0 }];
+        }
+      })
+    ).then((results) => setFacilityCounts(Object.fromEntries(results)));
   }, []);
 
   const accessSet = useMemo(() => new Set(me?.facilities ?? []), [me]);
@@ -64,6 +79,7 @@ export default function FacilitiesPage() {
           {FACILITY_CODES.map((f) => {
             const hasAccess = accessSet.has(f);
             const meta = progressByFacility[f];
+            const counts = facilityCounts[f] || { videos: 0, docs: 0, total: 0 };
             return (
               <Link
                 key={f}
@@ -84,7 +100,10 @@ export default function FacilitiesPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-semibold">{f}</div>
-                  <div className="text-sm font-medium text-[#0B3EAF] dark:text-[#A7D344]">{meta.count} course(s)</div>
+                  <div className="text-right text-xs font-medium text-[#0B3EAF] dark:text-[#A7D344]">
+                    <div>{counts.videos} video{counts.videos !== 1 ? "s" : ""}</div>
+                    <div>{counts.docs} doc{counts.docs !== 1 ? "s" : ""}</div>
+                  </div>
                 </div>
                 <div className="mt-3">
                   <ProgressBar value={meta.avgProgress} />

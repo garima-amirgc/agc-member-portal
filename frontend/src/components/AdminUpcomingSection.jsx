@@ -4,6 +4,7 @@ import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 
 const FACILITIES = ["AGC", "AQM", "SCF", "ASP"];
 const UPLOAD_IMAGE_TIMEOUT_MS = 3 * 60 * 1000;
+const POSTED_BY_OPTIONS = ["HR", "Social Committee", "IT", "Finance", "Safety", "Production", "FSQA", "Management", "Other"];
 
 const fieldLabelClass =
   "mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400 max-xl:text-[0.7rem]";
@@ -28,6 +29,7 @@ function createEmptyAddForm(businessUnits) {
     end_at: "",
     published: true,
     image_url: "",
+    posted_by: "",
   };
 }
 
@@ -248,6 +250,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
         end_at: endIso ?? undefined,
         published,
         image_url: form.image_url?.trim() || undefined,
+        posted_by: form.posted_by || undefined,
       });
       const nextForm = createEmptyAddForm(businessUnits);
       addBusinessUnitsRef.current = nextForm.business_units;
@@ -332,6 +335,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
       show_from_at: toLocalInput(showSrc),
       event_at: toLocalInput(eventSrc),
       end_at: toLocalInput(ev.end_at),
+      posted_by: ev.posted_by || "",
     });
   };
 
@@ -415,6 +419,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
         end_at: endIso,
         published: editing.published,
         image_url: imgTrim,
+        posted_by: editing.posted_by || undefined,
       });
 
       setEditing(null);
@@ -505,6 +510,22 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
             value={form.detail}
             onChange={(e) => setForm((f) => ({ ...f, detail: e.target.value }))}
           />
+        </div>
+        <div>
+          <label htmlFor="agc-upcoming-posted-by" className={fieldLabelClass}>
+            Posted by (department)
+          </label>
+          <select
+            id="agc-upcoming-posted-by"
+            className={fieldInputClass}
+            value={form.posted_by}
+            onChange={(e) => setForm((f) => ({ ...f, posted_by: e.target.value }))}
+          >
+            <option value="">— Select department (optional) —</option>
+            {POSTED_BY_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
         </div>
 
         <div className={formPanelClass}>
@@ -662,6 +683,11 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
                   </span>
                 )}
                 <span className="font-medium">{ev.title}</span>
+                {ev.posted_by ? (
+                  <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
+                    {ev.posted_by}
+                  </span>
+                ) : null}
                 {ev.detail ? (
                   <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">{ev.detail}</div>
                 ) : null}
@@ -776,6 +802,23 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
                     setEditing((prev) => (prev ? { ...prev, detail: e.target.value } : null))
                   }
                 />
+              </div>
+              <div className="sm:col-span-2">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                  Posted by (department)
+                </div>
+                <select
+                  className="w-full rounded border p-2 dark:bg-slate-700"
+                  value={editing.posted_by || ""}
+                  onChange={(e) =>
+                    setEditing((prev) => (prev ? { ...prev, posted_by: e.target.value } : null))
+                  }
+                >
+                  <option value="">— Select department (optional) —</option>
+                  {POSTED_BY_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
               </div>
               <div className="sm:col-span-2">
                 <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">

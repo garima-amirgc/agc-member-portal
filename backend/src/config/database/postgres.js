@@ -398,6 +398,7 @@ async function migrateColumns(client) {
     "ALTER TABLE facility_upcoming ADD COLUMN IF NOT EXISTS show_from_at TEXT",
     "ALTER TABLE facility_upcoming ADD COLUMN IF NOT EXISTS event_at TEXT",
     "ALTER TABLE facility_upcoming ADD COLUMN IF NOT EXISTS business_units TEXT",
+    "ALTER TABLE facility_upcoming ADD COLUMN IF NOT EXISTS posted_by TEXT",
     "ALTER TABLE birthday_list ADD COLUMN IF NOT EXISTS company_name TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS designation TEXT",

@@ -123,6 +123,17 @@ export default function UpcomingEventCards({
                     {ev.business_unit}
                   </span>
                 ) : null}
+                {ev.posted_by ? (
+                  <span
+                    className={
+                      compact
+                        ? "rounded bg-brand-green/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-green"
+                        : "rounded-md bg-brand-green/20 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-brand-green"
+                    }
+                  >
+                    {ev.posted_by}
+                  </span>
+                ) : null}
                 <h3 className={titleCls}>{ev.title}</h3>
               </div>
 

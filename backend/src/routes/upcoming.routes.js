@@ -40,6 +40,8 @@ function normalizeBusinessUnitsArray(row) {
   return bu && BUSINESS_UNITS.includes(bu) ? [bu] : [];
 }
 
+const VALID_POSTED_BY = ["HR", "Social Committee", "IT", "Finance", "Safety", "Production", "FSQA", "Management", "Other"];
+
 function shapeUpcomingRow(row) {
   if (!row || typeof row !== "object") return row;
   const business_units = normalizeBusinessUnitsArray(row);
@@ -50,6 +52,7 @@ function shapeUpcomingRow(row) {
     end_at: row.end_at != null ? String(row.end_at) : null,
     show_from_at: row.show_from_at != null ? String(row.show_from_at) : null,
     event_at: row.event_at != null ? String(row.event_at) : null,
+    posted_by: row.posted_by != null && VALID_POSTED_BY.includes(row.posted_by) ? row.posted_by : null,
   };
 }
 
@@ -188,7 +191,7 @@ function resolveBusinessUnitsFromBody(body) {
 }
 
 router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENTS), async (req, res) => {
-  const { title, detail, start_at, end_at, published, image_url, show_from_at, event_at } = req.body;
+  const { title, detail, start_at, end_at, published, image_url, show_from_at, event_at, posted_by } = req.body;
   if (!title || typeof title !== "string") {
     return res.status(400).json({ message: "title is required" });
   }
@@ -222,6 +225,7 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENT
   const nextImg = normalizeImageUrl(image_url);
   const titleTrim = title.trim();
   const detailTrim = (detail && String(detail).trim()) || null;
+  const postedByVal = posted_by && VALID_POSTED_BY.includes(posted_by) ? posted_by : null;
 
   const primaryBu = units[0];
   const unitsJson = JSON.stringify(units);
@@ -230,7 +234,7 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENT
 
   const result = await db
     .prepare(
-      "INSERT INTO facility_upcoming (business_unit, business_units, title, detail, start_at, end_at, sort_order, published, image_url, show_from_at, event_at) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO facility_upcoming (business_unit, business_units, title, detail, start_at, end_at, sort_order, published, image_url, show_from_at, event_at, posted_by) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)"
     )
     .run(
       primaryBu,
@@ -242,7 +246,8 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENT
       pub,
       nextImg,
       normShowFrom,
-      normEvent
+      normEvent,
+      postedByVal
     );
 
   const row = await db.prepare("SELECT * FROM facility_upcoming WHERE id = ?").get(result.lastInsertRowid);
@@ -254,7 +259,7 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVE
   const existing = await db.prepare("SELECT * FROM facility_upcoming WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ message: "Not found" });
 
-  const { business_unit, title, detail, start_at, end_at, published, image_url, show_from_at, event_at } = req.body;
+  const { business_unit, title, detail, start_at, end_at, published, image_url, show_from_at, event_at, posted_by } = req.body;
 
   const unitsFromBody = resolveBusinessUnitsFromBody(req.body);
   let nextBu = String(existing.business_unit || "").trim().toUpperCase();
@@ -316,6 +321,11 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVE
 
   const nextImage = image_url !== undefined ? normalizeImageUrl(image_url) : existing.image_url;
 
+  const nextPostedBy =
+    posted_by !== undefined
+      ? posted_by && VALID_POSTED_BY.includes(posted_by) ? posted_by : null
+      : existing.posted_by && VALID_POSTED_BY.includes(existing.posted_by) ? existing.posted_by : null;
+
   if (image_url !== undefined && existing.image_url && nextImage !== existing.image_url) {
     try {
       await deleteLessonVideoByUrl(existing.image_url);
@@ -326,9 +336,9 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVE
 
   await db
     .prepare(
-      "UPDATE facility_upcoming SET business_unit = ?, business_units = ?, title = ?, detail = ?, end_at = ?, published = ?, image_url = ?, show_from_at = ?, event_at = ? WHERE id = ?"
+      "UPDATE facility_upcoming SET business_unit = ?, business_units = ?, title = ?, detail = ?, end_at = ?, published = ?, image_url = ?, show_from_at = ?, event_at = ?, posted_by = ? WHERE id = ?"
     )
-    .run(nextBu, nextUnitsJson, nextTitle, nextDetail, nextEnd, nextPub, nextImage, nextShowFrom, nextEvent, req.params.id);
+    .run(nextBu, nextUnitsJson, nextTitle, nextDetail, nextEnd, nextPub, nextImage, nextShowFrom, nextEvent, nextPostedBy, req.params.id);
 
   const row = await db.prepare("SELECT * FROM facility_upcoming WHERE id = ?").get(req.params.id);
   return res.json(shapeUpcomingRow(row));

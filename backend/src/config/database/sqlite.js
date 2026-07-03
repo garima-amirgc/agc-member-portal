@@ -582,6 +582,10 @@ async function initDb() {
   } catch {
   }
   try {
+    rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN posted_by TEXT");
+  } catch {
+  }
+  try {
     const sel = rawDb.prepare(
       `SELECT id, business_unit FROM facility_upcoming
        WHERE business_units IS NULL OR TRIM(IFNULL(business_units, '')) = ''`
