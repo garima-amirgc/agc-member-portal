@@ -300,16 +300,16 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVE
 
   const nextEnd = end_at !== undefined ? normalizeDateInput(end_at) : existing.end_at;
 
-  if (show_from_at !== undefined && String(show_from_at).trim() && !nextShowFrom) {
+  if (show_from_at != null && String(show_from_at).trim() && !nextShowFrom) {
     return res.status(400).json({ message: "Invalid show_from_at" });
   }
-  if (event_at !== undefined && String(event_at).trim() && !nextEvent) {
+  if (event_at != null && String(event_at).trim() && !nextEvent) {
     return res.status(400).json({ message: "Invalid event_at" });
   }
-  if (start_at !== undefined && event_at === undefined && String(start_at).trim() && !nextEvent) {
+  if (start_at != null && event_at === undefined && String(start_at).trim() && !nextEvent) {
     return res.status(400).json({ message: "Invalid start_at" });
   }
-  if (end_at !== undefined && String(end_at).trim() && !nextEnd) {
+  if (end_at != null && String(end_at).trim() && !nextEnd) {
     return res.status(400).json({ message: "Invalid end_at" });
   }
 

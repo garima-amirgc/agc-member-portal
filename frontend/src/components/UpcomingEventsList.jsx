@@ -26,7 +26,8 @@ function formatTimeRange(startIso, endIso) {
 }
 
 function buildItems(events) {
-  const today = new Date();
+  const now = new Date();
+  const today = new Date(now);
   today.setHours(0, 0, 0, 0);
 
   return (events || [])
@@ -34,6 +35,12 @@ function buildItems(events) {
       const iso = getEventTimeIso(ev);
       if (!iso) return null;
       const date = new Date(iso);
+      // Keep event visible if end_at is set and still in the future,
+      // even if the event itself has already passed.
+      const endAt = ev.end_at ? new Date(ev.end_at) : null;
+      const visibleUntil = endAt && !Number.isNaN(endAt.getTime()) ? endAt : null;
+      const isStillVisible = date >= today || (visibleUntil && visibleUntil > now);
+      if (!isStillVisible) return null;
       return {
         key: `event-${ev.id}`,
         date,
@@ -44,7 +51,6 @@ function buildItems(events) {
       };
     })
     .filter(Boolean)
-    .filter((item) => item.date >= today)
     .sort((a, b) => a.date.getTime() - b.date.getTime())
     .slice(0, MAX_ITEMS);
 }
