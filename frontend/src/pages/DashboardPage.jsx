@@ -11,6 +11,7 @@ import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { hasAdminGrant } from "../utils/adminAccess";
 import CompanyNewsFeed from "../components/CompanyNewsFeed";
 import NewHiresCard from "../components/NewHiresCard";
+import HRNewsFeedSlider from "../components/HRNewsFeedSlider";
 import BirthdaysCard from "../components/BirthdaysCard";
 import QuickActionsRow from "../components/QuickActionsRow";
 import WelcomeBanner from "../components/WelcomeBanner";
@@ -60,6 +61,8 @@ export default function DashboardPage() {
   const [customerWinLoading, setCustomerWinLoading] = useState(true);
   const [communityInvolvementEntries, setCommunityInvolvementEntries] = useState([]);
   const [communityInvolvementLoading, setCommunityInvolvementLoading] = useState(true);
+  const [hrNewsfeedItems, setHrNewsfeedItems] = useState([]);
+  const [hrNewsfeedLoading, setHrNewsfeedLoading] = useState(true);
 
   useEffect(() => {
     if (!user?.id || user?.role === "Admin") return;
@@ -76,6 +79,7 @@ export default function DashboardPage() {
     setNewHireLoading(true);
     setCustomerWinLoading(true);
     setCommunityInvolvementLoading(true);
+    setHrNewsfeedLoading(true);
 
     const [
       upcomingResult,
@@ -84,6 +88,7 @@ export default function DashboardPage() {
       newHireResult,
       customerWinResult,
       communityResult,
+      hrNewsfeedResult,
     ] = await Promise.allSettled([
       api.get("/upcoming/feed"),
       api.get("/employee-of-month/current"),
@@ -91,6 +96,7 @@ export default function DashboardPage() {
       api.get("/new-hires/current"),
       api.get("/customer-wins/current"),
       api.get("/community-involvement/current"),
+      api.get("/hr-newsfeed/current"),
     ]);
 
     if (upcomingResult.status === "fulfilled") {
@@ -170,6 +176,18 @@ export default function DashboardPage() {
       setCommunityInvolvementEntries([]);
     }
     setCommunityInvolvementLoading(false);
+
+    if (hrNewsfeedResult.status === "fulfilled") {
+      setHrNewsfeedItems(Array.isArray(hrNewsfeedResult.value.data) ? hrNewsfeedResult.value.data : []);
+    } else {
+      console.warn(
+        "HR Newsfeed failed:",
+        hrNewsfeedResult.reason?.response?.status,
+        hrNewsfeedResult.reason?.response?.data ?? hrNewsfeedResult.reason?.message
+      );
+      setHrNewsfeedItems([]);
+    }
+    setHrNewsfeedLoading(false);
   }, []);
 
   useEffect(() => {
@@ -214,7 +232,7 @@ export default function DashboardPage() {
             <TrainingCompletionNotice user={user} />
             <QuickActionsRow />
 
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="grid items-stretch gap-6 sm:grid-cols-2">
               <CompanyNewsFeed
                 employeeOfMonthEntries={employeeOfMonthEntries}
                 employeeOfMonthLoading={employeeOfMonthLoading}
@@ -234,6 +252,8 @@ export default function DashboardPage() {
               />
 
             </div>
+
+            <HRNewsFeedSlider items={hrNewsfeedItems} loading={hrNewsfeedLoading} />
 
           </div>
 

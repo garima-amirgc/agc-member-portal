@@ -1235,6 +1235,24 @@ async function initDb() {
     console.error("[db] customer_inquiries table:", e.message || e);
   }
 
+  try {
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS hr_newsfeed (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        body TEXT,
+        image_url TEXT,
+        facilities TEXT,
+        department TEXT,
+        published INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } catch (e) {
+    console.error("[db] hr_newsfeed table:", e.message || e);
+  }
+
   persist();
 }
 

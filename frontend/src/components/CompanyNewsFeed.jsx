@@ -172,7 +172,7 @@ export default function CompanyNewsFeed({
   }, [items.length, next]);
 
   return (
-    <div className="card relative overflow-hidden rounded-2xl">
+    <div className="card relative flex h-full flex-col overflow-hidden rounded-2xl">
       {/* Top accent bar */}
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0B3EAF] to-[#A7D344]" aria-hidden />
 

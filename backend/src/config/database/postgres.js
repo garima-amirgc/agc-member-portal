@@ -635,6 +635,17 @@ async function migrateColumns(client) {
     )`,
     "CREATE INDEX IF NOT EXISTS idx_customer_inquiries_status ON customer_inquiries (status)",
     "CREATE INDEX IF NOT EXISTS idx_customer_inquiries_created_at ON customer_inquiries (created_at)",
+    `CREATE TABLE IF NOT EXISTS hr_newsfeed (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      body TEXT,
+      image_url TEXT,
+      facilities TEXT,
+      department TEXT,
+      published INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
   ];
   for (const q of alters) {
     try {

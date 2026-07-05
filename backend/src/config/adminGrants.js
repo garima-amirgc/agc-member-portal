@@ -16,6 +16,7 @@ const ADMIN_GRANT_KEYS = Object.freeze({
   FEEDBACK_POLLS: "feedback_polls",
   COMPANY_CONTENT: "company_content",
   IT_TICKETS: "it_tickets",
+  HR_NEWSFEED: "hr_newsfeed",
 });
 
 const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([

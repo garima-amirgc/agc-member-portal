@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import { PAGE_SHELL } from "../constants/pageLayout";
@@ -211,6 +212,7 @@ export default function ReportsPage() {
   }, [activeFacility, activeId, reportsForFacility]);
 
   return (
+    <>
     <main className={PAGE_SHELL}>
       <PageHeader title="Reports" />
 
@@ -397,37 +399,40 @@ export default function ReportsPage() {
         )
       )}
 
-        {expanded && active && (
-          <div className="fixed inset-0 z-[80] flex flex-col bg-white dark:bg-slate-950">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 sm:px-4 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={() => setExpanded(false)}
-                className="inline-flex items-center gap-1.5 rounded-portal border border-slate-200 bg-white/70 px-3 py-1.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900/40 dark:text-white/85 dark:hover:bg-white/5 dark:focus-visible:ring-brand-green/30"
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
-                </svg>
-                Back to portal
-              </button>
-              <div className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-white">
-                {safeTitle(active.title)}
-              </div>
-            </div>
+    </main>
 
-            <div className="min-h-0 flex-1">
-              <iframe
-                title={safeTitle(active.title)}
-                src={reportEmbedSrc(active.embed_src)}
-                className="h-full w-full border-0"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                allowFullScreen
-              />
+      {expanded && active && createPortal(
+        <div className="fixed inset-0 z-[9999] flex flex-col bg-white dark:bg-slate-950">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 sm:px-4 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="inline-flex items-center gap-1.5 rounded-portal border border-slate-200 bg-white/70 px-3 py-1.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900/40 dark:text-white/85 dark:hover:bg-white/5 dark:focus-visible:ring-brand-green/30"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+              </svg>
+              Back to portal
+            </button>
+            <div className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-white">
+              {safeTitle(active.title)}
             </div>
           </div>
-        )}
-    </main>
+
+          <div className="min-h-0 flex-1">
+            <iframe
+              title={safeTitle(active.title)}
+              src={reportEmbedSrc(active.embed_src)}
+              className="h-full w-full border-0"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              allowFullScreen
+            />
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 

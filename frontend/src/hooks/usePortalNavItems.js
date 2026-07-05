@@ -131,6 +131,14 @@ export function usePortalNavItems(user) {
           group: "hr",
         },
         {
+          to: "/admin/hr-newsfeed",
+          icon: IconUsers,
+          label: "HR News Feed",
+          desc: "Announcements with image",
+          grantKey: ADMIN_GRANT_KEYS.HR_NEWSFEED,
+          group: "hr",
+        },
+        {
           to: "/admin/upcoming",
           icon: IconCalendar,
           label: "Manage upcoming",

@@ -14,6 +14,7 @@ export const ADMIN_GRANT_KEYS = Object.freeze({
   FEEDBACK_POLLS: "feedback_polls",
   COMPANY_CONTENT: "company_content",
   IT_TICKETS: "it_tickets",
+  HR_NEWSFEED: "hr_newsfeed",
 });
 
 export const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
@@ -36,6 +37,7 @@ export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
       { key: ADMIN_GRANT_KEYS.COMMUNITY_INVOLVEMENT, label: "Community involvement" },
       { key: ADMIN_GRANT_KEYS.COMPANY_CONTENT, label: "About Company (policies, forms, links)" },
       { key: ADMIN_GRANT_KEYS.FEEDBACK_POLLS, label: "Feedback & polls (popup surveys)" },
+      { key: ADMIN_GRANT_KEYS.HR_NEWSFEED, label: "HR News Feed (announcements with image)" },
     ],
   },
   {

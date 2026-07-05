@@ -55,6 +55,8 @@ const AdminReportsPage = lazy(() => import("./pages/AdminReportsPage"));
 const AdminSystemStatusPage = lazy(() => import("./pages/AdminSystemStatusPage"));
 const AdminCalendarPage = lazy(() => import("./pages/AdminCalendarPage"));
 const AdminPollsPage = lazy(() => import("./pages/AdminPollsPage"));
+const AdminHRNewsfeedPage = lazy(() => import("./pages/AdminHRNewsfeedPage"));
+const NewsfeedPage = lazy(() => import("./pages/NewsfeedPage"));
 
 function pickFacilityForLegacyResources(me) {
   try {
@@ -123,6 +125,7 @@ export default function App() {
       <Route element={<AuthenticatedLayout darkMode={darkMode} setDarkMode={setDarkMode} />}>
         <Route index element={<DashboardIndex />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="newsfeed" element={<NewsfeedPage />} />
         <Route path="upcoming" element={<UpcomingPage />} />
         <Route path="upcoming/:eventId" element={<UpcomingEventDetailPage />} />
         <Route path="company-news" element={<CompanyNewsArchivePage />} />
@@ -238,6 +241,14 @@ export default function App() {
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.FEEDBACK_POLLS}>
               <AdminPollsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/hr-newsfeed"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.HR_NEWSFEED}>
+              <AdminHRNewsfeedPage />
             </ProtectedRoute>
           }
         />
