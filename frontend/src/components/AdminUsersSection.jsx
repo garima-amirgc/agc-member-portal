@@ -626,6 +626,21 @@ export default function AdminUsersSection({ className = "card" }) {
             <div className="rounded border p-3 dark:border-slate-700">
               <div className="mb-2 text-sm font-medium">Departments</div>
               <div className="flex flex-wrap gap-3">
+                {/* "All" option — selects every department at once */}
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={(form.departments || []).length === DEPARTMENTS.length}
+                    onChange={() => {
+                      if ((form.departments || []).length === DEPARTMENTS.length) {
+                        setForm({ ...form, departments: [] });
+                      } else {
+                        setForm({ ...form, departments: [...DEPARTMENTS] });
+                      }
+                    }}
+                  />
+                  <span className="font-medium">All</span>
+                </label>
                 {DEPARTMENTS.map((d) => {
                   const checked = (form.departments || []).includes(d);
                   return (
@@ -636,7 +651,6 @@ export default function AdminUsersSection({ className = "card" }) {
                         onChange={() => {
                           const current = new Set(form.departments || []);
                           if (current.has(d)) {
-                            if (current.size <= 1) return;
                             current.delete(d);
                           } else {
                             current.add(d);
@@ -779,7 +793,7 @@ export default function AdminUsersSection({ className = "card" }) {
                         </span>
                       ) : null}
                       <span>
-                        Reports to: {u.manager_name || "—"} · Dept: {formatDepartments(u)}
+                        Reports to: {u.manager_name || "—"} · Dept: {formatDepartments(u) || "—"}
                       </span>
                       {u.invite_status === "active" ? (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-900 dark:bg-amber-900/50 dark:text-amber-100">
@@ -1074,6 +1088,21 @@ export default function AdminUsersSection({ className = "card" }) {
               <div className="rounded border p-3 dark:border-slate-700">
                 <div className="mb-2 text-sm font-medium">Departments</div>
                 <div className="flex flex-wrap gap-3">
+                  {/* "All" option — selects every department at once */}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={(editing.departments || []).length === DEPARTMENTS.length}
+                      onChange={() => {
+                        if ((editing.departments || []).length === DEPARTMENTS.length) {
+                          setEditing({ ...editing, departments: [] });
+                        } else {
+                          setEditing({ ...editing, departments: [...DEPARTMENTS] });
+                        }
+                      }}
+                    />
+                    <span className="font-medium">All</span>
+                  </label>
                   {DEPARTMENTS.map((d) => {
                     const checked = (editing.departments || []).includes(d);
                     return (
@@ -1084,7 +1113,6 @@ export default function AdminUsersSection({ className = "card" }) {
                           onChange={() => {
                             const current = new Set(editing.departments || []);
                             if (current.has(d)) {
-                              if (current.size <= 1) return;
                               current.delete(d);
                             } else {
                               current.add(d);
