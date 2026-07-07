@@ -6,7 +6,6 @@ const { db, isPostgres } = require("../config/db");
 
 const router = express.Router();
 router.use(authRequired);
-router.use(requireAdminGrant(ADMIN_GRANT_KEYS.SYSTEM));
 
 async function scalar(sql) {
   try {
@@ -19,7 +18,7 @@ async function scalar(sql) {
   }
 }
 
-router.get("/metrics", async (_req, res) => {
+router.get("/metrics", requireAdminGrant(ADMIN_GRANT_KEYS.SYSTEM), async (_req, res) => {
   const startedAt = new Date(Date.now() - Math.round(process.uptime() * 1000)).toISOString();
   let dbOk = true;
   let dbLatencyMs = null;
