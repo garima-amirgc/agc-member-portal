@@ -580,20 +580,18 @@ async function markMessagesRead(ticketId, userId) {
 async function getUnreadCounts(userId) {
   const uid = Number(userId);
   if (!Number.isFinite(uid) || uid < 1) return {};
-  const sql = isPostgres
-    ? `SELECT tm.ticket_id, COUNT(*) AS count
+  // Only count unread messages for tickets where this user is the requester OR the assignee.
+  // IT-department members can view all tickets, but they should not receive unread badges
+  // for threads they are not a party to.
+  const sql = `SELECT tm.ticket_id, COUNT(*) AS count
        FROM ticket_messages tm
-       LEFT JOIN ticket_message_reads tmr ON tmr.ticket_id = tm.ticket_id AND tmr.user_id = $1
-       WHERE tm.sender_id != $1
-         AND tm.id > COALESCE(tmr.last_read_message_id, 0)
-       GROUP BY tm.ticket_id`
-    : `SELECT tm.ticket_id, COUNT(*) AS count
-       FROM ticket_messages tm
+       JOIN it_tickets t ON t.id = tm.ticket_id
        LEFT JOIN ticket_message_reads tmr ON tmr.ticket_id = tm.ticket_id AND tmr.user_id = ?
        WHERE tm.sender_id != ?
          AND tm.id > COALESCE(tmr.last_read_message_id, 0)
+         AND (t.user_id = ? OR t.assignee_id = ?)
        GROUP BY tm.ticket_id`;
-  const rows = await db.prepare(sql).all(uid, uid);
+  const rows = await db.prepare(sql).all(uid, uid, uid, uid);
   const result = {};
   for (const r of rows || []) {
     result[Number(r.ticket_id)] = Number(r.count);

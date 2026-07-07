@@ -3,9 +3,11 @@ const { DEPARTMENTS } = require("../config/constants");
 
 async function fallbackFromUserColumn(userId) {
   const u = await db
-    .prepare("SELECT COALESCE(NULLIF(TRIM(department), ''), 'Production') AS d FROM users WHERE id = ?")
+    .prepare("SELECT department FROM users WHERE id = ?")
     .get(userId);
-  const raw = u?.d != null ? String(u.d).trim() : "";
+  const raw = u?.department != null ? String(u.department).trim() : "";
+  // Empty string = explicitly "no department" (set via syncForUser with empty list).
+  if (raw === "") return [];
   const d = DEPARTMENTS.includes(raw) ? raw : "Production";
   return [d];
 }
@@ -37,7 +39,7 @@ function validateAndNormalize(arr) {
       out.push(d);
     }
   }
-  if (out.length === 0) return null;
+  // Empty array is valid — user deliberately has no department.
   out.sort((a, b) => a.localeCompare(b));
   return out;
 }
@@ -48,7 +50,9 @@ async function syncForUser(userId, list) {
   await db.prepare("DELETE FROM user_departments WHERE user_id = ?").run(id);
   const ins = db.prepare("INSERT OR IGNORE INTO user_departments(user_id, department) VALUES (?, ?)");
   for (const d of list) await ins.run(id, d);
-  await db.prepare("UPDATE users SET department = ? WHERE id = ?").run(list[0] || "Production", id);
+  // Use '' for no-department users so fallbackFromUserColumn can distinguish
+  // "explicitly no department" from "legacy user before multi-dept was added".
+  await db.prepare("UPDATE users SET department = ? WHERE id = ?").run(list[0] ?? "", id);
 }
 
 module.exports = {

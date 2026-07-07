@@ -1,6 +1,7 @@
 import AgcFacilityOrgChart from "./AgcFacilityOrgChart";
 import AqmFacilityOrgChart from "./AqmFacilityOrgChart";
 import AspFacilityOrgChart from "./AspFacilityOrgChart";
+import ScfFacilityOrgChart from "./ScfFacilityOrgChart";
 
 function initials(name = "") {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -38,6 +39,9 @@ export default function OrgChart({ facility }) {
   }
   if (fac === "ASP") {
     return <AspFacilityOrgChart />;
+  }
+  if (fac === "SCF") {
+    return <ScfFacilityOrgChart />;
   }
 
   return (
@@ -79,7 +83,7 @@ export default function OrgChart({ facility }) {
 
               <div className="flex min-w-0 flex-col items-center gap-2">
                 <div className="h-3 w-px shrink-0 bg-slate-300 dark:bg-slate-600" />
-                <Node name="Tom Heliotis" title="Chief Commercial Officer" />
+                <Node name="Tom Heliotis" title="President" />
                 <Node name="Adam Aziz" title="Director of Operations" />
                 <Node name="Gene Massa" title="Director of Human Resources" subtitle="AGC" />
               </div>

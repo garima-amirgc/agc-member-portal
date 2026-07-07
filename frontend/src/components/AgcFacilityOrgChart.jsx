@@ -68,9 +68,8 @@ function OrgPersonNode({ name, title, photoSrc, compact }) {
 }
 
 const TOP = [
-  { name: "Sherry Aziz", title: "Founder, Chief Finance Officer", photoSrc: "/sherry-aziz.png" },
   { name: "Tony Aziz", title: "Chief Executive Officer", photoSrc: orgChartAssetUrl("org-chart/tony-aziz.png") },
-  { name: "Tom Heliotis", title: "Chief Commercial Officer", photoSrc: orgChartAssetUrl("org-chart/tom-heliotis.png") },
+  { name: "Tom Heliotis", title: "President", photoSrc: orgChartAssetUrl("org-chart/tom-heliotis.png") },
 ];
 
 const SPINE_ROWS = [
@@ -189,23 +188,31 @@ export default function AgcFacilityOrgChart() {
         <div className="ml-2 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
           <OrgPersonNode
             compact
-            name="David Schlosser"
-            title="VP Finance"
-            photoSrc={orgChartAssetUrl("org-chart/david-schlosser.png")}
+            name="Sherry Aziz"
+            title="Founder, Chief Finance Officer"
+            photoSrc="/sherry-aziz.png"
           />
           <div className="ml-2 mt-1.5 flex flex-col items-stretch gap-1.5 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
             <OrgPersonNode
               compact
-              name="Steven Chow"
-              title="Director of Finance"
-              photoSrc={orgChartAssetUrl("org-chart/steven-show.png")}
+              name="David Schlosser"
+              title="VP Finance"
+              photoSrc={orgChartAssetUrl("org-chart/david-schlosser.png")}
             />
-            <OrgPersonNode
-              compact
-              name="Dhannjaykumar Patel"
-              title="Financial Controller"
-              photoSrc={orgChartAssetUrl("org-chart/dhannjaykumar-patel.png")}
-            />
+            <div className="ml-2 mt-1.5 flex flex-col items-stretch gap-1.5 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+              <OrgPersonNode
+                compact
+                name="Steven Chow"
+                title="Director of Finance"
+                photoSrc={orgChartAssetUrl("org-chart/steven-show.png")}
+              />
+              <OrgPersonNode
+                compact
+                name="Dhannjaykumar Patel"
+                title="Financial Controller"
+                photoSrc={orgChartAssetUrl("org-chart/dhannjaykumar-patel.png")}
+              />
+            </div>
           </div>
         </div>
 
@@ -234,6 +241,7 @@ export default function AgcFacilityOrgChart() {
         ].join(" ")}
       >
         <div className="mx-auto flex w-full max-w-5xl flex-wrap justify-center gap-x-6 gap-y-4 sm:gap-x-10 lg:grid lg:grid-cols-[0.9fr_2.1fr_0.6fr] lg:justify-items-center lg:gap-x-6">
+          <div /> {/* Finance column — Sherry shown in column below */}
           {TOP.map((p) => (
             <div key={p.name} className="flex flex-col items-center">
               <OrgPersonNode name={p.name} title={p.title} photoSrc={p.photoSrc} />
@@ -247,7 +255,13 @@ export default function AgcFacilityOrgChart() {
 
         <div className={`${colGrid} mt-6 lg:mt-4`}>
           <section className="flex min-w-0 flex-col items-center border-t border-slate-200/80 pt-6 lg:border-t-0 lg:pt-0 dark:border-slate-700/80">
-            <VBar className="h-3" />
+            <VBar className="h-4" />
+            <OrgPersonNode
+              name="Sherry Aziz"
+              title="Founder, Chief Finance Officer"
+              photoSrc="/sherry-aziz.png"
+            />
+            <VBar className="mt-2 h-3" />
             <div className="mt-2">
               <OrgPersonNode
                 name="David Schlosser"

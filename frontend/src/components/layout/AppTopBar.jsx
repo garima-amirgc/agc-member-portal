@@ -8,6 +8,7 @@ import { useMyOpenTicketCount } from "../../hooks/useMyOpenTicketCount";
 import { TopBarAdminGroupDropdown } from "./AdminNavGroupDropdown";
 import { resolvePublicMediaUrl } from "../../utils/mediaUrl";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
+import TopBarSearch from "./TopBarSearch";
 
 function initials(name = "") {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
@@ -102,7 +103,9 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
     <header
       className={`sticky top-0 z-30 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white/95 py-3.5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-[#0f0f0f]/95 ${PAGE_GUTTER_X}`}
     >
-      <div className="min-w-0 flex-1"></div>
+      <div className="min-w-0 flex-1 flex items-center">
+        <TopBarSearch />
+      </div>
 
       <div className="flex shrink-0 items-center gap-3">
         <div className="hidden text-right sm:block">

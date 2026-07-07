@@ -736,7 +736,7 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
     if (!v) return res.status(400).json({ message: "Invalid department" });
     newDeptList = v;
   }
-  const newDept = newDeptList[0] || "Production";
+  const newDept = newDeptList[0] ?? "";
 
   const nextRole =
     role !== undefined && role !== null && String(role).trim() !== ""
