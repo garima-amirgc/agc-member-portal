@@ -76,8 +76,9 @@ function HBar({ className = "" }) {
 }
 
 const TOP = [
-  { name: "Sherry Aziz", title: "Chief Finance Officer", photoSrc: "/sherry-aziz.png" },
   { name: "Tony Aziz", title: "Chief Executive Officer", photoSrc: orgChartAssetUrl("org-chart/tony-aziz.png") },
+  { name: "Sherry Aziz", title: "Chief Finance Officer", photoSrc: "/sherry-aziz.png" },
+  { name: "Tom Heliotis", title: "President", photoSrc: orgChartAssetUrl("org-chart/tom-heliotis.png") },
   { name: "Adam Aziz", title: "Director of Operations", photoSrc: orgChartAssetUrl("org-chart/adam-aziz.png") },
 ];
 
@@ -109,9 +110,10 @@ export default function AqmFacilityOrgChart() {
             Leadership (peers)
           </div>
           <div className="flex flex-col items-stretch gap-1.5">
-            {TOP.map((p) => (
-              <OrgPersonNode key={p.name} compact name={p.name} title={p.title} photoSrc={p.photoSrc} />
-            ))}
+            <OrgPersonNode compact name="Tony Aziz" title="Chief Executive Officer" photoSrc={orgChartAssetUrl("org-chart/tony-aziz.png")} />
+            <OrgPersonNode compact name="Sherry Aziz" title="Chief Finance Officer" photoSrc="/sherry-aziz.png" />
+            <OrgPersonNode compact name="Tom Heliotis" title="President" photoSrc={orgChartAssetUrl("org-chart/tom-heliotis.png")} />
+            <OrgPersonNode compact name="Adam Aziz" title="Director of Operations" photoSrc={orgChartAssetUrl("org-chart/adam-aziz.png")} />
           </div>
         </div>
 
@@ -158,25 +160,25 @@ export default function AqmFacilityOrgChart() {
           "overflow-x-auto",
         ].join(" ")}
       >
-        <div className="mx-auto flex w-full max-w-4xl flex-wrap items-start justify-center gap-x-6 gap-y-4 sm:flex-nowrap sm:gap-x-10">
-          {TOP.map((p) => (
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-start justify-center gap-x-4 gap-y-4 sm:flex-nowrap sm:gap-x-6">
+          {TOP.map((p, i) => (
             <div key={p.name} className="flex flex-col items-center">
               <OrgPersonNode name={p.name} title={p.title} photoSrc={p.photoSrc} />
-              <VBar className="mt-2 h-4" />
+              {i === 0 ? <VBar className="mt-2 h-4" /> : <div className="mt-2 h-4" />}
             </div>
           ))}
         </div>
-        <div className="mx-auto mt-0 flex w-full max-w-4xl justify-center px-4 sm:px-16">
+        <div className="mx-auto mt-0 flex w-full max-w-5xl justify-center px-2 sm:px-8">
           <HBar className="h-px w-full" />
         </div>
 
-        <div className="mx-auto mt-0 flex w-full max-w-4xl justify-center">
+        <div className="mx-auto mt-0 flex w-full max-w-5xl justify-center">
           <VBar className="h-4" />
         </div>
-        <div className="mx-auto flex w-full max-w-4xl justify-center px-6 sm:px-28">
+        <div className="mx-auto flex w-full max-w-5xl justify-center px-6 sm:px-24">
           <HBar className="h-px w-full" />
         </div>
-        <div className="mx-auto flex w-full max-w-4xl flex-wrap items-start justify-center gap-x-10 gap-y-4 sm:flex-nowrap sm:gap-x-16">
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-start justify-center gap-x-10 gap-y-4 sm:flex-nowrap sm:gap-x-16">
           {MID.map((p) => (
             <div key={p.name} className="flex flex-col items-center">
               <VBar className="mb-2 h-4" />
@@ -185,11 +187,11 @@ export default function AqmFacilityOrgChart() {
             </div>
           ))}
         </div>
-        <div className="mx-auto mt-0 flex w-full max-w-4xl justify-center px-6 sm:px-28">
+        <div className="mx-auto mt-0 flex w-full max-w-5xl justify-center px-6 sm:px-24">
           <HBar className="h-px w-full" />
         </div>
 
-        <div className="mx-auto mt-4 grid w-full max-w-4xl grid-cols-1 gap-8 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-4">
+        <div className="mx-auto mt-4 grid w-full max-w-5xl grid-cols-1 gap-8 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-4">
           <div className="flex flex-col items-center border-t border-slate-200/80 pt-4 sm:border-t-0 sm:pt-0 dark:border-slate-700/80">
             <VBar className="h-3" />
             <div className="mt-2 flex flex-col items-center gap-2">
