@@ -96,8 +96,9 @@ function HBar({ className = "", dashed = false }) {
 }
 
 const TOP = [
-  { name: "Sherry Aziz", title: "Chief Finance Officer", photoSrc: "/sherry-aziz.png" },
   { name: "Tony Aziz", title: "Chief Executive Officer", photoSrc: orgChartAssetUrl("org-chart/tony-aziz.png") },
+  { name: "Sherry Aziz", title: "Chief Finance Officer", photoSrc: "/sherry-aziz.png" },
+  { name: "Tom Heliotis", title: "President", photoSrc: orgChartAssetUrl("org-chart/tom-heliotis.png") },
   { name: "Adam Aziz", title: "Director of Operations", photoSrc: orgChartAssetUrl("org-chart/adam-aziz.png") },
 ];
 
@@ -120,19 +121,24 @@ export default function AspFacilityOrgChart() {
         <h2 className="text-sm font-bold text-slate-900 dark:text-white">ASP organization</h2>
       </div>
 
+      {/* ── Mobile ── */}
       <div className="block rounded-xl border border-slate-200/80 bg-slate-50/90 p-3 sm:hidden dark:border-slate-700 dark:bg-slate-900/40">
         <div className="mb-2 rounded-lg border border-dashed border-slate-300 p-2 dark:border-slate-600">
           <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Leadership (peers)
           </div>
           <div className="flex flex-col items-stretch gap-1.5">
-            {TOP.map((p) => (
-              <OrgPersonNode key={p.name} compact name={p.name} title={p.title} photoSrc={p.photoSrc} />
-            ))}
+            <OrgPersonNode compact name="Tony Aziz" title="Chief Executive Officer" photoSrc={orgChartAssetUrl("org-chart/tony-aziz.png")} />
+            <OrgPersonNode compact name="Sherry Aziz" title="Chief Finance Officer" photoSrc="/sherry-aziz.png" />
+            <OrgPersonNode compact name="Tom Heliotis" title="President" photoSrc={orgChartAssetUrl("org-chart/tom-heliotis.png")} />
+            <OrgPersonNode compact name="Adam Aziz" title="Director of Operations" photoSrc={orgChartAssetUrl("org-chart/adam-aziz.png")} />
           </div>
         </div>
 
         <div className="ml-2 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+          <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Reports to Tony Aziz
+          </div>
           <div className="flex flex-col items-stretch gap-1.5">
             {TONY_REPORTS.map((p) => (
               <div key={p.name}>
@@ -149,65 +155,62 @@ export default function AspFacilityOrgChart() {
         </div>
 
         <div className="ml-2 mt-3 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+          <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Reports to Adam Aziz
+          </div>
           <div className="flex flex-col items-stretch gap-1.5">
             {ADAM_REPORTS.map((p) => (
-              <div key={p.name}>
-                <OrgPersonNode compact name={p.name} title={p.title} photoSrc={p.photoSrc} />
-                {p.name === DOTTED_LINK.to && (
-                  <div className="mt-1 ml-1 flex items-center gap-1.5">
-                    <span className="h-0 w-4 shrink-0 border-t border-dashed border-slate-400 dark:border-slate-500" aria-hidden />
-                    <span className="text-[8px] italic text-slate-500 dark:text-slate-400">{DOTTED_LINK.from}</span>
-                  </div>
-                )}
-              </div>
+              <OrgPersonNode key={p.name} compact name={p.name} title={p.title} photoSrc={p.photoSrc} />
             ))}
           </div>
         </div>
       </div>
 
+      {/* ── Desktop ── */}
       <div
         className={[
           "hidden rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-4 sm:block sm:px-5 dark:border-slate-700 dark:bg-slate-900/40",
           "overflow-x-auto",
         ].join(" ")}
       >
-        <div className="mx-auto grid w-full max-w-4xl grid-cols-3 items-start justify-center gap-x-6 sm:gap-x-10">
-          {TOP.map((p) => (
+        {/* TOP row — VBar only under Tony (index 0) */}
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-start justify-center gap-x-4 gap-y-4 sm:flex-nowrap sm:gap-x-6">
+          {TOP.map((p, i) => (
             <div key={p.name} className="flex flex-col items-center">
               <OrgPersonNode name={p.name} title={p.title} photoSrc={p.photoSrc} />
-              <VBar className="mt-2 h-4" />
+              {i === 0 ? <VBar className="mt-2 h-4" /> : <div className="mt-2 h-4" />}
             </div>
           ))}
         </div>
-        <div className="mx-auto mt-0 flex w-full max-w-4xl justify-center px-4 sm:px-16">
+
+        {/* HBar spanning all 4 nodes */}
+        <div className="mx-auto mt-0 flex w-full max-w-5xl justify-center px-2 sm:px-8">
           <HBar className="h-px w-full" />
         </div>
 
-        <div className="mx-auto grid w-full max-w-4xl grid-cols-3 items-start justify-center gap-x-6 sm:gap-x-10">
-          <div aria-hidden />
-          <div className="flex flex-col items-center" aria-hidden>
-            <VBar className="h-[52px]" />
+        {/* Lower section: Tony's reports (left ~75%) + Adam's report (right ~25%) */}
+        <div className="mx-auto mt-0 grid w-full max-w-5xl grid-cols-1 gap-8 sm:grid-cols-[3fr_1fr] sm:gap-6">
+
+          {/* Tony's subtree */}
+          <div className="flex flex-col items-center border-t border-slate-200/80 pt-6 sm:border-t-0 sm:pt-0 dark:border-slate-700/80">
+            <VBar className="h-4" />
+            <HBar className="-mt-px w-full max-w-md sm:max-w-lg" />
+            <div className="mt-0 grid w-full grid-cols-3 gap-x-4 sm:gap-x-6">
+              {TONY_REPORTS.map((p) => (
+                <div key={p.name} className="flex flex-col items-center">
+                  <VBar dashed={p.name === DOTTED_LINK.from} className="-mt-px mb-2 h-4" />
+                  <OrgPersonNode name={p.name} title={p.title} photoSrc={p.photoSrc} />
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-col items-center">
-            <VBar className="h-3" />
-            <HBar className="h-px w-10" />
-            <VBar className="h-3" />
+
+          {/* Adam's subtree */}
+          <div className="flex flex-col items-center border-t border-slate-200/80 pt-6 sm:border-t-0 sm:pt-0 dark:border-slate-700/80">
+            <VBar className="h-4" />
             <OrgPersonNode name={ADAM_REPORTS[0].name} title={ADAM_REPORTS[0].title} photoSrc={ADAM_REPORTS[0].photoSrc} />
             <VBar dashed className="mt-2 h-6" />
           </div>
-        </div>
-
-        <div className="mx-auto mt-0 flex w-full max-w-4xl justify-center px-16 sm:px-28">
-          <HBar className="h-px w-full" />
-        </div>
-
-        <div className="mx-auto grid w-full max-w-4xl grid-cols-3 items-start justify-center gap-x-6 sm:gap-x-10">
-          {TONY_REPORTS.map((p) => (
-            <div key={p.name} className="flex flex-col items-center">
-              <VBar dashed={p.name === DOTTED_LINK.from} className="mb-2 h-4" />
-              <OrgPersonNode name={p.name} title={p.title} photoSrc={p.photoSrc} />
-            </div>
-          ))}
         </div>
       </div>
     </div>
