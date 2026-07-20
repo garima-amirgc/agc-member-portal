@@ -86,6 +86,7 @@ async function start() {
   const searchRoutes = require("./routes/search.routes");
   const customerInquiriesRoutes = require("./routes/customer-inquiries.routes");
   const hrNewsfeedRoutes = require("./routes/hrNewsfeed.routes");
+  const adpRoutes = require("./routes/adp.routes");
   const { authRequired } = require("./middleware/auth");
   const leaveSvc = require("./services/leaveRequests.service");
   const managerTeamSvc = require("./services/managerTeam.service");
@@ -188,6 +189,7 @@ async function start() {
     ["/search", searchRoutes],
     ["/customer-inquiries", customerInquiriesRoutes],
     ["/hr-newsfeed", hrNewsfeedRoutes],
+    ["/adp", adpRoutes],
   ];
 
   function mountRoutes(router) {

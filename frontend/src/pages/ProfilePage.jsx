@@ -69,10 +69,111 @@ function ProfileDetail({ label, value, className = "" }) {
   );
 }
 
+// ─── ADP section component ────────────────────────────────────────────────────
+
+function AdpStatusBadge({ status }) {
+  if (!status) return null;
+  const active = status.toLowerCase() === "active";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+        active
+          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+          : "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+      }`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-slate-400"}`} />
+      {status}
+    </span>
+  );
+}
+
+function AdpSection({ adp, adpLoading, adpError }) {
+  // If ADP is not configured (503) just silently hide the section
+  if (!adpLoading && adpError?.status === 503) return null;
+
+  const formatDate = (iso) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return isNaN(d) ? iso : d.toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
+  };
+
+  return (
+    <section className="card">
+      {/* Section header */}
+      <div className="mb-4 flex items-center gap-2">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0B3EAF]/10 dark:bg-[#0B3EAF]/20">
+          {/* ADP logo-ish icon */}
+          <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0B3EAF] dark:text-[#A7D344]" fill="currentColor">
+            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+          </svg>
+        </div>
+        <h2 className="text-base font-semibold text-slate-900 dark:text-white">Employment Details</h2>
+        <span className="rounded bg-[#0B3EAF]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0B3EAF] dark:bg-[#A7D344]/15 dark:text-[#A7D344]">
+          ADP
+        </span>
+      </div>
+
+      {adpLoading ? (
+        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-[#0B3EAF] dark:border-slate-700 dark:border-t-[#A7D344]" />
+          Loading employment details…
+        </div>
+      ) : adpError ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {adpError.status === 404
+            ? "No ADP record found matching your email address."
+            : "Unable to load employment details right now."}
+        </p>
+      ) : adp ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {adp.worker_id && (
+            <ProfileDetail label="Employee ID" value={adp.worker_id} />
+          )}
+          {adp.job_title && (
+            <ProfileDetail label="Job Title" value={adp.job_title} />
+          )}
+          {adp.department && (
+            <ProfileDetail label="Department" value={adp.department} />
+          )}
+          {adp.work_location && (
+            <ProfileDetail label="Work Location" value={adp.work_location} />
+          )}
+          {adp.hire_date && (
+            <ProfileDetail label="Hire Date" value={formatDate(adp.hire_date)} />
+          )}
+          {adp.employment_type && (
+            <ProfileDetail label="Employment Type" value={adp.employment_type} />
+          )}
+          {adp.work_email && (
+            <ProfileDetail label="Work Email" value={adp.work_email} />
+          )}
+          {adp.work_phone && (
+            <ProfileDetail label="Work Phone" value={adp.work_phone} />
+          )}
+          {adp.employment_status && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Status</div>
+              <div className="mt-1">
+                <AdpStatusBadge status={adp.employment_status} />
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+// ─── ProfilePage ──────────────────────────────────────────────────────────────
+
 export default function ProfilePage() {
   const { user, refreshMe } = useAuth();
 
   const [me, setMe] = useState(null);
+  const [adp, setAdp] = useState(null);
+  const [adpLoading, setAdpLoading] = useState(true);
+  const [adpError, setAdpError] = useState(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -116,6 +217,8 @@ export default function ProfilePage() {
     syncFormFromProfile(user);
 
     let cancelled = false;
+
+    // Fetch portal profile + ADP data in parallel
     api
       .get("/users/me", USER_ME_PROFILE)
       .then((res) => {
@@ -127,6 +230,22 @@ export default function ProfilePage() {
       .catch((e) => {
         if (cancelled) return;
         if (!user) setError(friendlyErrorMessage(e, "Failed to load profile"));
+      });
+
+    setAdpLoading(true);
+    setAdpError(null);
+    api
+      .get("/adp/me")
+      .then((res) => {
+        if (cancelled) return;
+        setAdp(res.data);
+        setAdpLoading(false);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setAdp(null);
+        setAdpError({ status: e?.response?.status ?? 0, message: e?.message });
+        setAdpLoading(false);
       });
 
     return () => {
@@ -298,6 +417,8 @@ export default function ProfilePage() {
           ) : null}
         </div>
       </section>
+
+      <AdpSection adp={adp} adpLoading={adpLoading} adpError={adpError} />
 
       {editing ? (
         <section className="card" ref={editSectionRef}>
