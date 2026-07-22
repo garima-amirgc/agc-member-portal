@@ -225,8 +225,8 @@ export default function DashboardPage() {
   return (
     <>
       <main className={PAGE_SHELL}>
-        <section className="grid gap-6 lg:grid-cols-12 lg:items-start">
-          <div className="min-w-0 space-y-6 lg:col-span-9">
+        <section className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <div className="min-w-0 flex-1 space-y-6">
             <WelcomeBanner user={user} />
             <NewHireWelcomeCard user={user} />
             <TrainingCompletionNotice user={user} />
@@ -257,7 +257,7 @@ export default function DashboardPage() {
 
           </div>
 
-          <aside className="min-w-0 lg:col-span-3 lg:sticky lg:top-6 lg:self-start">
+          <aside className="min-w-0 lg:w-[260px] lg:shrink-0 lg:sticky lg:top-6 lg:self-start">
             <div className="space-y-4">
               <div className="card no-title-underline rounded-2xl p-3 sm:p-4">
                 <SidebarCardHeader

@@ -45,10 +45,26 @@ router.get("/", async (req, res) => {
 
   if (facilities.length === 0) return res.json([]);
 
-  const placeholders = facilities.map(() => "?").join(",");
-  const rows = await db
-    .prepare(`SELECT * FROM courses WHERE business_unit IN (${placeholders}) ORDER BY id DESC`)
-    .all(...facilities);
+  const deptRows = await db
+    .prepare("SELECT department FROM user_departments WHERE user_id = ?")
+    .all(req.user.id);
+  const departments = deptRows.map((r) => r.department);
+
+  const facPh = facilities.map(() => "?").join(",");
+  let rows;
+  if (departments.length === 0) {
+    // No department assigned — only see courses open to all departments
+    rows = await db
+      .prepare(`SELECT * FROM courses WHERE business_unit IN (${facPh}) AND department IS NULL ORDER BY id DESC`)
+      .all(...facilities);
+  } else {
+    const deptPh = departments.map(() => "?").join(",");
+    rows = await db
+      .prepare(
+        `SELECT * FROM courses WHERE business_unit IN (${facPh}) AND (department IS NULL OR department IN (${deptPh})) ORDER BY id DESC`
+      )
+      .all(...facilities, ...departments);
+  }
   return res.json(rows);
 });
 
@@ -62,6 +78,13 @@ router.get("/:id", async (req, res) => {
       .prepare("SELECT 1 FROM user_facilities WHERE user_id = ? AND business_unit = ? LIMIT 1")
       .get(req.user.id, course.business_unit);
     if (!facilityAllowed) return res.status(403).json({ message: "Forbidden for your facilities" });
+
+    if (course.department) {
+      const deptAllowed = await db
+        .prepare("SELECT 1 FROM user_departments WHERE user_id = ? AND department = ? LIMIT 1")
+        .get(req.user.id, course.department);
+      if (!deptAllowed) return res.status(403).json({ message: "Forbidden for your department" });
+    }
   }
 
   const lessons = await db
@@ -76,22 +99,24 @@ function normalizeResourceCategory(raw) {
 }
 
 router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
-  const { title, description, business_unit, resource_category } = req.body;
+  const { title, description, business_unit, resource_category, department } = req.body;
   const rc = normalizeResourceCategory(resource_category);
+  const dept = department ? String(department).trim() || null : null;
   const result = await db
     .prepare(
-      "INSERT INTO courses(title, description, business_unit, created_by, resource_category) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO courses(title, description, business_unit, created_by, resource_category, department) VALUES (?, ?, ?, ?, ?, ?)"
     )
-    .run(title, description || "", business_unit, req.user.id, rc);
+    .run(title, description || "", business_unit, req.user.id, rc, dept);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
 router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
-  const { title, description, business_unit, resource_category } = req.body;
+  const { title, description, business_unit, resource_category, department } = req.body;
   const rc = normalizeResourceCategory(resource_category);
+  const dept = department ? String(department).trim() || null : null;
   await db
-    .prepare("UPDATE courses SET title=?, description=?, business_unit=?, resource_category=? WHERE id=?")
-    .run(title, description, business_unit, rc, req.params.id);
+    .prepare("UPDATE courses SET title=?, description=?, business_unit=?, resource_category=?, department=? WHERE id=?")
+    .run(title, description, business_unit, rc, dept, req.params.id);
   res.json({ message: "Course updated" });
 });
 

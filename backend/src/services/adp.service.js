@@ -28,8 +28,17 @@ const path = require("path");
 const DEFAULT_TOKEN_URL = "https://accounts.adp.com/auth/oauth/v2/token";
 const DEFAULT_API_BASE = "https://api.adp.com";
 
-// In-memory token cache
+// In-memory caches
 let _cache = { token: null, expiresAt: 0 };
+let _workersCache = { workers: null, expiresAt: 0 };
+const WORKERS_TTL_MS = (() => {
+  const mins = parseInt(process.env.ADP_CACHE_TTL_MINUTES, 10);
+  return (Number.isFinite(mins) && mins > 0 ? mins : 60) * 60 * 1000; // default 60 min
+})();
+
+function clearWorkersCache() {
+  _workersCache = { workers: null, expiresAt: 0 };
+}
 
 // ─── Config helpers ──────────────────────────────────────────────────────────
 
@@ -50,10 +59,36 @@ function loadPem(envValue) {
   const v = String(envValue).trim();
   if (v.startsWith("-----")) {
     // Inline PEM — replace literal \n with real newlines (Render env vars)
-    return v.replace(/\\n/g, "\n");
+    return v.replace(/\\n/g, "\n").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   }
   try {
-    return fs.readFileSync(path.resolve(v), "utf8");
+    const resolved = path.resolve(v);
+    console.log(`[ADP] Reading PEM file: "${resolved}"`);
+    const buf = fs.readFileSync(resolved);
+
+    let content;
+    // Detect encoding from BOM
+    if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+      content = buf.slice(3).toString("utf8"); // UTF-8 BOM
+    } else if (buf[0] === 0xFF && buf[1] === 0xFE) {
+      content = buf.slice(2).toString("utf16le"); // UTF-16 LE BOM
+    } else if (buf[0] === 0xFE && buf[1] === 0xFF) {
+      content = buf.slice(2).swap16().toString("utf16le"); // UTF-16 BE BOM
+    } else {
+      content = buf.toString("utf8");
+    }
+
+    // Normalize: CRLF → LF, trim trailing spaces per line, ensure final newline
+    const clean = content
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .join("\n")
+      .trim() + "\n";
+
+    console.log(`[ADP] Loaded PEM (${clean.length} bytes), starts: ${JSON.stringify(clean.slice(0, 30))}`);
+    return clean;
   } catch (e) {
     throw new Error(`ADP: could not read PEM file at "${v}": ${e.message}`);
   }
@@ -148,36 +183,79 @@ async function adpGet(apiPath) {
 }
 
 /**
- * Look up a worker by their work email address.
- *
- * NOTE: The exact $filter field name depends on your ADP Workforce Now
- * configuration and API version. Adjust the filter string if needed:
- *
- *   Option A (most common):
- *     workers/businessCommunication/emails/emailUri eq 'email'
- *
- *   Option B (some orgs):
- *     workers/person/communicationEmails/emailUri eq 'email'
- *
- * If email filtering is unreliable, consider storing the associateOID in
- * the portal's users table (see getWorkerByOID below).
+ * Fetch all workers from ADP, paginating through results (default page is 50).
+ * Results are cached for WORKERS_TTL_MS to avoid hammering the API on every
+ * profile page load.
  */
-async function getWorkerByEmail(email) {
-  const filter = `workers/businessCommunication/emails/emailUri eq '${email}'`;
-  const qs = `$filter=${encodeURIComponent(filter)}`;
-  const data = await adpGet(`/hr/v2/workers?${qs}`);
-  const workers = data?.workers;
-  return Array.isArray(workers) && workers.length > 0 ? workers[0] : null;
+async function getAllWorkers() {
+  if (_workersCache.workers && _workersCache.expiresAt > Date.now()) {
+    return _workersCache.workers;
+  }
+
+  const pageSize = 100;
+  let skip = 0;
+  let all = [];
+
+  // Paginate until we get fewer results than pageSize (last page)
+  // or we've fetched 2000 workers max (safety cap)
+  while (skip <= 1900) {
+    const data = await adpGet(`/hr/v2/workers?$top=${pageSize}&$skip=${skip}`);
+    const page = data?.workers;
+    if (!Array.isArray(page) || page.length === 0) break;
+    all = all.concat(page);
+    if (page.length < pageSize) break; // last page
+    skip += pageSize;
+  }
+
+  _workersCache = { workers: all, expiresAt: Date.now() + WORKERS_TTL_MS };
+  console.log(`[ADP] Workers fetched and cached: ${all.length} total`);
+  return all;
 }
 
 /**
- * Fetch a single worker directly by their ADP associateOID.
- * Faster and more reliable once the OID is known.
+ * Find a worker by work email — fetches all workers and matches client-side.
+ * This is the primary lookup method. Works automatically for any employee
+ * whose work email is recorded in ADP.
  */
+async function getWorkerByEmail(email) {
+  if (!email) return null;
+  const workers = await getAllWorkers();
+  const target = String(email).toLowerCase().trim();
+  return (
+    workers.find((w) => {
+      const bcEmails = w.businessCommunication?.emails || [];
+      const personEmails = w.person?.communicationEmails || w.person?.communications?.emails || [];
+      return [...bcEmails, ...personEmails].some(
+        (e) => String(e.emailUri || "").toLowerCase().trim() === target
+      );
+    }) || null
+  );
+}
+
+/**
+ * Find a worker by their ADP Associate ID (workerID.idValue or associateOID).
+ * Used as a fallback when email matching isn't possible.
+ */
+async function getWorkerByAssociateOID(id) {
+  if (!id) return null;
+  const workers = await getAllWorkers();
+  const target = String(id).trim().toUpperCase();
+  return (
+    workers.find((w) => {
+      const oid = String(w.associateOID || "").trim().toUpperCase();
+      const wid = String(w.workerID?.idValue || "").trim().toUpperCase();
+      return oid === target || wid === target;
+    }) || null
+  );
+}
+
+async function validateAssociateOID(id) {
+  const worker = await getWorkerByAssociateOID(id);
+  return worker !== null;
+}
+
 async function getWorkerByOID(associateOID) {
-  const data = await adpGet(`/hr/v2/workers/${encodeURIComponent(associateOID)}`);
-  const workers = data?.workers;
-  return Array.isArray(workers) && workers.length > 0 ? workers[0] : null;
+  return getWorkerByAssociateOID(associateOID);
 }
 
 // ─── Data mapping ─────────────────────────────────────────────────────────────
@@ -189,37 +267,82 @@ async function getWorkerByOID(associateOID) {
 function mapWorker(worker) {
   if (!worker) return null;
 
-  const wa = worker.workAssignments?.[0] || {};
+  // Prefer the primary or active work assignment; fall back to index 0
+  const assignments = worker.workAssignments || [];
+  const wa =
+    assignments.find((a) => a.primaryIndicator === true) ||
+    assignments.find((a) =>
+      String(a.workerStatus?.statusCode?.codeValue || "").toLowerCase() === "active"
+    ) ||
+    assignments[assignments.length - 1] ||  // last assignment is usually most recent
+    {};
   const person = worker.person || {};
   const legal = person.legalName || {};
   const preferred = person.preferredName || {};
 
-  // Email — check both businessCommunication (common) and person.communicationEmails
+  // Email — check businessCommunication, person.communication (singular), person.communications (plural)
   const bcEmails = worker.businessCommunication?.emails || [];
-  const personEmails = person.communicationEmails || person.communications?.emails || [];
+  const personEmails =
+    person.communicationEmails ||
+    person.communication?.emails ||
+    person.communications?.emails ||
+    [];
   const allEmails = [...bcEmails, ...personEmails];
   const workEmail =
     allEmails.find((e) => e.nameCode?.codeValue === "Work")?.emailUri ||
     allEmails[0]?.emailUri ||
     null;
 
-  // Phone — same dual-source pattern
+  // Phone — check businessCommunication, person.communication.phones, and person.communication.mobiles
+  // ADP sometimes uses singular "communication" with a "mobiles" array for cell phones
   const bcPhones = worker.businessCommunication?.phones || [];
-  const personPhones = person.communicationPhones || person.communications?.phones || [];
-  const allPhones = [...bcPhones, ...personPhones];
+  const personPhones =
+    person.communication?.phones ||
+    person.communicationPhones ||
+    person.communications?.phones ||
+    [];
+  const personMobiles = person.communication?.mobiles || [];
+  const allPhones = [...bcPhones, ...personPhones, ...personMobiles];
   const workPhone =
-    allPhones.find((p) => p.nameCode?.codeValue === "Work") || allPhones[0] || null;
+    allPhones.find((p) => p.nameCode?.codeValue === "Work") ||
+    allPhones.find((p) => p.nameCode?.codeValue === "Personal Cell") ||
+    allPhones[0] ||
+    null;
 
   let phoneNumber = null;
   if (workPhone) {
-    phoneNumber = [
-      workPhone.countryDialing,
-      workPhone.areaDialing,
-      workPhone.dialNumber,
-    ]
-      .filter(Boolean)
-      .join("-");
-    if (workPhone.extension) phoneNumber += ` ext. ${workPhone.extension}`;
+    // Prefer pre-formatted number if available
+    if (workPhone.formattedNumber) {
+      phoneNumber = workPhone.formattedNumber;
+    } else {
+      phoneNumber = [workPhone.countryDialing, workPhone.areaDialing, workPhone.dialNumber]
+        .filter(Boolean)
+        .join("-");
+      if (workPhone.extension) phoneNumber += ` ext. ${workPhone.extension}`;
+    }
+  }
+
+  // Department — check departmentCode first, then homeOrganizationalUnits
+  const deptFromCode = wa.departmentCode?.longName || wa.departmentCode?.shortName || null;
+  const orgUnits = wa.homeOrganizationalUnits || [];
+  const deptUnit =
+    orgUnits.find((u) => String(u.typeCode?.codeValue || "").toLowerCase() === "department") ||
+    orgUnits[0];
+  const department = deptFromCode || deptUnit?.nameCode?.longName || deptUnit?.nameCode?.shortName || null;
+
+  // Home address from person.legalAddress
+  const addr = person.legalAddress;
+  let homeAddress = null;
+  if (addr) {
+    const parts = [
+      addr.lineOne,
+      addr.lineTwo,
+      addr.cityName,
+      addr.countrySubdivisionLevel1?.shortName || addr.countrySubdivisionLevel1?.codeValue,
+      addr.postalCode,
+      addr.countryCode,
+    ].filter(Boolean);
+    if (parts.length > 0) homeAddress = parts.join(", ");
   }
 
   return {
@@ -234,9 +357,11 @@ function mapWorker(worker) {
     work_email: workEmail,
     work_phone: phoneNumber,
     job_title: wa.jobTitle || null,
-    department: wa.departmentCode?.longName || wa.departmentCode?.shortName || null,
+    department,
     work_location: wa.workLocation?.nameCode?.longName || wa.workLocation?.nameCode?.shortName || null,
     hire_date: wa.hireDate || null,
+    birth_date: person.birthDate || null,
+    home_address: homeAddress,
     employment_status: wa.workerStatus?.statusCode?.codeValue || null,
     employment_type: wa.workerTypeCode?.codeValue || null,
   };
@@ -244,7 +369,11 @@ function mapWorker(worker) {
 
 module.exports = {
   isConfigured,
+  getAllWorkers,
   getWorkerByEmail,
+  getWorkerByAssociateOID,
+  validateAssociateOID,
   getWorkerByOID,
   mapWorker,
+  clearWorkersCache,
 };

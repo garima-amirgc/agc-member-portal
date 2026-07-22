@@ -36,6 +36,7 @@ const CommunityInvolvementPage = lazy(() => import("./pages/CommunityInvolvement
 const CommunityInvolvementDetailPage = lazy(() => import("./pages/CommunityInvolvementDetailPage"));
 const AdminAboutCompanyPage = lazy(() => import("./pages/AdminAboutCompanyPage"));
 const AboutCompanyPage = lazy(() => import("./pages/AboutCompanyPage"));
+const AgcHubPage = lazy(() => import("./pages/AgcHubPage"));
 const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
 const CoursePlayerPage = lazy(() => import("./pages/CoursePlayerPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
@@ -57,6 +58,8 @@ const AdminCalendarPage = lazy(() => import("./pages/AdminCalendarPage"));
 const AdminPollsPage = lazy(() => import("./pages/AdminPollsPage"));
 const AdminHRNewsfeedPage = lazy(() => import("./pages/AdminHRNewsfeedPage"));
 const NewsfeedPage = lazy(() => import("./pages/NewsfeedPage"));
+const SocialCommitteePage = lazy(() => import("./pages/SocialCommitteePage"));
+const AdminSocialCommitteePage = lazy(() => import("./pages/AdminSocialCommitteePage"));
 
 function pickFacilityForLegacyResources(me) {
   try {
@@ -139,6 +142,7 @@ export default function App() {
         <Route path="customer-wins/:id" element={<CustomerWinDetailPage />} />
         <Route path="community-involvement" element={<CommunityInvolvementPage />} />
         <Route path="community-involvement/:id" element={<CommunityInvolvementDetailPage />} />
+        <Route path="about-company" element={<AgcHubPage />} />
         <Route path="about-company/:section" element={<AboutCompanyPage />} />
         <Route
           path="users"
@@ -249,6 +253,15 @@ export default function App() {
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.HR_NEWSFEED}>
               <AdminHRNewsfeedPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="social-committee" element={<SocialCommitteePage />} />
+        <Route
+          path="admin/social-committee"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.SOCIAL_COMMITTEE}>
+              <AdminSocialCommitteePage />
             </ProtectedRoute>
           }
         />

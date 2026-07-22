@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGC Member Portal — Announcement Poster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Marcellus&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#e8edf5;
+    display:flex; justify-content:center; align-items:flex-start;
+    padding:40px 20px;
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+  }
+
+  @media print {
+    body { background:#fff; padding:0; }
+    .poster { box-shadow:none; width:100%; max-width:none; }
+  }
+
+  .poster {
+    width:720px;
+    max-width:100%;
+    background:#fff;
+    border-radius:6px;
+    overflow:hidden;
+    box-shadow:0 24px 80px rgba(11,62,175,0.22);
+  }
+
+  /* ── HERO ── */
+  .hero {
+    background:linear-gradient(145deg, #061f5c 0%, #0B3EAF 55%, #1245c8 100%);
+    padding:56px 56px 48px;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero-dots {
+    position:absolute; inset:0;
+    background-image:radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px);
+    background-size:28px 28px;
+  }
+  .hero-circle1 {
+    position:absolute; top:-80px; right:-60px;
+    width:320px; height:320px; border-radius:50%;
+    background:rgba(167,211,68,0.13);
+  }
+  .hero-circle2 {
+    position:absolute; bottom:-110px; left:-90px;
+    width:360px; height:360px; border-radius:50%;
+    background:rgba(255,255,255,0.05);
+  }
+
+  .eyebrow {
+    position:relative; z-index:2;
+    display:inline-flex; align-items:center; gap:8px;
+    background:rgba(167,211,68,0.18);
+    border:1px solid rgba(167,211,68,0.35);
+    border-radius:100px;
+    padding:5px 16px;
+    margin-bottom:30px;
+  }
+  .eyebrow-dot { width:7px; height:7px; border-radius:50%; background:#A7D344; flex-shrink:0; }
+  .eyebrow span {
+    font-size:11px; font-weight:700; letter-spacing:0.15em;
+    text-transform:uppercase; color:#A7D344;
+  }
+
+  .company-name {
+    position:relative; z-index:2;
+    font-size:13px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
+    color:rgba(255,255,255,0.60); margin-bottom:10px;
+  }
+  .portal-title {
+    position:relative; z-index:2;
+    font-size:52px; font-weight:900; line-height:1.0; letter-spacing:-0.01em;
+    color:#fff; margin-bottom:16px;
+  }
+  .portal-title .accent { color:#A7D344; }
+  .tagline {
+    position:relative; z-index:2;
+    font-family:'Marcellus', serif; font-size:22px;
+    color:rgba(255,255,255,0.90); margin-bottom:36px;
+  }
+  .flag-bar {
+    position:relative; z-index:2;
+    display:flex; gap:10px;
+  }
+  .flag-stripe { height:5px; width:46px; border-radius:100px; }
+
+  /* ── INTRO ── */
+  .intro {
+    padding:36px 56px 28px;
+    border-bottom:1px solid #eef0f5;
+  }
+  .intro p {
+    font-size:15.5px; line-height:1.75; color:#374151;
+  }
+  .intro strong { color:#0B3EAF; font-weight:700; }
+
+  /* ── FEATURES ── */
+  .features { padding:30px 56px 34px; }
+  .section-label {
+    font-size:10px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase;
+    color:#9ca3af; margin-bottom:20px;
+  }
+  .features-grid {
+    display:grid; grid-template-columns:1fr 1fr; gap:14px;
+  }
+  .feature-card {
+    border:1.5px solid #eef0f5; border-radius:12px;
+    padding:18px 18px;
+    display:flex; align-items:flex-start; gap:14px;
+  }
+  .feature-icon {
+    width:40px; height:40px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; font-size:19px;
+  }
+  .feature-icon.blue { background:#eef3ff; }
+  .feature-icon.green { background:#f2f8e6; }
+  .feature-title { font-size:13px; font-weight:700; color:#111827; margin-bottom:4px; }
+  .feature-desc { font-size:11.5px; color:#6b7280; line-height:1.55; }
+
+  /* ── ACCESS ── */
+  .access-wrap { padding:0 56px 38px; }
+  .access {
+    background:linear-gradient(135deg, #0B3EAF 0%, #061f5c 100%);
+    border-radius:16px;
+    padding:28px 34px;
+    display:flex; align-items:center; justify-content:space-between; gap:24px;
+    position:relative; overflow:hidden;
+  }
+  .access::before {
+    content:''; position:absolute; top:-50px; right:-50px;
+    width:200px; height:200px; border-radius:50%;
+    background:rgba(167,211,68,0.12);
+  }
+  .access-label {
+    font-size:10px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase;
+    color:rgba(255,255,255,0.50); margin-bottom:6px;
+  }
+  .access-url {
+    font-size:19px; font-weight:800; color:#fff; margin-bottom:5px;
+  }
+  .access-sub { font-size:12px; color:rgba(255,255,255,0.58); }
+  .access-badge {
+    position:relative; z-index:1;
+    background:#A7D344; color:#1a1a1a;
+    font-size:13px; font-weight:700;
+    padding:12px 24px; border-radius:100px;
+    white-space:nowrap; flex-shrink:0;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    padding:18px 56px;
+    background:#f9fafb;
+    border-top:1px solid #eef0f5;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+  }
+  .footer-brand { font-size:12px; color:#9ca3af; }
+  .footer-brand strong { color:#0B3EAF; }
+  .footer-pills { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill {
+    font-size:10px; font-weight:700; padding:4px 12px; border-radius:100px;
+    background:#eef3ff; color:#0B3EAF; letter-spacing:0.05em;
+  }
+  .pill.green { background:#f2f8e6; color:#4d7a00; }
+
+  /* Print button */
+  .print-btn {
+    display:block; margin:24px auto 0; width:fit-content;
+    background:#0B3EAF; color:#fff;
+    border:none; border-radius:8px;
+    padding:10px 24px; font-size:14px; font-weight:600;
+    cursor:pointer; font-family:inherit;
+  }
+  .print-btn:hover { background:#0a35a0; }
+  @media print { .print-btn { display:none; } }
+</style>
+</head>
+<body>
+
+<div>
+  <div class="poster">
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-dots"></div>
+      <div class="hero-circle1"></div>
+      <div class="hero-circle2"></div>
+
+      <div class="eyebrow">
+        <div class="eyebrow-dot"></div>
+        <span>Now Live — All Facilities</span>
+      </div>
+
+      <div class="company-name">Amir Group of Companies</div>
+      <div class="portal-title">AGC <span class="accent">Member</span> Portal</div>
+      <div class="tagline">Learn. Comply. Grow.</div>
+
+      <div class="flag-bar">
+        <div class="flag-stripe" style="background:#A7D344"></div>
+        <div class="flag-stripe" style="background:rgba(255,255,255,0.85)"></div>
+        <div class="flag-stripe" style="background:#c0392b"></div>
+      </div>
+    </div>
+
+    <!-- INTRO -->
+    <div class="intro">
+      <p>We're excited to introduce the <strong>AGC Member Portal</strong> — your central hub for everything at Amir Group. From training and compliance to company news, HR updates, and IT support, everything you need is now in one place.</p>
+    </div>
+
+    <!-- FEATURES -->
+    <div class="features">
+      <div class="section-label">What's inside</div>
+      <div class="features-grid">
+
+        <div class="feature-card">
+          <div class="feature-icon blue">🎓</div>
+          <div>
+            <div class="feature-title">AGC University</div>
+            <div class="feature-desc">Complete training courses, track compliance, and access learning resources by facility.</div>
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon green">📰</div>
+          <div>
+            <div class="feature-title">Company News</div>
+            <div class="feature-desc">Employee spotlights, leadership updates, customer wins, and community involvement stories.</div>
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon green">👥</div>
+          <div>
+            <div class="feature-title">HR Updates</div>
+            <div class="feature-desc">New hire announcements, HR newsfeed, upcoming events, and the employee calendar.</div>
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon blue">📊</div>
+          <div>
+            <div class="feature-title">Reports & Analytics</div>
+            <div class="feature-desc">Access Power BI dashboards and operational reports for your facility at a glance.</div>
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon blue">🎫</div>
+          <div>
+            <div class="feature-title">IT Support</div>
+            <div class="feature-desc">Submit and track IT tickets directly from the portal — faster support, full visibility.</div>
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon green">📅</div>
+          <div>
+            <div class="feature-title">Calendar & Events</div>
+            <div class="feature-desc">Stay up to date with company holidays, events, and activities across all locations.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ACCESS -->
+    <div class="access-wrap">
+      <div class="access">
+        <div>
+          <div class="access-label">Get started today</div>
+          <div class="access-url">memberportal.amirgc.com</div>
+          <div class="access-sub">Sign in with your Microsoft work account or email &amp; password</div>
+        </div>
+        <a href="https://memberportal.amirgc.com/" target="_blank" class="access-badge" style="text-decoration:none;">Sign In Now →</a>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+      <div class="footer-brand">© 2025 <strong>Amir Group of Companies</strong></div>
+      <div class="footer-pills">
+        <div class="pill">AGC</div>
+        <div class="pill">AQM</div>
+        <div class="pill green">SCF</div>
+        <div class="pill green">ASP</div>
+      </div>
+    </div>
+
+  </div>
+
+  <button class="print-btn" onclick="window.print()">🖨️ Print Poster</button>
+</div>
+
+</body>
+</html>

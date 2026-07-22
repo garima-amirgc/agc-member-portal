@@ -111,7 +111,7 @@ function AboutCompanyAboutPage() {
           </div>
           {forms.length > 0 ? (
             <div>
-              <h2 className="mb-3 text-lg font-semibold text-slate-900 dark:text-white">Forms</h2>
+              <h2 className="mb-3 text-lg font-semibold text-slate-900 dark:text-white">Employee Handbook</h2>
               <div className="grid gap-4 md:grid-cols-2">
                 {forms.map((item) => (
                   <DocumentCard key={item.id} item={item} />

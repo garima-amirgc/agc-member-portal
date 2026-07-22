@@ -1,6 +1,7 @@
 const { ROLES, canonicalRole } = require("./constants");
 
 const ADMIN_GRANT_KEYS = Object.freeze({
+  SOCIAL_COMMITTEE: "social_committee",
   ENGAGEMENT_CALENDAR: "engagement_calendar",
   UPCOMING: "upcoming",
   UPCOMING_EVENTS: "upcoming_events",

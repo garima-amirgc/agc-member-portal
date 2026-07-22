@@ -11,6 +11,32 @@ function formatEventWhen(ev) {
   return iso ? new Date(iso).toLocaleString() : "Schedule TBD";
 }
 
+function formatDateRange(ev) {
+  const startIso = getEventTimeIso(ev);
+  if (!startIso) return null;
+  const start = new Date(startIso);
+  const endIso = ev?.event_end_at;
+  const end = endIso ? new Date(endIso) : null;
+  const hasEnd = end && !Number.isNaN(end.getTime());
+
+  const dateOpts = { month: "long", day: "numeric", year: "numeric" };
+  const timeOpts = { hour: "numeric", minute: "2-digit" };
+
+  if (!hasEnd || start.toDateString() === end.toDateString()) {
+    // Single day — show full date + time
+    return {
+      label: "Date & Time",
+      value: start.toLocaleString(undefined, { ...dateOpts, ...timeOpts }),
+    };
+  }
+
+  // Multi-day range
+  return {
+    label: "Dates",
+    value: `${start.toLocaleDateString(undefined, dateOpts)} – ${end.toLocaleDateString(undefined, dateOpts)}`,
+  };
+}
+
 function eventSortValue(ev) {
   const iso = getEventTimeIso(ev);
   const ms = iso ? new Date(iso).getTime() : NaN;
@@ -104,12 +130,43 @@ function UpcomingCard({ event, onClick }) {
 
 function EventDetail({ event }) {
   const img = resolvePublicMediaUrl(event.image_url);
+  const [lightbox, setLightbox] = useState(false);
   return (
     <section className="card overflow-hidden p-0">
       {img ? (
-        <div className="flex max-h-80 w-full items-center justify-center border-b border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
-          <img src={img} alt="" className="max-h-72 max-w-full object-contain" />
-        </div>
+        <>
+          <button
+            type="button"
+            onClick={() => setLightbox(true)}
+            className="flex max-h-80 w-full cursor-zoom-in items-center justify-center border-b border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5"
+            aria-label="View full image"
+          >
+            <img src={img} alt="" className="max-h-72 max-w-full object-contain" />
+          </button>
+          {lightbox && (
+            <div
+              className="fixed inset-0 z-50 overflow-y-auto bg-black/80"
+              onClick={() => setLightbox(false)}
+            >
+              <div className="flex min-h-full items-center justify-center p-4">
+                <img
+                  src={img}
+                  alt=""
+                  className="w-full max-w-2xl rounded-xl object-contain shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setLightbox(false)}
+                className="fixed right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </>
       ) : null}
       <div className="space-y-4 p-5">
         <div>
@@ -119,7 +176,21 @@ function EventDetail({ event }) {
           <h2 className="mt-1 text-2xl font-bold leading-tight text-slate-900 dark:text-white">
             {event.title || "Untitled event"}
           </h2>
-          <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{formatEventWhen(event)}</p>
+          {(() => {
+            const range = formatDateRange(event);
+            return range ? (
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  {range.label}
+                </span>
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {range.value}
+                </span>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">Schedule TBD</p>
+            );
+          })()}
         </div>
 
         <div className="flex flex-wrap gap-2">

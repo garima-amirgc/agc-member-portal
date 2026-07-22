@@ -5,8 +5,9 @@ import { uploadLessonVideo, uploadResourceDocumentFile } from "../services/direc
 import { PAGE_SHELL } from "../constants/pageLayout";
 import ResourceDocumentGridCard from "../components/resources/ResourceDocumentGridCard";
 import { CATEGORIES } from "../utils/resourcesContent";
+import { DEPARTMENTS } from "../constants/departments";
 
-const EMPTY_COURSE = { title: "", description: "", business_unit: "AGC", resource_category: "" };
+const EMPTY_COURSE = { title: "", description: "", business_unit: "AGC", resource_category: "", department: "" };
 const EMPTY_DOC = { business_unit: "AGC", category: "finance", title: "" };
 const EMPTY_REPORT = { business_unit: "AGC", title: "", link_url: "", description: "" };
 
@@ -95,6 +96,7 @@ export default function AdminDashboardPage() {
       description: c.description ?? "",
       business_unit: c.business_unit,
       resource_category: c.resource_category || "",
+      department: c.department || "",
     });
   };
 
@@ -112,6 +114,7 @@ export default function AdminDashboardPage() {
         description: courseEdit.description ?? "",
         business_unit: courseEdit.business_unit,
         resource_category: courseEdit.resource_category?.trim() || null,
+        department: courseEdit.department?.trim() || null,
       });
       setCourseEdit(null);
       load();
@@ -436,6 +439,21 @@ export default function AdminDashboardPage() {
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Department (leave blank to show to all departments)
+                    </label>
+                    <select
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      value={courseForm.department || ""}
+                      onChange={(e) => setCourseForm({ ...courseForm, department: e.target.value })}
+                    >
+                      <option value="">All departments</option>
+                      {DEPARTMENTS.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
                       List video under Resources (Videos section)
                     </label>
                     <select
@@ -525,6 +543,22 @@ export default function AdminDashboardPage() {
                             </div>
                             <div>
                               <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                Department
+                              </label>
+                              <select
+                                className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                                value={courseEdit.department || ""}
+                                onChange={(e) => setCourseEdit({ ...courseEdit, department: e.target.value })}
+                                disabled={savingCourse}
+                              >
+                                <option value="">All departments</option>
+                                {DEPARTMENTS.map((d) => (
+                                  <option key={d} value={d}>{d}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
                                 List under Resources (Videos)
                               </label>
                               <select
@@ -558,6 +592,11 @@ export default function AdminDashboardPage() {
                                 <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
                                   {c.business_unit}
                                 </div>
+                                {c.department ? (
+                                  <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                                    {c.department}
+                                  </div>
+                                ) : null}
                                 {c.resource_category ? (
                                   <div className="text-[10px] font-medium uppercase text-brand-blue dark:text-brand-green">
                                     Resources · Videos:{" "}

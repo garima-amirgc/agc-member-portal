@@ -54,11 +54,11 @@ export default function HRNewsFeedSlider({ items, loading }) {
 
       {/* Left: image — full card height, object-contain so nothing is cut off */}
       {imgSrc && (
-        <div className="relative w-2/5 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900">
+        <div className="relative w-1/4 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900">
           <img
             src={imgSrc}
             alt=""
-            className="absolute inset-0 h-full w-full object-contain"
+            className="absolute inset-0 h-full w-full object-cover object-[50%_20%]"
             loading="lazy"
           />
         </div>

@@ -52,6 +52,7 @@ function shapeUpcomingRow(row) {
     end_at: row.end_at != null ? String(row.end_at) : null,
     show_from_at: row.show_from_at != null ? String(row.show_from_at) : null,
     event_at: row.event_at != null ? String(row.event_at) : null,
+    event_end_at: row.event_end_at != null ? String(row.event_end_at) : null,
     posted_by: row.posted_by != null && VALID_POSTED_BY.includes(row.posted_by) ? row.posted_by : null,
   };
 }
@@ -191,7 +192,7 @@ function resolveBusinessUnitsFromBody(body) {
 }
 
 router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENTS), async (req, res) => {
-  const { title, detail, start_at, end_at, published, image_url, show_from_at, event_at, posted_by } = req.body;
+  const { title, detail, start_at, end_at, published, image_url, show_from_at, event_at, event_end_at, posted_by } = req.body;
   if (!title || typeof title !== "string") {
     return res.status(400).json({ message: "title is required" });
   }
@@ -205,6 +206,7 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENT
   const normEvent =
     event_at !== undefined ? normalizeDateInput(event_at) : start_at !== undefined ? normalizeDateInput(start_at) : null;
   const normEnd = normalizeDateInput(end_at);
+  const normEventEnd = event_end_at !== undefined ? normalizeDateInput(event_end_at) : null;
   if (show_from_at !== undefined && String(show_from_at).trim() && !normShowFrom) {
     return res.status(400).json({ message: "Invalid show_from_at" });
   }
@@ -234,7 +236,7 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENT
 
   const result = await db
     .prepare(
-      "INSERT INTO facility_upcoming (business_unit, business_units, title, detail, start_at, end_at, sort_order, published, image_url, show_from_at, event_at, posted_by) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO facility_upcoming (business_unit, business_units, title, detail, start_at, end_at, sort_order, published, image_url, show_from_at, event_at, event_end_at, posted_by) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .run(
       primaryBu,
@@ -247,6 +249,7 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVENT
       nextImg,
       normShowFrom,
       normEvent,
+      normEventEnd,
       postedByVal
     );
 
@@ -259,7 +262,7 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVE
   const existing = await db.prepare("SELECT * FROM facility_upcoming WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ message: "Not found" });
 
-  const { business_unit, title, detail, start_at, end_at, published, image_url, show_from_at, event_at, posted_by } = req.body;
+  const { business_unit, title, detail, start_at, end_at, published, image_url, show_from_at, event_at, event_end_at, posted_by } = req.body;
 
   const unitsFromBody = resolveBusinessUnitsFromBody(req.body);
   let nextBu = String(existing.business_unit || "").trim().toUpperCase();
@@ -299,6 +302,7 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVE
   else if (start_at !== undefined) nextEvent = normalizeDateInput(start_at);
 
   const nextEnd = end_at !== undefined ? normalizeDateInput(end_at) : existing.end_at;
+  const nextEventEnd = event_end_at !== undefined ? normalizeDateInput(event_end_at) : existing.event_end_at;
 
   if (show_from_at != null && String(show_from_at).trim() && !nextShowFrom) {
     return res.status(400).json({ message: "Invalid show_from_at" });
@@ -336,9 +340,9 @@ router.put("/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.UPCOMING_EVE
 
   await db
     .prepare(
-      "UPDATE facility_upcoming SET business_unit = ?, business_units = ?, title = ?, detail = ?, end_at = ?, published = ?, image_url = ?, show_from_at = ?, event_at = ?, posted_by = ? WHERE id = ?"
+      "UPDATE facility_upcoming SET business_unit = ?, business_units = ?, title = ?, detail = ?, end_at = ?, published = ?, image_url = ?, show_from_at = ?, event_at = ?, event_end_at = ?, posted_by = ? WHERE id = ?"
     )
-    .run(nextBu, nextUnitsJson, nextTitle, nextDetail, nextEnd, nextPub, nextImage, nextShowFrom, nextEvent, nextPostedBy, req.params.id);
+    .run(nextBu, nextUnitsJson, nextTitle, nextDetail, nextEnd, nextPub, nextImage, nextShowFrom, nextEvent, nextEventEnd, nextPostedBy, req.params.id);
 
   const row = await db.prepare("SELECT * FROM facility_upcoming WHERE id = ?").get(req.params.id);
   return res.json(shapeUpcomingRow(row));

@@ -1,4 +1,5 @@
 export const ADMIN_GRANT_KEYS = Object.freeze({
+  SOCIAL_COMMITTEE: "social_committee",
   ENGAGEMENT_CALENDAR: "engagement_calendar",
   UPCOMING: "upcoming",
   UPCOMING_EVENTS: "upcoming_events",
@@ -43,7 +44,10 @@ export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
   {
     groupKey: "social",
     label: "Social Committee",
-    options: [{ key: ADMIN_GRANT_KEYS.UPCOMING_EVENTS, label: "Manage upcoming events" }],
+    options: [
+      { key: ADMIN_GRANT_KEYS.UPCOMING_EVENTS, label: "Manage upcoming events" },
+      { key: ADMIN_GRANT_KEYS.SOCIAL_COMMITTEE, label: "Social Committee (winners & events)" },
+    ],
   },
   {
     groupKey: "sales",

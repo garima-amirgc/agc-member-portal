@@ -464,6 +464,50 @@ const SCHEMA = `
     FOREIGN KEY(ticket_id) REFERENCES it_tickets(id) ON DELETE CASCADE,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  -- Social Committee: past events and winner announcements
+  CREATE TABLE IF NOT EXISTS social_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    event_date TEXT,
+    description TEXT,
+    image_url TEXT,
+    video_url TEXT,
+    business_units TEXT DEFAULT '["AGC"]',
+    published INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS social_winners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    award TEXT,
+    event_name TEXT,
+    social_event_id INTEGER,
+    image_url TEXT,
+    business_unit TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(social_event_id) REFERENCES social_events(id) ON DELETE SET NULL,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS social_event_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    social_event_id INTEGER NOT NULL,
+    image_url TEXT NOT NULL,
+    caption TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(social_event_id) REFERENCES social_events(id) ON DELETE CASCADE
+  );
 `;
 
 async function initDb() {
@@ -663,6 +707,23 @@ async function initDb() {
     rawDb.exec("ALTER TABLE users ADD COLUMN admin_grants TEXT");
   } catch {
   }
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN adp_associate_oid TEXT");
+  } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_worker_id TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_job_title TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_department TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_work_phone TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_work_email TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_work_location TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_employment_type TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_employment_status TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_home_address TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_birth_date TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_hire_date TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE users ADD COLUMN adp_synced_at TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE courses ADD COLUMN department TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE facility_upcoming ADD COLUMN event_end_at TEXT"); } catch {}
   try {
     rawDb.exec("ALTER TABLE users ADD COLUMN facility_university_only INTEGER NOT NULL DEFAULT 0");
   } catch {
@@ -1252,6 +1313,13 @@ async function initDb() {
   } catch (e) {
     console.error("[db] hr_newsfeed table:", e.message || e);
   }
+
+  try {
+    rawDb.exec("ALTER TABLE social_events ADD COLUMN video_url TEXT");
+  } catch {}
+  try {
+    rawDb.exec("ALTER TABLE social_winners ADD COLUMN tier TEXT");
+  } catch {}
 
   persist();
 }

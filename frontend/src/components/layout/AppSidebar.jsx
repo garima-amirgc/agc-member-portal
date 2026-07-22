@@ -5,11 +5,11 @@ import { useAuth } from "../../context/AuthContext";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
 import { useMyOpenTicketCount } from "../../hooks/useMyOpenTicketCount";
 import { isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
-import { COMPANY_CONTENT_NAV_TITLE } from "../../constants/companyContentConfig";
 import { IconBuilding, IconChevron, IconHelp, IconSparkle } from "./SidebarIcons";
 import { SidebarAdminGroupDropdown } from "./AdminNavGroupDropdown";
+import { COMPANY_CONTENT_NAV_TITLE } from "../../constants/companyContentConfig";
 
-const SIDEBAR_WIDTH_PX = 224;
+const SIDEBAR_WIDTH_PX = 260;
 const sidebarShellStyle = {
   width: SIDEBAR_WIDTH_PX,
   minWidth: SIDEBAR_WIDTH_PX,
@@ -78,20 +78,48 @@ function NavItem({ to, end, icon: Icon, label, desc, badge }) {
   );
 }
 
-function NavSection({ title, icon: Icon, defaultOpen, children }) {
+function NavSection({ title, icon: Icon, defaultOpen, to, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="mt-1">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2.5 rounded-portal px-2.5 py-2 text-left text-xs font-semibold text-white transition hover:bg-black/10 dark:hover:bg-white/10"
-        aria-expanded={open}
-      >
-        {Icon ? <Icon className="h-4 w-4 shrink-0 text-white/90" aria-hidden /> : null}
-        <span className="min-w-0 flex-1">{title}</span>
-        <IconChevron open={open} className="h-3.5 w-3.5 shrink-0 text-white/80" />
-      </button>
+      {to ? (
+        /* Title = NavLink to hub; chevron = separate collapse toggle */
+        <div className="flex items-center">
+          <NavLink
+            to={to}
+            end
+            className={({ isActive }) =>
+              [
+                "flex flex-1 items-center gap-2.5 rounded-l-portal px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-black/10 dark:hover:bg-white/10",
+                isActive ? "bg-white/10" : "",
+              ].join(" ")
+            }
+          >
+            {Icon ? <Icon className="h-4 w-4 shrink-0 text-white/90" aria-hidden /> : null}
+            <span className="min-w-0 flex-1">{title}</span>
+          </NavLink>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex shrink-0 items-center rounded-r-portal px-2 py-2 text-white/80 transition hover:bg-black/10 dark:hover:bg-white/10"
+            aria-expanded={open}
+            aria-label={`${open ? "Collapse" : "Expand"} ${title}`}
+          >
+            <IconChevron open={open} className="h-3.5 w-3.5 text-white/80" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center gap-2.5 rounded-portal px-2.5 py-2 text-left text-xs font-semibold text-white transition hover:bg-black/10 dark:hover:bg-white/10"
+          aria-expanded={open}
+        >
+          {Icon ? <Icon className="h-4 w-4 shrink-0 text-white/90" aria-hidden /> : null}
+          <span className="min-w-0 flex-1">{title}</span>
+          <IconChevron open={open} className="h-3.5 w-3.5 shrink-0 text-white/80" />
+        </button>
+      )}
       {open ? (
         <div className="mt-1 space-y-0.5 border-l-2 border-white/35 pl-3 dark:border-white/25">
           {children}
@@ -141,13 +169,7 @@ export default function AppSidebar() {
           ))}
         </div>
 
-        {aboutCompanyItems.length > 0 ? (
-          <NavSection title={COMPANY_CONTENT_NAV_TITLE} icon={IconBuilding} defaultOpen={false}>
-            {aboutCompanyItems.map((item) => (
-              <NavItem key={item.to} {...item} />
-            ))}
-          </NavSection>
-        ) : null}
+        <NavItem to="/about-company" end icon={IconBuilding} label={COMPANY_CONTENT_NAV_TITLE} />
 
         {showAdminSection ? (
           <NavSection title="Administration" defaultOpen>

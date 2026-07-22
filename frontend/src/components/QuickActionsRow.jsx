@@ -9,36 +9,37 @@ import {
 } from "./layout/SidebarIcons";
 
 const ACTIONS = [
-  { to: "/profile", icon: IconUser, label: "My Profile" },
-  { to: "/team", icon: IconTeam, label: "Team" },
-  { to: "/reports", icon: IconChart, label: "Reports" },
-  { to: "/facilities", icon: IconBuilding, label: "UofAGC" },
-  { to: "/upcoming", icon: IconCalendar, label: "Upcoming" },
-  { to: "/it-tickets", icon: IconTicket, label: "IT Support" },
+  { to: "/profile",     icon: IconUser,     label: "My Profile",  accent: false },
+  { to: "/team",        icon: IconTeam,     label: "Team",        accent: false },
+  { to: "/reports",     icon: IconChart,    label: "Reports",     accent: false },
+  { to: "/facilities",  icon: IconBuilding, label: "UofAGC",      accent: true  },
+  { to: "/upcoming",    icon: IconCalendar, label: "Upcoming",    accent: false },
+  { to: "/it-tickets",  icon: IconTicket,   label: "IT Support",  accent: false },
 ];
 
 export default function QuickActionsRow() {
   return (
-    <div className="card rounded-2xl">
-      <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+    <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
+      <span className="mr-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 shrink-0">
         Quick Actions
-      </h2>
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-        {ACTIONS.map(({ to, icon: Icon, label }) => (
-          <Link
-            key={to}
-            to={to}
-            className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-[#0B3EAF]/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/40"
-          >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0B3EAF]/10 text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
-              <Icon className="h-5 w-5" />
-            </span>
-            <span className="text-[11px] font-semibold leading-tight text-slate-700 dark:text-slate-200">
-              {label}
-            </span>
-          </Link>
-        ))}
-      </div>
+      </span>
+
+      {ACTIONS.map(({ to, icon: Icon, label, accent }) => (
+        <Link
+          key={to}
+          to={to}
+          className={[
+            "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+            "hover:scale-[1.04] active:scale-[0.98]",
+            accent
+              ? "bg-[#A7D344] text-[#0f0f0f] hover:bg-[#96c030]"
+              : "bg-[#0B3EAF] text-white hover:bg-[#082d82]",
+          ].join(" ")}
+        >
+          <Icon className="h-3.5 w-3.5 shrink-0" />
+          {label}
+        </Link>
+      ))}
     </div>
   );
 }

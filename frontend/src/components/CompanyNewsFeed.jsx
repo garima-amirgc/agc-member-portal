@@ -87,9 +87,9 @@ function SlideCard({ item }) {
   const inner = (
     <div className="flex h-52 overflow-hidden rounded-xl border border-slate-100 dark:border-slate-700">
       {/* Left: Image */}
-      <div className="relative w-2/5 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-800">
+      <div className="relative w-1/4 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-800">
         {img ? (
-          <img src={img} alt={item.title} className="h-full w-full object-cover" />
+          <img src={img} alt={item.title} className="h-full w-full object-cover object-[50%_20%]" />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#0B3EAF]/10 to-[#A7D344]/10">
             <svg viewBox="0 0 24 24" className="h-8 w-8 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" strokeWidth={1.5}>

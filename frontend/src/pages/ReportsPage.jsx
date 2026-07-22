@@ -6,7 +6,7 @@ import { PAGE_SHELL } from "../constants/pageLayout";
 import api from "../services/api";
 
 const FACILITIES = ["AGC", "AQM", "SCF", "ASP"];
-const YVF_SCF_TAB = "YVF & SCF";
+const YVF_SCF_TAB = "YVF & AGC Dashboard";
 const YVF_SCF_LINKS = [
   {
     label: "YVF Reporting Dashboard",
@@ -15,9 +15,9 @@ const YVF_SCF_LINKS = [
     preview: "/dashboard-preview-yvf.png",
   },
   {
-    label: "SCF & AQM Reporting Dashboard",
-    url: "https://amirgc-scf.onrender.com/",
-    desc: "SCF & AQM — shipments, inventory, yield, production",
+    label: "AGC Dashboard",
+    url: "https://reportingportal.amirgc.com/",
+    desc: "AGC — shipments, inventory, yield, production",
     preview: "/dashboard-preview-scf.png",
   },
 ];

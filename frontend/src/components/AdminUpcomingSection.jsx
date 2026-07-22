@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import api from "../services/api";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 
@@ -26,6 +27,7 @@ function createEmptyAddForm(businessUnits) {
     detail: "",
     show_from_at: "",
     event_at: "",
+    event_end_at: "",
     end_at: "",
     published: true,
     image_url: "",
@@ -91,6 +93,7 @@ function readScheduleFromFormEl(formEl) {
     return {
       show_from_at: String(fd.get("agc_show_from") ?? ""),
       event_at: String(fd.get("agc_event") ?? ""),
+      event_end_at: String(fd.get("agc_event_end") ?? ""),
       end_at: String(fd.get("agc_end") ?? ""),
     };
   } catch {
@@ -131,6 +134,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
   const [removingId, setRemovingId] = useState(null);
   const [editing, setEditing] = useState(null);
   const [editingSaving, setEditingSaving] = useState(false);
+  const [editError, setEditError] = useState("");
   const [uploadingFormImage, setUploadingFormImage] = useState(false);
   const [uploadingEditImage, setUploadingEditImage] = useState(false);
   const formImageInputRef = useRef(null);
@@ -138,6 +142,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
   const addFormRef = useRef(null);
   const editShowRef = useRef(null);
   const editEventRef = useRef(null);
+  const editEventEndRef = useRef(null);
   const editEndRef = useRef(null);
   const editModalRef = useRef(null);
   const editBusinessUnitsRef = useRef([]);
@@ -229,13 +234,16 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
     const sch = scheduleOverride ?? readScheduleFromFormEl(addFormRef.current) ?? {
       show_from_at: form.show_from_at,
       event_at: form.event_at,
+      event_end_at: form.event_end_at,
       end_at: form.end_at,
     };
     const showIso = scheduleFieldToApi(sch.show_from_at);
     const eventIso = scheduleFieldToApi(sch.event_at);
+    const eventEndIso = scheduleFieldToApi(sch.event_end_at);
     const endIso = scheduleFieldToApi(sch.end_at);
     if (!assertScheduleField("Show in list from", sch.show_from_at, showIso)) return;
-    if (!assertScheduleField("Event date & time", sch.event_at, eventIso)) return;
+    if (!assertScheduleField("Start date & time", sch.event_at, eventIso)) return;
+    if (!assertScheduleField("End date & time", sch.event_end_at, eventEndIso)) return;
     if (!assertScheduleField("Hide from list after", sch.end_at, endIso)) return;
 
     setSaving(true);
@@ -247,6 +255,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
         detail: form.detail.trim() || undefined,
         show_from_at: showIso ?? undefined,
         event_at: eventIso ?? undefined,
+        event_end_at: eventEndIso ?? undefined,
         end_at: endIso ?? undefined,
         published,
         image_url: form.image_url?.trim() || undefined,
@@ -315,6 +324,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
   };
 
   const openEdit = (ev) => {
+    setEditError("");
     const eventSrc = ev.event_at ?? ev.eventAt ?? ev.start_at ?? ev.startAt;
     const showSrc = ev.show_from_at ?? ev.showFromAt;
     const bu = String(ev.business_unit ?? ev.businessUnit ?? "").trim().toUpperCase();
@@ -334,6 +344,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
       published: ev.published !== 0 && ev.published !== false,
       show_from_at: toLocalInput(showSrc),
       event_at: toLocalInput(eventSrc),
+      event_end_at: toLocalInput(ev.event_end_at),
       end_at: toLocalInput(ev.end_at),
       posted_by: ev.posted_by || "",
     });
@@ -382,24 +393,32 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
   };
 
   const saveEdit = async () => {
+    setEditError("");
+    console.log("[saveEdit] called, editing:", editing?.id);
     if (!editing) return;
     if (!String(editing.title || "").trim()) {
-      window.alert("Title is required.");
+      setEditError("Title is required.");
       return;
     }
     const showRaw = editShowRef.current?.value ?? editing.show_from_at;
     const eventRaw = editEventRef.current?.value ?? editing.event_at;
+    const eventEndRaw = editEventEndRef.current?.value ?? editing.event_end_at;
     const endRaw = editEndRef.current?.value ?? editing.end_at;
+    console.log("[saveEdit] raw values:", { showRaw, eventRaw, eventEndRaw, endRaw });
     const showIso = scheduleFieldToApi(showRaw);
     const eventIso = scheduleFieldToApi(eventRaw);
+    const eventEndIso = scheduleFieldToApi(eventEndRaw);
     const endIso = scheduleFieldToApi(endRaw);
-    if (!assertScheduleField("Show in list from", showRaw, showIso)) return;
-    if (!assertScheduleField("Event date & time", eventRaw, eventIso)) return;
-    if (!assertScheduleField("Hide from list after", endRaw, endIso)) return;
+    console.log("[saveEdit] iso values:", { showIso, eventIso, eventEndIso, endIso });
+    if (trimDateField(showRaw) != null && showIso == null) { setEditError("Show in list from: invalid date/time."); return; }
+    if (trimDateField(eventRaw) != null && eventIso == null) { setEditError("Start date & time: invalid date/time."); return; }
+    if (trimDateField(eventEndRaw) != null && eventEndIso == null) { setEditError("End date & time: invalid date/time."); return; }
+    if (trimDateField(endRaw) != null && endIso == null) { setEditError("Hide from list after: invalid date/time."); return; }
 
     const ordered = mergeBusinessUnitPick(editModalRef.current, editBusinessUnitsRef.current);
+    console.log("[saveEdit] ordered facilities:", ordered);
     if (ordered.length === 0) {
-      window.alert("Select at least one facility.");
+      setEditError("Select at least one facility.");
       return;
     }
 
@@ -416,6 +435,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
         detail: detailTrim,
         show_from_at: showIso,
         event_at: eventIso,
+        event_end_at: eventEndIso ?? null,
         end_at: endIso,
         published: editing.published,
         image_url: imgTrim,
@@ -428,7 +448,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
     } catch (err) {
       const st = err.response?.status;
       const msg = err.response?.data?.message || err.message;
-      window.alert(st ? `Edit failed (HTTP ${st}): ${msg}` : msg);
+      setEditError(st ? `Save failed (HTTP ${st}): ${msg}` : (msg || "Unknown error"));
     } finally {
       setEditingSaving(false);
     }
@@ -576,7 +596,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
           <div className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100 max-xl:mb-2 max-xl:text-xs">
             Schedule <span className="font-normal text-slate-500 dark:text-slate-400">(optional)</span>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <label htmlFor="agc_show_from" className={fieldLabelClass}>
                 Show in list from
@@ -592,7 +612,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
             </div>
             <div>
               <label htmlFor="agc_event" className={fieldLabelClass}>
-                Event date &amp; time
+                Start date &amp; time
               </label>
               <input
                 id="agc_event"
@@ -603,7 +623,20 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
                 onChange={(e) => setForm((f) => ({ ...f, event_at: e.target.value }))}
               />
             </div>
-            <div className="sm:col-span-2 lg:col-span-1">
+            <div>
+              <label htmlFor="agc_event_end" className={fieldLabelClass}>
+                End date &amp; time <span className="font-normal text-slate-400">(leave blank if single day)</span>
+              </label>
+              <input
+                id="agc_event_end"
+                name="agc_event_end"
+                className={fieldInputClass}
+                type="datetime-local"
+                value={form.event_end_at}
+                onChange={(e) => setForm((f) => ({ ...f, event_end_at: e.target.value }))}
+              />
+            </div>
+            <div>
               <label htmlFor="agc_end" className={fieldLabelClass}>
                 Hide from list after
               </label>
@@ -728,8 +761,8 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
         )}
       </div>
 
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3 sm:p-4">
+      {editing && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/40 p-3 sm:p-4">
           <form
             ref={editModalRef}
             key={editing.id}
@@ -881,7 +914,7 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
               </div>
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
-                  Event date &amp; time (optional)
+                  Start date &amp; time (optional)
                 </div>
                 <input
                   ref={editEventRef}
@@ -890,6 +923,20 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
                   value={editing.event_at || ""}
                   onChange={(e) =>
                     setEditing((prev) => (prev ? { ...prev, event_at: e.target.value } : null))
+                  }
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                  End date &amp; time <span className="font-normal normal-case">(leave blank if single day)</span>
+                </div>
+                <input
+                  ref={editEventEndRef}
+                  className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                  type="datetime-local"
+                  value={editing.event_end_at || ""}
+                  onChange={(e) =>
+                    setEditing((prev) => (prev ? { ...prev, event_end_at: e.target.value } : null))
                   }
                 />
               </div>
@@ -921,16 +968,23 @@ export default function AdminUpcomingSection({ className = "card mt-6" }) {
               <span className="text-sm font-medium">Published (visible on facility Upcoming)</span>
             </label>
 
+            {editError && (
+              <p className="mt-3 rounded-lg bg-red-50 p-2.5 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                {editError}
+              </p>
+            )}
+
             <div className="mt-4 flex items-center justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>
                 Cancel
               </button>
-              <button type="submit" className="btn-primary" disabled={editingSaving}>
+              <button type="button" className="btn-primary" disabled={editingSaving} onClick={() => void saveEdit()}>
                 {editingSaving ? "Saving…" : "Save changes"}
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
     </section>
   );

@@ -60,16 +60,34 @@ function displayValue(value) {
   return text || "Not added";
 }
 
-function ProfileDetail({ label, value, className = "" }) {
+function ProfileDetail({ label, value, className = "", fromAdp = false }) {
   return (
     <div className={`rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5 ${className}`}>
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
+        {fromAdp && (
+          <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-[#0B3EAF]/10 text-[#0B3EAF] dark:bg-[#A7D344]/15 dark:text-[#A7D344]">
+            ✦ ADP
+          </span>
+        )}
+      </div>
       <div className="mt-1 font-semibold text-slate-900 dark:text-white">{value}</div>
     </div>
   );
 }
 
-// ─── ADP section component ────────────────────────────────────────────────────
+// ─── ADP locked field notice ──────────────────────────────────────────────────
+
+function AdpLocked() {
+  return (
+    <p className="mt-1 flex items-center gap-1 text-xs text-[#0B3EAF] dark:text-[#A7D344]">
+      <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-[#0B3EAF]/10 text-[#0B3EAF] dark:bg-[#A7D344]/15 dark:text-[#A7D344]">✦ ADP</span>
+      Managed in ADP — edit there to update
+    </p>
+  );
+}
+
+// ─── ADP status badge ─────────────────────────────────────────────────────────
 
 function AdpStatusBadge({ status }) {
   if (!status) return null;
@@ -85,83 +103,6 @@ function AdpStatusBadge({ status }) {
       <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-slate-400"}`} />
       {status}
     </span>
-  );
-}
-
-function AdpSection({ adp, adpLoading, adpError }) {
-  // If ADP is not configured (503) just silently hide the section
-  if (!adpLoading && adpError?.status === 503) return null;
-
-  const formatDate = (iso) => {
-    if (!iso) return null;
-    const d = new Date(iso);
-    return isNaN(d) ? iso : d.toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
-  };
-
-  return (
-    <section className="card">
-      {/* Section header */}
-      <div className="mb-4 flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0B3EAF]/10 dark:bg-[#0B3EAF]/20">
-          {/* ADP logo-ish icon */}
-          <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0B3EAF] dark:text-[#A7D344]" fill="currentColor">
-            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-          </svg>
-        </div>
-        <h2 className="text-base font-semibold text-slate-900 dark:text-white">Employment Details</h2>
-        <span className="rounded bg-[#0B3EAF]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0B3EAF] dark:bg-[#A7D344]/15 dark:text-[#A7D344]">
-          ADP
-        </span>
-      </div>
-
-      {adpLoading ? (
-        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-[#0B3EAF] dark:border-slate-700 dark:border-t-[#A7D344]" />
-          Loading employment details…
-        </div>
-      ) : adpError ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          {adpError.status === 404
-            ? "No ADP record found matching your email address."
-            : "Unable to load employment details right now."}
-        </p>
-      ) : adp ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {adp.worker_id && (
-            <ProfileDetail label="Employee ID" value={adp.worker_id} />
-          )}
-          {adp.job_title && (
-            <ProfileDetail label="Job Title" value={adp.job_title} />
-          )}
-          {adp.department && (
-            <ProfileDetail label="Department" value={adp.department} />
-          )}
-          {adp.work_location && (
-            <ProfileDetail label="Work Location" value={adp.work_location} />
-          )}
-          {adp.hire_date && (
-            <ProfileDetail label="Hire Date" value={formatDate(adp.hire_date)} />
-          )}
-          {adp.employment_type && (
-            <ProfileDetail label="Employment Type" value={adp.employment_type} />
-          )}
-          {adp.work_email && (
-            <ProfileDetail label="Work Email" value={adp.work_email} />
-          )}
-          {adp.work_phone && (
-            <ProfileDetail label="Work Phone" value={adp.work_phone} />
-          )}
-          {adp.employment_status && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Status</div>
-              <div className="mt-1">
-                <AdpStatusBadge status={adp.employment_status} />
-              </div>
-            </div>
-          )}
-        </div>
-      ) : null}
-    </section>
   );
 }
 
@@ -244,7 +185,11 @@ export default function ProfilePage() {
       .catch((e) => {
         if (cancelled) return;
         setAdp(null);
-        setAdpError({ status: e?.response?.status ?? 0, message: e?.message });
+        setAdpError({
+          status: e?.response?.status ?? 0,
+          message: e?.response?.data?.message || e?.message,
+          needs_oid: e?.response?.data?.needs_oid === true,
+        });
         setAdpLoading(false);
       });
 
@@ -252,6 +197,26 @@ export default function ProfilePage() {
       cancelled = true;
     };
   }, [user, syncFormFromProfile]);
+
+  const fetchAdp = useCallback(() => {
+    setAdpLoading(true);
+    setAdpError(null);
+    api
+      .get("/adp/me")
+      .then((res) => {
+        setAdp(res.data);
+        setAdpLoading(false);
+      })
+      .catch((e) => {
+        setAdp(null);
+        setAdpError({
+          status: e?.response?.status ?? 0,
+          message: e?.response?.data?.message || e?.message,
+          needs_oid: e?.response?.data?.needs_oid === true,
+        });
+        setAdpLoading(false);
+      });
+  }, []);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -358,6 +323,14 @@ export default function ProfilePage() {
   const profile = me || user;
   if (!profile) return <div className={PAGE_PADDING}>Loading profile…</div>;
 
+  const formatAdpDate = (iso) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    if (d.getFullYear() < 1900) return d.toLocaleDateString("en-CA", { month: "long", day: "numeric" });
+    return d.toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
+  };
+
   const avatarUrl = resolvePublicMediaUrl(profile.profile_image_url);
   const facilities =
     Array.isArray(profile.facilities) && profile.facilities.length > 0
@@ -386,8 +359,8 @@ export default function ProfilePage() {
           </div>
           <h2 className="mt-4 text-xl font-bold text-slate-950 dark:text-white">{profile.name}</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{profile.email}</p>
-          {String(profile.designation || "").trim() ? (
-            <p className="mt-1 text-sm font-medium text-[#0B3EAF] dark:text-[#A7D344]">{profile.designation}</p>
+          {String(adp?.job_title || profile.designation || "").trim() ? (
+            <p className="mt-1 text-sm font-medium text-[#0B3EAF] dark:text-[#A7D344]">{adp?.job_title || profile.designation}</p>
           ) : null}
           {!editing ? (
             <button type="button" className="btn-primary mt-4" onClick={startEditing}>
@@ -397,28 +370,73 @@ export default function ProfilePage() {
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          {/* Work identity */}
           <ProfileDetail label="Role" value={displayValue(profile.role)} />
-          <ProfileDetail label="Email" value={displayValue(profile.email)} />
-          <ProfileDetail label="Departments" value={displayValue(formatDepartments(profile))} />
-          <ProfileDetail label="Designation" value={displayValue(profile.designation)} />
-          <ProfileDetail label="Phone" value={displayValue(profile.phone)} />
-          <ProfileDetail label="Date of birth" value={birthDateLabel(profile.birth_month, profile.birth_day)} />
           <ProfileDetail
-            label="Date of joining"
-            value={joinDateLabel(profile.join_month, profile.join_day, profile.join_year)}
+            label="Department"
+            value={displayValue(adp?.department || formatDepartments(profile))}
+            fromAdp={!!adp?.department}
           />
-          <ProfileDetail label="Address" value={displayValue(profile.address)} className="sm:col-span-2" />
+          <ProfileDetail
+            label="Job Title"
+            value={displayValue(adp?.job_title || profile.designation)}
+            fromAdp={!!adp?.job_title}
+          />
+          {adp?.worker_id && <ProfileDetail label="Employee ID" value={adp.worker_id} fromAdp />}
+          {adp?.employment_type && <ProfileDetail label="Employment Type" value={adp.employment_type} fromAdp />}
+          {adp?.employment_status && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Employment Status</span>
+                <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-[#0B3EAF]/10 text-[#0B3EAF] dark:bg-[#A7D344]/15 dark:text-[#A7D344]">✦ ADP</span>
+              </div>
+              <div className="mt-1"><AdpStatusBadge status={adp.employment_status} /></div>
+            </div>
+          )}
+          <ProfileDetail
+            label="Date of Joining"
+            value={adp?.hire_date ? formatAdpDate(adp.hire_date) : joinDateLabel(profile.join_month, profile.join_day, profile.join_year)}
+            fromAdp={!!adp?.hire_date}
+          />
+          {/* Contact */}
+          <ProfileDetail label="Email" value={displayValue(profile.email)} />
+          {adp?.work_email && <ProfileDetail label="Work Email" value={adp.work_email} fromAdp />}
+          <ProfileDetail
+            label="Phone"
+            value={displayValue(adp?.work_phone || profile.phone)}
+            fromAdp={!!adp?.work_phone}
+          />
+          {adp?.work_location && <ProfileDetail label="Work Location" value={adp.work_location} fromAdp />}
+          {/* Personal */}
+          <ProfileDetail
+            label="Date of Birth"
+            value={adp?.birth_date ? formatAdpDate(adp.birth_date) : birthDateLabel(profile.birth_month, profile.birth_day)}
+            fromAdp={!!adp?.birth_date}
+          />
+          <ProfileDetail label="Address" value={displayValue(adp?.home_address || profile.address)} className="sm:col-span-2" fromAdp={!!adp?.home_address} />
           {facilities.length > 0 ? (
-            <ProfileDetail
-              label="Facilities"
-              value={facilities.join(", ")}
-              className="sm:col-span-2"
-            />
+            <ProfileDetail label="Facilities" value={facilities.join(", ")} className="sm:col-span-2" />
           ) : null}
         </div>
-      </section>
 
-      <AdpSection adp={adp} adpLoading={adpLoading} adpError={adpError} />
+        {!adpLoading && adpError?.status === 404 && (
+          <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/40 dark:bg-amber-900/20">
+            <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              Your work email address is not on file in ADP. Please contact HR or update it in your ADP self-service portal so your employment details can be pulled here automatically.
+            </p>
+          </div>
+        )}
+
+        {adp && (
+          <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
+            <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-[#0B3EAF]/10 text-[#0B3EAF] dark:bg-[#A7D344]/15 dark:text-[#A7D344]">✦ ADP</span>
+            {" "}Fields marked ADP are sourced directly from ADP Workforce Now and update automatically.
+          </p>
+        )}
+      </section>
 
       {editing ? (
         <section className="card" ref={editSectionRef}>
@@ -467,109 +485,127 @@ export default function ProfilePage() {
                 <input className="w-full rounded border p-2 dark:bg-slate-700" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Phone (optional)</label>
+                <label className="mb-1 block text-sm font-medium">Phone {adp?.work_phone ? "" : "(optional)"}</label>
                 <input
-                  className="w-full rounded border p-2 dark:bg-slate-700"
+                  className={`w-full rounded border p-2 dark:bg-slate-700 ${adp?.work_phone ? "cursor-not-allowed opacity-60" : ""}`}
                   type="tel"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  value={adp?.work_phone || form.phone}
+                  onChange={(e) => { if (!adp?.work_phone) setForm({ ...form, phone: e.target.value }); }}
+                  readOnly={!!adp?.work_phone}
                   placeholder="e.g. (555) 123-4567"
                 />
+                {adp?.work_phone && <AdpLocked />}
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Designation (optional)</label>
+                <label className="mb-1 block text-sm font-medium">Designation {adp?.job_title ? "" : "(optional)"}</label>
                 <input
-                  className="w-full rounded border p-2 dark:bg-slate-700"
-                  value={form.designation}
-                  onChange={(e) => setForm({ ...form, designation: e.target.value })}
+                  className={`w-full rounded border p-2 dark:bg-slate-700 ${adp?.job_title ? "cursor-not-allowed opacity-60" : ""}`}
+                  value={adp?.job_title || form.designation}
+                  onChange={(e) => { if (!adp?.job_title) setForm({ ...form, designation: e.target.value }); }}
+                  readOnly={!!adp?.job_title}
                   placeholder="e.g. Safety Officer, Supervisor"
                 />
+                {adp?.job_title && <AdpLocked />}
               </div>
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Address (optional)</label>
+                <label className="mb-1 block text-sm font-medium">Address {adp?.home_address ? "" : "(optional)"}</label>
                 <textarea
-                  className="min-h-[88px] w-full rounded border p-2 dark:bg-slate-700"
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  className={`min-h-[88px] w-full rounded border p-2 dark:bg-slate-700 ${adp?.home_address ? "cursor-not-allowed opacity-60" : ""}`}
+                  value={adp?.home_address || form.address}
+                  onChange={(e) => { if (!adp?.home_address) setForm({ ...form, address: e.target.value }); }}
+                  readOnly={!!adp?.home_address}
                   placeholder="Street, city, province/state, postal code"
                 />
+                {adp?.home_address && <AdpLocked />}
               </div>
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-sm font-medium">New Password (optional)</label>
                 <input className="w-full rounded border p-2 dark:bg-slate-700" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Leave blank to keep current password" />
               </div>
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Date of birth (optional)</label>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <select
-                    className="w-full rounded border p-2 dark:bg-slate-700"
-                    value={form.birth_month}
-                    onChange={(e) => setForm({ ...form, birth_month: e.target.value })}
-                  >
-                    <option value="">Month</option>
-                    {MONTHS.map((m, idx) => (
-                      <option key={m} value={String(idx + 1)}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="w-full rounded border p-2 dark:bg-slate-700"
-                    value={form.birth_day}
-                    onChange={(e) => setForm({ ...form, birth_day: e.target.value })}
-                  >
-                    <option value="">Day</option>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                      <option key={d} value={String(d)}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <label className="mb-1 block text-sm font-medium">Date of birth {adp?.birth_date ? "" : "(optional)"}</label>
+                {adp?.birth_date ? (
+                  <>
+                    <input
+                      className="w-full cursor-not-allowed rounded border p-2 opacity-60 dark:bg-slate-700"
+                      readOnly
+                      value={formatAdpDate(adp.birth_date)}
+                    />
+                    <AdpLocked />
+                  </>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <select
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      value={form.birth_month}
+                      onChange={(e) => setForm({ ...form, birth_month: e.target.value })}
+                    >
+                      <option value="">Month</option>
+                      {MONTHS.map((m, idx) => (
+                        <option key={m} value={String(idx + 1)}>{m}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      value={form.birth_day}
+                      onChange={(e) => setForm({ ...form, birth_day: e.target.value })}
+                    >
+                      <option value="">Day</option>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                        <option key={d} value={String(d)}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Date of joining (optional)</label>
+                <label className="mb-1 block text-sm font-medium">Date of joining {adp?.hire_date ? "" : "(optional)"}</label>
                 <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
                   Used for work anniversary celebrations on your joining date each year.
                 </p>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <select
-                    className="w-full rounded border p-2 dark:bg-slate-700"
-                    value={form.join_month}
-                    onChange={(e) => setForm({ ...form, join_month: e.target.value })}
-                  >
-                    <option value="">Month</option>
-                    {MONTHS.map((m, idx) => (
-                      <option key={m} value={String(idx + 1)}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="w-full rounded border p-2 dark:bg-slate-700"
-                    value={form.join_day}
-                    onChange={(e) => setForm({ ...form, join_day: e.target.value })}
-                  >
-                    <option value="">Day</option>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                      <option key={d} value={String(d)}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="w-full rounded border p-2 dark:bg-slate-700"
-                    value={form.join_year}
-                    onChange={(e) => setForm({ ...form, join_year: e.target.value })}
-                  >
-                    <option value="">Year</option>
-                    {JOIN_YEAR_OPTIONS.map((y) => (
-                      <option key={y} value={String(y)}>
-                        {y}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {adp?.hire_date ? (
+                  <>
+                    <input
+                      className="w-full cursor-not-allowed rounded border p-2 opacity-60 dark:bg-slate-700"
+                      readOnly
+                      value={formatAdpDate(adp.hire_date)}
+                    />
+                    <AdpLocked />
+                  </>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <select
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      value={form.join_month}
+                      onChange={(e) => setForm({ ...form, join_month: e.target.value })}
+                    >
+                      <option value="">Month</option>
+                      {MONTHS.map((m, idx) => (
+                        <option key={m} value={String(idx + 1)}>{m}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      value={form.join_day}
+                      onChange={(e) => setForm({ ...form, join_day: e.target.value })}
+                    >
+                      <option value="">Day</option>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                        <option key={d} value={String(d)}>{d}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      value={form.join_year}
+                      onChange={(e) => setForm({ ...form, join_year: e.target.value })}
+                    >
+                      <option value="">Year</option>
+                      {JOIN_YEAR_OPTIONS.map((y) => (
+                        <option key={y} value={String(y)}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 

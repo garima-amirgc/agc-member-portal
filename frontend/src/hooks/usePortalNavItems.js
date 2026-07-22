@@ -60,7 +60,7 @@ export function usePortalNavItems(user) {
         to: "/reports",
         icon: IconChart,
         label: "Reports",
-        desc: "Power BI dashboards",
+        desc: "",
       },
       {
         to: "/calendar",
@@ -71,6 +71,11 @@ export function usePortalNavItems(user) {
         to: "/upcoming",
         icon: IconCalendar,
         label: "Upcoming",
+      },
+      {
+        to: "/social-committee",
+        icon: IconTeam,
+        label: "Social Committee",
       },
       {
         to: "/it-tickets",
@@ -143,6 +148,14 @@ export function usePortalNavItems(user) {
           icon: IconCalendar,
           label: "Manage upcoming",
           grantKey: ADMIN_GRANT_KEYS.UPCOMING_EVENTS,
+          group: "social",
+        },
+        {
+          to: "/admin/social-committee",
+          icon: IconTeam,
+          label: "Social Committee",
+          desc: "Winners & past events",
+          grantKey: ADMIN_GRANT_KEYS.SOCIAL_COMMITTEE,
           group: "social",
         },
         {

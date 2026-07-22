@@ -10,10 +10,10 @@ import {
 } from "./layout/SidebarIcons";
 
 const RESOURCES = [
-  { to: "/about-company/about", icon: IconInfo, label: "Employee Handbook" },
-  { to: "/about-company/policy", icon: IconDocument, label: "Policies & Procedures" },
-  { to: "/about-company/benefits", icon: IconHeart, label: "Benefits Portal" },
-  { to: "/about-company/forms", icon: IconClipboard, label: "Forms" },
+  { to: "/about-company", icon: IconInfo, label: "Employee Handbook" },
+  { to: "/about-company", icon: IconDocument, label: "Policies & Procedures" },
+  { to: "/about-company", icon: IconHeart, label: "Benefits Portal" },
+  { to: "/about-company", icon: IconClipboard, label: "Forms" },
   { to: "/facilities", icon: IconBuilding, label: "Learning Center" },
   { to: "/it-tickets", icon: IconTicket, label: "IT Service Catalog" },
 ];
@@ -41,7 +41,7 @@ export default function HelpfulResourcesCard() {
       </div>
 
       <Link
-        to="/about-company/about"
+        to="/about-company"
         className="mt-3 inline-flex text-[11px] font-bold text-[#0B3EAF] underline underline-offset-2 dark:text-[#A7D344]"
       >
         Browse all resources →

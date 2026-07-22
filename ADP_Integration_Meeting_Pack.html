@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ADP Integration Meeting Pack — AGC University Member Portal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --blue: #0B3EAF;
+    --green: #A7D344;
+    --blue-light: #EEF3FF;
+    --green-light: #F4F9E8;
+    --gray: #f5f5f5;
+    --rule: #CCCCCC;
+    --text: #222222;
+    --muted: #555555;
+    --code-bg: #1E1E2E;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', 'Calibri', Arial, sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: #fff;
+    line-height: 1.55;
+  }
+
+  /* ── Print styles ── */
+  @media print {
+    .no-print { display: none !important; }
+    body { font-size: 11px; }
+    .cover { page-break-after: always; }
+    h1 { page-break-before: auto; }
+    section { page-break-inside: avoid; }
+    table { page-break-inside: avoid; }
+    .box { page-break-inside: avoid; }
+  }
+
+  /* ── Cover page ── */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #EEF3FF 0%, #fff 60%);
+    padding: 60px 40px;
+    text-align: center;
+    border-bottom: 6px solid var(--blue);
+  }
+  .cover-label {
+    font-size: 13px;
+    color: #888;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+  .cover-title {
+    font-size: 48px;
+    font-weight: 700;
+    color: var(--blue);
+    line-height: 1.15;
+    margin-bottom: 10px;
+  }
+  .cover-sub {
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 30px;
+  }
+  .cover-divider {
+    width: 120px;
+    height: 4px;
+    background: var(--green);
+    border-radius: 2px;
+    margin: 0 auto 30px;
+  }
+  .cover-meta {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 6px;
+  }
+  .cover-meta-small {
+    font-size: 12px;
+    color: #999;
+    font-style: italic;
+  }
+  .cover-confidential {
+    margin-top: 60px;
+    font-size: 11px;
+    color: #bbb;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ── Page wrapper ── */
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 48px 60px;
+  }
+
+  /* ── Header strip (non-cover) ── */
+  .doc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px;
+    margin-bottom: 36px;
+    font-size: 11px;
+    color: #888;
+  }
+  .doc-header .confidential { font-style: italic; }
+
+  /* ── Headings ── */
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--blue);
+    margin: 40px 0 6px;
+    padding-bottom: 6px;
+    border-bottom: 3px solid var(--blue);
+  }
+  h1:first-child { margin-top: 0; }
+  h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--blue);
+    margin: 28px 0 8px;
+  }
+  h3 {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #333;
+    margin: 20px 0 6px;
+  }
+
+  /* ── Body text ── */
+  p { margin: 8px 0; color: var(--text); }
+  .muted { color: var(--muted); font-size: 12px; }
+
+  /* ── Bullets ── */
+  ul.bullets { margin: 10px 0 10px 0; padding: 0; list-style: none; }
+  ul.bullets li {
+    padding: 3px 0 3px 22px;
+    position: relative;
+    font-size: 13px;
+    color: var(--text);
+  }
+  ul.bullets li::before {
+    content: "•";
+    position: absolute;
+    left: 4px;
+    color: var(--blue);
+    font-weight: 700;
+  }
+  ul.bullets li.sub {
+    padding-left: 44px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  ul.bullets li.sub::before { content: "–"; color: #aaa; left: 28px; }
+
+  /* ── Numbered steps ── */
+  ol.steps { margin: 10px 0; padding: 0; list-style: none; counter-reset: step-counter; }
+  ol.steps li {
+    counter-increment: step-counter;
+    padding: 5px 0 5px 38px;
+    position: relative;
+    font-size: 13px;
+  }
+  ol.steps li::before {
+    content: counter(step-counter);
+    position: absolute;
+    left: 0;
+    top: 4px;
+    background: var(--blue);
+    color: #fff;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 12px;
+  }
+  table th {
+    background: var(--blue);
+    color: #fff;
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  table td {
+    padding: 7px 10px;
+    border: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  table tr:nth-child(even) td { background: var(--gray); }
+  table tr:nth-child(odd) td { background: #fff; }
+  .field-name {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: var(--blue);
+    white-space: nowrap;
+  }
+  .data-type {
+    font-size: 11px;
+    color: #888;
+    white-space: nowrap;
+  }
+  td.label-col {
+    font-weight: 600;
+    background: var(--gray) !important;
+    color: #444;
+    width: 28%;
+  }
+
+  /* ── Code blocks ── */
+  .code-block {
+    background: var(--code-bg);
+    color: var(--green);
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 8px 0;
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+
+  /* ── Info note ── */
+  .note {
+    background: var(--blue-light);
+    border-left: 4px solid var(--blue);
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+    font-size: 12px;
+    color: #444;
+    margin: 12px 0;
+    font-style: italic;
+  }
+  .note::before { content: "ℹ  "; color: var(--blue); font-style: normal; }
+
+  /* ── Warning box ── */
+  .warn {
+    background: #FFF8E7;
+    border-left: 4px solid #E8A020;
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+    font-size: 12px;
+    color: #555;
+    margin: 12px 0;
+  }
+  .warn::before { content: "⚠  "; color: #E8A020; }
+
+  /* ── Boxes ── */
+  .box {
+    border: 1px solid var(--rule);
+    border-left: 5px solid var(--blue);
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+    background: var(--gray);
+  }
+  .box.green { border-left-color: var(--green); }
+  .box-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 10px;
+  }
+
+  /* ── Timeline pills ── */
+  .timeline-row { display: flex; gap: 0; margin: 4px 0; align-items: flex-start; }
+  .timeline-day {
+    min-width: 52px;
+    background: var(--blue);
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px 0 0 4px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .timeline-milestone {
+    background: var(--blue-light);
+    color: var(--blue);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 4px 10px;
+    min-width: 160px;
+    flex-shrink: 0;
+  }
+  .timeline-detail {
+    background: #fff;
+    border: 1px solid var(--rule);
+    border-left: none;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 0 4px 4px 0;
+    flex: 1;
+    color: var(--muted);
+  }
+
+  /* ── Print button ── */
+  .print-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    z-index: 1000;
+  }
+  .print-btn:hover { background: #0a35a0; }
+
+  .spacer { height: 24px; }
+  .spacer-sm { height: 12px; }
+</style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">🖨 Print / Save as PDF</button>
+
+<!-- ═══════════════════════════════════════════════════════ COVER PAGE ═══ -->
+<div class="cover">
+  <div class="cover-label">AGC University Member Portal</div>
+  <div class="cover-title">ADP API Integration</div>
+  <div class="cover-sub">Meeting Pack</div>
+  <div class="cover-divider"></div>
+  <div class="cover-meta">Prepared for ADP Implementation Meeting · July 2026</div>
+  <div class="cover-meta-small">Project Kickoff: Day 4 · CSR Submission: Day 6</div>
+  <div class="cover-confidential">Confidential — Internal Use Only</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ CONTENT ═══════ -->
+<div class="page">
+
+  <div class="doc-header">
+    <span>AGC University Member Portal — ADP Integration Meeting Pack</span>
+    <span class="confidential">Confidential · July 2026</span>
+  </div>
+
+  <!-- ─── Section 1 ─── -->
+  <h1>1. Purpose &amp; Integration Overview</h1>
+
+  <p>The AGC University Member Portal currently manages employee data independently in its own database. This integration will connect the portal directly to ADP Workforce Now as the authoritative source of truth for:</p>
+
+  <ul class="bullets">
+    <li>Employee general information (names, titles, departments, work locations)</li>
+    <li>Reporting hierarchy (manager-to-report relationships for dynamic org charts)</li>
+    <li>Vacation &amp; time-off balances and approved requests</li>
+  </ul>
+
+  <p>Rather than duplicating and manually maintaining employee records, the portal will query ADP's API, ensuring data is always current and eliminating double-entry errors.</p>
+
+  <div class="spacer-sm"></div>
+
+  <table>
+    <tbody>
+      <tr><td class="label-col">Integration type</td><td>ADP Workforce Now — Practitioner-Initiated API</td></tr>
+      <tr><td class="label-col">Auth method</td><td>OAuth 2.0 with certificate-based client authentication (mTLS)</td></tr>
+      <tr><td class="label-col">Facilities covered</td><td>AGC · AQM · ASP · SCF</td></tr>
+      <tr><td class="label-col">Data direction</td><td>Read-only pull from ADP into the portal</td></tr>
+      <tr><td class="label-col">Refresh cadence</td><td>On-demand (live) + optional daily background sync</td></tr>
+      <tr><td class="label-col">Project kickoff</td><td>Day 4 — data requirements + usage plan review</td></tr>
+      <tr><td class="label-col">CSR submission</td><td>Day 6 — IT generates private key + CSR; sends only the CSR file to ADP</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─── Section 2 ─── -->
+  <h1>2. Data Requirements</h1>
+
+  <h2>2.1 Employee General Information</h2>
+  <p>The following fields are required from each active worker record. This data populates the People Directory, employee profile cards, and the org chart nodes.</p>
+
+  <div class="spacer-sm"></div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:32%">ADP Field Name</th>
+        <th style="width:12%">Data Type</th>
+        <th>Portal Usage</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="field-name">associateOID</span></td>
+        <td class="data-type">String</td>
+        <td>Unique stable ID — primary key linking portal users to ADP records</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workerID</span></td>
+        <td class="data-type">String</td>
+        <td>Alternate employee ID displayed on profile cards</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">person.legalName.givenName</span></td>
+        <td class="data-type">String</td>
+        <td>First name — displayed on profile, search results, and org chart nodes</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">person.legalName.familyName</span></td>
+        <td class="data-type">String</td>
+        <td>Last name — combined with givenName for full display name</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">person.preferredName</span></td>
+        <td class="data-type">String</td>
+        <td>Preferred display name — shown instead of legal name when set</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">person.communicationEmails</span></td>
+        <td class="data-type">Array</td>
+        <td>Work email address — used for messaging and profile lookup</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">person.communicationPhones</span></td>
+        <td class="data-type">Array</td>
+        <td>Work phone number — displayed on profile cards</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workAssignments[0].jobTitle</span></td>
+        <td class="data-type">String</td>
+        <td>Job title — shown on org chart nodes, profile cards, and search results</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workAssignments[0].departmentCode.longName</span></td>
+        <td class="data-type">String</td>
+        <td>Department name — maps to portal departments: IT · Finance · Sales · Purchase · Safety · Production · FSQA</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workAssignments[0].workLocation.nameCode.longName</span></td>
+        <td class="data-type">String</td>
+        <td>Facility / work site — maps to AGC · AQM · ASP · SCF</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workAssignments[0].hireDate</span></td>
+        <td class="data-type">Date</td>
+        <td>Hire date — shown on profile, used for tenure calculations</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workAssignments[0].workerStatus.statusCode.codeValue</span></td>
+        <td class="data-type">String</td>
+        <td>Employment status (Active / Terminated / Leave) — used to filter active-only views</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workAssignments[0].workerTypeCode.codeValue</span></td>
+        <td class="data-type">String</td>
+        <td>Employment type (Full-time / Part-time / Contract) — displayed on profile</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2.2 Reporting Hierarchy</h2>
+  <p>The portal's org chart currently requires manual code maintenance per facility. This integration will replace that with live ADP hierarchy data, so org structure changes in ADP are reflected in the portal automatically.</p>
+
+  <div class="spacer-sm"></div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40%">ADP Field Name</th>
+        <th style="width:12%">Data Type</th>
+        <th>Portal Usage</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="field-name">workAssignments[0].reportsTo[0].associateOID</span></td>
+        <td class="data-type">String</td>
+        <td>Manager's ADP ID — used to build the parent-child hierarchy tree for org charts</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workAssignments[0].reportsTo[0].workerID</span></td>
+        <td class="data-type">String</td>
+        <td>Manager's employee ID — alternate link key</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workAssignments[0].positionID</span></td>
+        <td class="data-type">String</td>
+        <td>Position code — identifies the node in the hierarchy even when the seat is vacant</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">workAssignments[0].reportsTo[0].positionID</span></td>
+        <td class="data-type">String</td>
+        <td>Manager's position code — allows hierarchy by position, not just by person</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note">The portal currently hosts static org chart components (AgcFacilityOrgChart.jsx, ScfFacilityOrgChart.jsx, etc.). The integration will allow these to auto-populate from ADP hierarchy data, with the option to keep manual overrides for specific nodes when needed.</div>
+
+  <h2>2.3 Vacation &amp; Time-Off Data</h2>
+  <p>The portal dashboard will display each employee's vacation balance and upcoming approved time off. Managers will also see a summary of their direct reports' upcoming absences.</p>
+
+  <div class="spacer-sm"></div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:36%">ADP Field Name</th>
+        <th style="width:12%">Data Type</th>
+        <th>Portal Usage</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="field-name">timeOffRequests[].timeOffType</span></td>
+        <td class="data-type">String</td>
+        <td>Type of leave (Vacation / Sick / Personal / Bereavement)</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">timeOffRequests[].startDate</span></td>
+        <td class="data-type">Date</td>
+        <td>Start date — shown on the employee's dashboard upcoming-absence widget</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">timeOffRequests[].endDate</span></td>
+        <td class="data-type">Date</td>
+        <td>End date — used to calculate duration of absence</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">timeOffRequests[].durationInHours</span></td>
+        <td class="data-type">Number</td>
+        <td>Hours requested — used alongside balance to show remaining allowance</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">timeOffRequests[].statusCode.codeValue</span></td>
+        <td class="data-type">String</td>
+        <td>Request status (Approved / Pending / Denied) — only Approved shown by default</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">timeOffBalances[].timeOffType</span></td>
+        <td class="data-type">String</td>
+        <td>Balance category (Vacation / Sick etc.) — used to label the balance widget</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">timeOffBalances[].balance</span></td>
+        <td class="data-type">Number</td>
+        <td>Current balance in hours — displayed prominently on the employee dashboard card</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">timeOffBalances[].balanceAsOfDate</span></td>
+        <td class="data-type">Date</td>
+        <td>Balance effective date — shown so the employee knows how current the figure is</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─── Section 3 ─── -->
+  <h1>3. How the Data Will Be Used in the Portal</h1>
+
+  <h2>3.1 People Directory &amp; Profile Cards</h2>
+  <p>The employee search and profile pages will switch from the portal's own user table to live ADP data. When a user searches for a colleague, the portal queries ADP's worker list (filtered to active employees) and displays name, title, department, facility, and photo.</p>
+
+  <h2>3.2 Org Chart Auto-Population</h2>
+  <p>Instead of maintaining static JSX files per facility, the org chart will be driven by the <span class="field-name">reportsTo</span> hierarchy from ADP. Each node renders using the same <span class="field-name">OrgPersonNode</span> component already in the codebase, populated at runtime rather than hardcoded. Manual overrides per node are still supported for cases where ADP data doesn't match the intended display (e.g. consultants, dual-reporting).</p>
+
+  <h2>3.3 Vacation Dashboard Widget</h2>
+  <p>A new widget on the employee's home dashboard will show:</p>
+  <ul class="bullets">
+    <li>Remaining vacation balance (in hours or days — configurable)</li>
+    <li>Next approved time-off block (start date, end date, duration)</li>
+    <li>Any pending requests awaiting approval, clearly labelled as Pending</li>
+  </ul>
+
+  <h2>3.4 Manager View — Team Absence Overview</h2>
+  <p>Managers will see a summary card listing direct reports who are on approved leave this week or this month, helping with scheduling and coverage planning. This uses the <span class="field-name">reportsTo</span> field to identify direct reports, combined with the time-off request data.</p>
+
+  <h2>3.5 Data Sync Strategy</h2>
+  <div class="box">
+    <div class="box-title">Two-layer approach</div>
+    <ul class="bullets">
+      <li><strong>Live API call</strong> — used for searches, profile views, and org chart loads; always fresh</li>
+      <li class="sub">Triggered on user navigation; cached in memory for the session duration</li>
+      <li><strong>Daily background sync</strong> — runs nightly via a scheduled job on the portal backend</li>
+      <li class="sub">Caches ADP data to a local sync table for fast dashboard loads and offline fallback</li>
+      <li class="sub">Sends an internal notification if any employee's title, department, or manager changed</li>
+    </ul>
+  </div>
+
+  <!-- ─── Section 4 ─── -->
+  <h1>4. Technical: Certificate-Based OAuth 2.0 Flow</h1>
+
+  <p>ADP's API uses OAuth 2.0 with mutual TLS (mTLS). The portal backend authenticates by presenting a client certificate signed by ADP's Certificate Authority. The private key never leaves the server.</p>
+
+  <div class="spacer-sm"></div>
+
+  <div class="box">
+    <div class="box-title">Authentication sequence</div>
+    <ol class="steps">
+      <li>IT generates a 2048-bit RSA private key — stored securely on the server, never committed to the repository</li>
+      <li>IT generates a Certificate Signing Request (CSR) using the private key</li>
+      <li>Only the CSR (.csr file) is sent to ADP — the private key stays internal</li>
+      <li>ADP signs the CSR and returns a certificate (.crt / .pem)</li>
+      <li>The portal backend loads both the private key and the ADP-issued certificate at runtime from environment variables or a secrets vault</li>
+      <li>For each API call: the backend uses the certificate to obtain a short-lived OAuth 2.0 access token from ADP's token endpoint</li>
+      <li>The access token is used to authenticate API requests; it expires and is renewed automatically</li>
+    </ol>
+  </div>
+
+  <!-- ─── Section 5 ─── -->
+  <h1>5. Day 6 — CSR Generation: Step-by-Step (IT)</h1>
+
+  <p>On Day 6, IT generates the private key and CSR. These commands run on the server or a secure workstation. <strong>The private key must never be shared, emailed, or committed to source control.</strong></p>
+
+  <div class="spacer"></div>
+
+  <h3>Step 1 — Generate the private key</h3>
+  <p>Run the following command to create a 2048-bit RSA private key:</p>
+  <div class="code-block">openssl genrsa -out agc-portal-adp.key 2048</div>
+  <div class="warn">Keep <code>agc-portal-adp.key</code> on a secure machine or in a secrets vault (e.g. AWS Secrets Manager, Azure Key Vault, Render environment variables). Do NOT share it, email it, or push it to git.</div>
+
+  <div class="spacer-sm"></div>
+  <h3>Step 2 — Generate the CSR</h3>
+  <p>Use the private key to create the Certificate Signing Request. You will be prompted to fill in the Distinguished Name fields:</p>
+  <div class="code-block">openssl req -new -key agc-portal-adp.key -out agc-portal-adp.csr</div>
+
+  <p style="margin-top:10px;">When prompted, enter:</p>
+  <table style="margin-top:8px;">
+    <thead>
+      <tr><th style="width:35%">Prompt Field</th><th>Value to Enter</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="field-name">Country Name (C)</span></td><td>CA</td></tr>
+      <tr><td><span class="field-name">State or Province (ST)</span></td><td>Your province (e.g. Ontario)</td></tr>
+      <tr><td><span class="field-name">Locality (L)</span></td><td>Your city (e.g. Mississauga)</td></tr>
+      <tr><td><span class="field-name">Organisation Name (O)</span></td><td>AGC University Inc. (or your legal entity name)</td></tr>
+      <tr><td><span class="field-name">Organisational Unit (OU)</span></td><td>IT / Portal Development</td></tr>
+      <tr><td><span class="field-name">Common Name (CN)</span></td><td>portal.agcuniversity.com (or your registered domain)</td></tr>
+      <tr><td><span class="field-name">Email Address</span></td><td>IT contact email address</td></tr>
+      <tr><td><span class="field-name">Challenge password</span></td><td>(leave blank — press Enter)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="spacer-sm"></div>
+  <h3>Step 3 — Verify the CSR (optional but recommended)</h3>
+  <div class="code-block">openssl req -noout -text -in agc-portal-adp.csr</div>
+  <p>Confirm that the Subject fields match what you entered, and that the Public Key algorithm shows RSA (2048 bit).</p>
+
+  <div class="spacer-sm"></div>
+  <h3>Step 4 — Send the CSR to ADP</h3>
+  <ul class="bullets">
+    <li>Attach <code>agc-portal-adp.csr</code> to the ADP submission portal or email it to your ADP Implementation contact</li>
+    <li><strong>Do NOT attach the .key file</strong> — only the .csr file goes to ADP</li>
+    <li>ADP will process the CSR and return a signed certificate (.crt or .pem file), typically within a few business days</li>
+  </ul>
+
+  <div class="spacer-sm"></div>
+  <h3>Step 5 — Store the returned certificate securely</h3>
+  <p>Once ADP returns the signed certificate:</p>
+  <ul class="bullets">
+    <li>Store both <code>agc-portal-adp.key</code> and the returned <code>agc-portal-adp.crt</code> in a secrets vault or as encrypted environment variables on Render</li>
+    <li>On the portal backend, load them at runtime via:</li>
+  </ul>
+  <div class="code-block">ADP_CLIENT_KEY=&lt;contents of .key file&gt;
+ADP_CLIENT_CERT=&lt;contents of .crt file&gt;</div>
+  <ul class="bullets">
+    <li>Rotate the certificate before it expires (ADP will specify the validity period — typically 1–2 years)</li>
+    <li>Add <code>*.key</code> and <code>*.crt</code> to <code>.gitignore</code> as a precaution</li>
+  </ul>
+
+  <!-- ─── Section 6 ─── -->
+  <h1>6. Project Timeline</h1>
+
+  <div style="display:flex;flex-direction:column;gap:4px;margin:12px 0;">
+    <div class="timeline-row">
+      <div class="timeline-day">Day 4</div>
+      <div class="timeline-milestone">Project Kickoff</div>
+      <div class="timeline-detail">Explain data requirements to ADP. Walk through this document. ADP reviews implementation process and confirms API access scope.</div>
+    </div>
+    <div class="timeline-row">
+      <div class="timeline-day">Day 6</div>
+      <div class="timeline-milestone">CSR Submission</div>
+      <div class="timeline-detail">IT generates private key + CSR. Sends only the .csr to ADP. ADP begins certificate signing.</div>
+    </div>
+    <div class="timeline-row">
+      <div class="timeline-day">TBD</div>
+      <div class="timeline-milestone">Cert returned</div>
+      <div class="timeline-detail">ADP delivers the signed certificate. IT loads it into secrets vault / Render environment variables.</div>
+    </div>
+    <div class="timeline-row">
+      <div class="timeline-day">TBD</div>
+      <div class="timeline-milestone">Token endpoint test</div>
+      <div class="timeline-detail">Dev team verifies OAuth 2.0 token exchange using the certificate. Confirm access to sandbox/dev environment.</div>
+    </div>
+    <div class="timeline-row">
+      <div class="timeline-day">TBD</div>
+      <div class="timeline-milestone">Data mapping</div>
+      <div class="timeline-detail">Map ADP response fields to portal data model. Confirm department codes and facility names align.</div>
+    </div>
+    <div class="timeline-row">
+      <div class="timeline-day">TBD</div>
+      <div class="timeline-milestone">Employee info</div>
+      <div class="timeline-detail">Replace static user lookups in People Directory with live ADP worker calls.</div>
+    </div>
+    <div class="timeline-row">
+      <div class="timeline-day">TBD</div>
+      <div class="timeline-milestone">Hierarchy integration</div>
+      <div class="timeline-detail">Replace static org chart JSX with live reportsTo hierarchy from ADP.</div>
+    </div>
+    <div class="timeline-row">
+      <div class="timeline-day">TBD</div>
+      <div class="timeline-milestone">Vacation widget</div>
+      <div class="timeline-detail">Build and wire the vacation balance + upcoming-absence dashboard widget.</div>
+    </div>
+    <div class="timeline-row">
+      <div class="timeline-day">TBD</div>
+      <div class="timeline-milestone">UAT &amp; sign-off</div>
+      <div class="timeline-detail">Test with real employee data. Confirm accuracy. Portal goes live with ADP integration.</div>
+    </div>
+  </div>
+
+  <!-- ─── Section 7 ─── -->
+  <h1>7. Security Checklist</h1>
+
+  <div class="box green">
+    <div class="box-title">Before Day 6 — CSR submission</div>
+    <ul class="bullets">
+      <li>Confirm the key-generation machine is secure and not shared</li>
+      <li>Ensure the secrets vault (or Render environment) is ready to receive the key + cert</li>
+      <li>Add <code>*.key</code> and <code>*.crt</code> to <code>.gitignore</code> in the portal repository</li>
+    </ul>
+  </div>
+
+  <div class="box green">
+    <div class="box-title">After receiving the ADP certificate</div>
+    <ul class="bullets">
+      <li>Load <code>ADP_CLIENT_KEY</code> and <code>ADP_CLIENT_CERT</code> as environment variables on Render — never in code</li>
+      <li>Restrict the ADP API scope to read-only (worker data, time-off) — do not request write permissions</li>
+      <li>Log all ADP API calls on the backend without logging token values</li>
+      <li>Set up certificate expiry alerts at 60-day and 30-day marks</li>
+      <li>Do not cache access tokens beyond their expiry time</li>
+    </ul>
+  </div>
+
+  <!-- ─── Section 8 ─── -->
+  <h1>8. Questions for ADP (Day 4)</h1>
+
+  <ul class="bullets">
+    <li>Which ADP API version should we target — v1 or v2 workers API?</li>
+    <li>What is the sandbox / development environment URL for testing before production?</li>
+    <li>Which OAuth 2.0 scopes are available for read-only access to worker records, reporting hierarchy, and time-off balances?</li>
+    <li>What is the rate limit for the workers API (requests per minute / per hour)?</li>
+    <li>How are departments and cost centres coded in ADP — will they match our department names (IT, Finance, Sales, Purchase, Safety, Production, FSQA)?</li>
+    <li>Is the reporting hierarchy available as a dedicated endpoint, or must it be inferred from the <span class="field-name">reportsTo</span> field on each worker record?</li>
+    <li>How long does certificate signing typically take after CSR submission?</li>
+    <li>What is the certificate validity period and what is the renewal process?</li>
+    <li>Is there a webhook or event notification available for employee status changes (new hire, termination, department change, manager change)?</li>
+  </ul>
+
+  <div class="spacer"></div>
+  <div style="text-align:center;color:#ccc;font-size:11px;border-top:1px solid #eee;padding-top:20px;margin-top:40px;">
+    AGC University Member Portal · ADP Integration Meeting Pack · Confidential · July 2026
+  </div>
+
+</div><!-- /page -->
+</body>
+</html>

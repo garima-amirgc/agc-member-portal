@@ -87,6 +87,9 @@ async function start() {
   const customerInquiriesRoutes = require("./routes/customer-inquiries.routes");
   const hrNewsfeedRoutes = require("./routes/hrNewsfeed.routes");
   const adpRoutes = require("./routes/adp.routes");
+  const socialRoutes = require("./routes/social.routes");
+  const adpSync = require("./services/adpSync.service");
+  adpSync.startSync(); // start background ADP → DB sync
   const { authRequired } = require("./middleware/auth");
   const leaveSvc = require("./services/leaveRequests.service");
   const managerTeamSvc = require("./services/managerTeam.service");
@@ -190,6 +193,7 @@ async function start() {
     ["/customer-inquiries", customerInquiriesRoutes],
     ["/hr-newsfeed", hrNewsfeedRoutes],
     ["/adp", adpRoutes],
+    ["/social", socialRoutes],
   ];
 
   function mountRoutes(router) {

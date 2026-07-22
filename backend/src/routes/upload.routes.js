@@ -179,7 +179,7 @@ router.post(
 router.post(
   "/",
   authRequired,
-  requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN),
+  requireAdminGrantAny(ADMIN_GRANT_KEYS.LEARNING_ADMIN, ADMIN_GRANT_KEYS.SOCIAL_COMMITTEE),
   upload.single("video"),
   async (req, res, next) => {
   if (!req.file) {
@@ -340,7 +340,7 @@ router.post(
 router.post(
   "/upcoming-image",
   authRequired,
-  requireAdminGrantAny(...SPOTLIGHT_ADMIN_GRANT_KEYS, ADMIN_GRANT_KEYS.UPCOMING_EVENTS),
+  requireAdminGrantAny(...SPOTLIGHT_ADMIN_GRANT_KEYS, ADMIN_GRANT_KEYS.UPCOMING_EVENTS, ADMIN_GRANT_KEYS.SOCIAL_COMMITTEE, ADMIN_GRANT_KEYS.HR_NEWSFEED),
   uploadImage.single("image"),
   async (req, res) => {
     if (!req.file) {

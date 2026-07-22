@@ -1,0 +1,438 @@
+────────────────────────────────────────────────────────────────
+AGC UNIVERSITY MEMBER PORTAL — FIGMA DESIGN PROMPT
+Three new screens: Employee Profile · Team Hierarchy · Vacation Tracker
+────────────────────────────────────────────────────────────────
+
+
+══════════════════════════════════════════════════════════════════
+SECTION 1 — DESIGN SYSTEM (apply to every screen)
+══════════════════════════════════════════════════════════════════
+
+TYPEFACE
+  Primary font: Inter (fallback: Roboto, system-ui, Segoe UI, sans-serif)
+  Weights used: 400 (body), 500 (label), 600 (subheading), 700 (heading)
+
+COLOUR PALETTE — LIGHT MODE
+  Brand Blue         #0B3EAF   — primary actions, headings, icons, active states
+  Brand Blue Hover   #082d82   — pressed / hover state of blue elements
+  Brand Blue Soft    #E8EEF8   — subtle blue backgrounds, active nav pill
+  Brand Surface      #EEF2FB   — card backgrounds, nav hover fill
+  Brand Surface Dark #E2E8F8   — slightly deeper surface tint
+  Brand Green        #A7D344   — accent, success, secondary buttons, badges
+  Brand Green Hover  #8FB536   — pressed green
+  Brand Green Soft   #F4F9E8   — green chip backgrounds, info badges
+  Brand Red          #E02B20   — errors, destructive actions, alerts
+  Brand Red Hover    #C4241A   — pressed red
+  Brand Muted        #5C5F66   — secondary text, sub-labels
+  Border             #D1D7DC   — all card and input borders
+  Surface Gray       #F7F9FA   — page background, table alternating rows
+  White              #FFFFFF   — card fills, input fills
+  Black              #000000   — primary text in light mode
+
+COLOUR PALETTE — DARK MODE (provide dark variants on all screens)
+  Page background    #0F0F0F
+  Card background    #141414 / #1A1A1A
+  Border             rgba(255,255,255,0.10)
+  Primary text       #FFFFFF
+  Secondary text     rgba(255,255,255,0.55)
+  Active nav fill    rgba(255,255,255,0.10)
+  Blue accent        #A7D344 (green becomes primary accent in dark)
+
+BORDER RADIUS
+  portal  = 12px   — use on all cards, dropdowns, modals, inputs
+  full    = 9999px — use on pills, avatars, badges, org chart nodes
+  sm      = 6px    — small chips, tags
+
+ELEVATION / SHADOWS
+  Card shadow (rest):    0 4px 24px rgba(11,62,175,0.08), 0 2px 8px rgba(0,0,0,0.04)
+  Card shadow (raised):  0 12px 40px rgba(11,62,175,0.12), 0 4px 16px rgba(0,0,0,0.06)
+  Top bar shadow:        0 1px 3px rgba(0,0,0,0.08)
+
+SPACING SCALE (use multiples of 4px)
+  xs=4, sm=8, md=12, base=16, lg=24, xl=32, 2xl=48, 3xl=64
+
+ICONS
+  Use outline-style icons (similar to Heroicons or Phosphor outline set)
+  Icon size: 16px inside nav, 20px inside cards, 24px in empty states
+  Icon colour: brand-blue in light mode, brand-green in dark mode
+
+
+══════════════════════════════════════════════════════════════════
+SECTION 2 — GLOBAL SHELL (appears on all screens)
+══════════════════════════════════════════════════════════════════
+
+SIDEBAR — fixed left, 224px wide
+  Background: #0B3EAF (brand-blue)
+  Top area (64px tall):
+    Company logo/wordmark centred, white
+    Below logo: small facility tag pill (e.g. "AGC") — white text, #082d82 fill, rounded-full
+  Nav section label: 10px, uppercase, letter-spacing 0.08em, white/55, left-padded 12px
+  Nav item (48px tall, 12px horizontal padding):
+    Icon 16px + label 12px semibold, white/90
+    Hover: bg rgba(0,0,0,0.10), border-radius 12px
+    Active: bg rgba(0,0,0,0.15), left red bar (4px wide, rounded-full, #E02B20, vertically centred)
+    Badge: small red pill (#E02B20) right-aligned, 10px font, white text
+  Bottom of sidebar:
+    Help icon link
+    Powered-by / version text, white/30, 10px
+
+NAV ITEMS (in order):
+  Dashboard, Company News, Organisation, People, IT Support,
+  Resources, Reports, Administration (collapsible group)
+
+TOP BAR — sticky, full width of main area, 56px tall
+  Background: white/95, backdrop-blur
+  Border-bottom: 1px solid #D1D7DC
+  Shadow: 0 1px 3px rgba(0,0,0,0.08)
+  Left section (flex-1):
+    Search input — width 75% of main content area
+    Input: height 36px, border-radius 12px, border #D1D7DC, bg #F7F9FA
+    Left icon: search icon, #5C5F66, 16px
+    Placeholder: "Search…" in #5C5F66
+    Focus state: border #0B3EAF, ring 2px #0B3EAF/20, bg white
+  Right section (flex-shrink-0, gap 12px):
+    User name + email (right-aligned text, 14px/12px, stacked)
+    Avatar circle: 40px, bg #0B3EAF, white initials 14px bold
+      Ring: 2px solid #A7D344, ring-offset 2px white
+      If photo: object-cover
+    Hamburger menu button: 40px square, border #D1D7DC, border-radius 12px
+      Three lines (5px wide, 4px wide, 3px wide), all #0B3EAF, 3px tall, gap 3px
+
+PAGE CONTENT AREA
+  Padding: 24px horizontal, 24px vertical (32px on large screens)
+  Background: #F7F9FA (light) / #0F0F0F (dark)
+  Max content width: ~1200px centred
+
+
+══════════════════════════════════════════════════════════════════
+SCREEN 1 — EMPLOYEE PROFILE PAGE
+Route: /profile  or  /people/{id}
+══════════════════════════════════════════════════════════════════
+
+PURPOSE
+  Shows all data pulled from ADP for a given employee.
+  Accessible by the employee themselves (own profile) and by managers.
+
+LAYOUT
+  Two-column layout on desktop: left column 35%, right column 65%
+  Single column on mobile (stack vertically)
+
+── LEFT COLUMN ──────────────────────────────────────────────────
+
+HERO CARD (border-radius 12px, white bg, shadow card)
+  Top: full-width photo strip, 160px tall, gradient bg #0B3EAF→#082d82
+  Avatar: 88px circle, centred, offset -44px from bottom of strip
+    Border: 4px solid white, shadow raised
+    Source: ADP profile photo (initials fallback, bg #0B3EAF, white text 22px)
+  Below avatar (centred):
+    Full name: 18px bold, #000
+    Job title: 13px, #5C5F66, margin-top 2px
+    Facility tag: small pill (brand-blue bg, white 10px text, rounded-full, px-10 py-4)
+      e.g. "AGC" or "SCF"
+    Employment type chip: "Full-time" / "Part-time", green-soft bg, green text, rounded-full
+  Divider
+  Contact section (label + value rows, 16px padding):
+    Email icon + email address (clickable mailto link, brand-blue)
+    Phone icon + phone number
+    Department icon + department name (e.g. "Finance")
+    Building icon + facility name (e.g. "AGC — Amber Glen Corporation")
+    Calendar icon + hire date (formatted "Jan 15, 2019 · 6 yrs tenure")
+    Status dot + employment status ("Active" in green, "On Leave" in amber, "Terminated" in red)
+
+REPORTING-TO CARD (below hero card, same width, border-radius 12px)
+  Title: "Reports to" (12px, uppercase, #5C5F66)
+  Manager node: avatar 36px + name 14px semibold + title 12px #5C5F66
+  Arrow icon pointing down
+  Sub-label "via ADP hierarchy" (10px, #5C5F66/60, italic)
+
+── RIGHT COLUMN ──────────────────────────────────────────────────
+
+VACATION BALANCE CARD (border-radius 12px, white bg, shadow card)
+  Header row: "Time Off" label (16px semibold) + "via ADP" chip (10px, green-soft, green text)
+  Balance grid: 3 equal columns
+    Each column:
+      Large number: 28px bold, brand-blue (e.g. "14.5")
+      Unit: "days" or "hours", 11px, #5C5F66, below number
+      Type label: 12px semibold, below unit (e.g. "Vacation", "Sick", "Personal")
+  Divider
+  Next approved absence row:
+    Calendar icon + "Next: Mar 3 – Mar 7 (4 days)" — 13px
+    Status pill "Approved" — green bg, white text
+  Pending row (if any):
+    Clock icon + "2 requests pending approval" — 13px, #5C5F66, italic
+
+DIRECT REPORTS CARD (below vacation card, same width)
+  Title: "Direct Reports" (16px semibold)
+  Count badge: "(4)" — brand-blue, small
+  List: each report shows
+    Avatar 32px + name 13px bold + title 11px #5C5F66
+    Row hover: bg #EEF2FB, border-radius 8px
+    Clicking navigates to that person's profile
+  If no direct reports: empty state icon + "No direct reports" text
+
+ADP SYNC BADGE (bottom of right column, full width)
+  Light gray bar, 12px text, #5C5F66
+  "Employee data synced from ADP · Last updated: Today at 9:14 AM"
+  Refresh icon on right
+
+── MOBILE LAYOUT ─────────────────────────────────────────────────
+  Stack: Hero card → Vacation Balance → Reporting To → Direct Reports
+  Vacation balance: show as vertical list instead of 3-column grid
+
+
+══════════════════════════════════════════════════════════════════
+SCREEN 2 — TEAM HIERARCHY PAGE
+Route: /organisation  (Tab: "Team Hierarchy" or per-facility selector)
+══════════════════════════════════════════════════════════════════
+
+PURPOSE
+  Shows the full org chart tree driven by ADP reportsTo data.
+  Users can switch between facilities (AGC / AQM / ASP / SCF).
+  Managers can expand/collapse branches.
+
+LAYOUT
+  Full-width content area with horizontal scroll enabled
+  Top controls bar (sticky, below top bar)
+  Chart canvas below controls
+
+FACILITY SELECTOR BAR (sticky, 48px, white bg, border-bottom #D1D7DC)
+  Left: "Organisation" page title, 16px bold, brand-blue
+  Centre: 4-segment pill toggle
+    Segments: "AGC" · "AQM" · "ASP" · "SCF"
+    Active: #0B3EAF bg, white text, border-radius full
+    Inactive: white/transparent, #5C5F66 text
+    Pill container: border 1px #D1D7DC, border-radius full
+  Right: "View all" text link (brand-blue, 13px) + collapse/expand all toggle icon button
+
+ORG CHART CANVAS (white card, border-radius 12px, shadow card, overflow-x auto)
+  Minimum width: 900px (allows scroll on small screens)
+
+  ORG CHART NODE COMPONENT (reuse existing pattern from codebase):
+    Shape: horizontal pill, rounded-full (9999px)
+    Background: #0C3EB0 (slightly darker than brand-blue)
+    Padding: 4px 12px 4px 4px
+    Left: avatar circle 32px
+      Photo from ADP (initials fallback)
+      bg white/15, ring 1px inset white/25
+      initials: 10px bold white
+    Right of avatar:
+      Name: 10px bold white, line-height tight
+      Title: 8.5px white/90, line-height snug
+    Hover state: bg #0f4fd6, shadow raised, cursor pointer
+    Clicking opens the employee Profile page (Screen 1)
+
+  TBD / VACANT NODE:
+    Same pill shape but bg rgba(11,62,175,0.35)
+    Initials replaced by "TBD" text
+    Name: "Open Position" in white/70 italic
+    Title: role name
+
+  CONNECTOR LINES:
+    Colour: #94A3B8 (slate-400)
+    Width: 1px
+    Style: solid (solid lines for solid reporting; dashed for dotted/matrix lines)
+    Vertical lines drop from bottom of parent node
+    Horizontal lines connect siblings at the same level
+
+  TREE STRUCTURE:
+    Level 0 (CEO/Top): centred, single node
+    Vertical line drops 20px
+    Horizontal bar stretches between all Level-1 children
+    Level 1 nodes below the horizontal bar, spaced evenly
+    Pattern repeats for Level 2, 3, etc.
+    Collapsed branches: show a "▶ 4 reports" chip in brand-blue-soft, clicking expands
+
+  FACILITY LEGEND (bottom-right of canvas):
+    Small legend pill: colour dot + "Solid line = direct report" and
+    "Dashed line = matrix/dotted reporting"
+
+MOBILE (below 768px):
+  Switch to indented list view (not tree canvas)
+  Each level indented 20px
+  Person rows: avatar 28px + name 13px bold + title 11px #5C5F66
+  Expand/collapse chevron on right
+
+
+══════════════════════════════════════════════════════════════════
+SCREEN 3 — VACATION TRACKER (Manager View)
+Route: /vacation  or  tab on dashboard for managers
+══════════════════════════════════════════════════════════════════
+
+PURPOSE
+  Managers see their whole team's time-off in one place.
+  Track balances, upcoming absences, and pending approval requests.
+  Data is pulled live from ADP via the portal backend.
+
+LAYOUT
+  Full-width, single column
+  Four sub-sections stacked vertically:
+  1) Summary stats bar
+  2) Upcoming absence calendar/timeline
+  3) Balance table (all team members)
+  4) Pending requests queue
+
+── SUB-SECTION 1: STATS BAR ─────────────────────────────────────
+
+White card, border-radius 12px, shadow card
+Four equal stat tiles in a row (gap 1px dividers between them):
+  ┌───────────────┬───────────────┬───────────────┬───────────────┐
+  │  Off Today    │  Off This Wk  │  Pending      │  Avg Balance  │
+  │  2 employees  │  5 employees  │  3 requests   │  12.4 days    │
+  │  avatar row   │  avatar row   │  ⏳ icon       │  📊 icon      │
+  └───────────────┴───────────────┴───────────────┴───────────────┘
+  Number: 32px bold, brand-blue
+  Label: 12px, #5C5F66
+  Avatar row: up to 4 small overlapping avatars (24px, -6px margin-left overlap)
+
+── SUB-SECTION 2: TEAM TIMELINE ─────────────────────────────────
+
+White card, border-radius 12px, shadow card
+Header row:
+  Left: "Team Calendar" label (16px semibold) + month navigation ("< June 2026 >")
+  Right: week/month toggle pill
+
+TIMELINE GRID:
+  Left column (160px): employee name + avatar
+  Right area: date columns for the selected month/week
+  Each employee row: horizontal bar spanning their approved absence dates
+    Bar colour: brand-green #A7D344, border-radius 4px
+    On hover: tooltip showing "Sarah K · Vacation · June 3–7 · 5 days"
+  Pending requests: same bar but dashed border, brand-blue colour, 60% opacity
+    Label: "Pending"
+  Today indicator: vertical red line across all rows, labelled "Today"
+  Weekends: column bg #F7F9FA (slightly greyed)
+
+FILTER ROW (between header and grid):
+  Department filter: dropdown pill ("All Departments" / IT / Finance / Sales etc.)
+  Facility filter: dropdown pill ("All Facilities" / AGC / AQM / ASP / SCF)
+  Type filter: "All" / "Vacation" / "Sick" / "Personal"
+
+── SUB-SECTION 3: BALANCE TABLE ─────────────────────────────────
+
+White card, border-radius 12px, shadow card
+Header: "Team Balances" (16px semibold) + "Synced from ADP · Today" chip
+
+TABLE:
+  Columns: Employee | Title | Dept | Vacation Left | Sick Left | YTD Used | Status
+  Header row: bg #0B3EAF, white text, 12px semibold
+  Alternate rows: white / #F7F9FA
+  Border: 1px #D1D7DC
+  Cell padding: 10px 12px
+
+  Employee cell: avatar 28px + name 13px bold + facility tag chip
+  Title cell: 12px #5C5F66
+  Balance cells: number + progress bar below
+    Bar: full width of cell, 4px tall, border-radius full
+    Fill colour: green if >10 days, amber if 5–10, red if <5
+    Bar track: #E2E8F8
+  YTD Used: number, #5C5F66
+  Status cell: pill — "Active" green / "On Leave" amber / "Terminated" red/muted
+
+  Table footer: "Showing 12 of 24 employees · Load more"
+
+── SUB-SECTION 4: PENDING REQUESTS QUEUE ────────────────────────
+
+White card, border-radius 12px, shadow card, border-left 4px solid #A7D344
+Header: "Pending Approvals" (16px semibold) + red badge count "(3)"
+
+Each request row (56px tall, border-bottom #D1D7DC):
+  Left: avatar 36px + employee name 14px bold + "Vacation · June 3 – June 7" 12px #5C5F66
+  Centre: "5 days" pill (brand-blue-soft bg, brand-blue text, border-radius full, 12px)
+  Centre: "Submitted Jun 1" text, 11px #5C5F66
+  Right: two action buttons
+    Approve: 32px button, bg brand-green, white text, "✓ Approve", border-radius 8px
+    Decline: 32px button, border 1px #E02B20, brand-red text, "✗ Decline", border-radius 8px
+  Row hover: bg #EEF2FB
+
+Empty state (no pending):
+  Centered illustration area (130px tall)
+  Checkmark icon in brand-green circle
+  "All caught up! No pending requests." — 14px, #5C5F66
+
+MOBILE:
+  Stats bar: 2×2 grid (2 columns, 2 rows)
+  Timeline: switches to list view (employee + date range per row, no grid)
+  Balance table: horizontally scrollable, card-style per employee instead of table
+
+
+══════════════════════════════════════════════════════════════════
+SECTION 3 — COMPONENT LIBRARY (create as Figma components)
+══════════════════════════════════════════════════════════════════
+
+1. AVATAR
+   Sizes: 24px / 32px / 36px / 40px / 88px
+   Variants: photo, initials (bg brand-blue, white text), TBD (bg brand-blue/35)
+   Ring variant: 2px solid brand-green, 2px offset white
+
+2. PERSON PILL (org chart node)
+   Variants: default (blue), compact, TBD/vacant
+   States: default, hover, selected
+
+3. BADGE / CHIP
+   Variants: blue (brand-blue bg white text), green (green-soft bg green text),
+             red (red/10 bg red text), gray (surface bg muted text)
+   Sizes: xs (10px), sm (12px)
+
+4. STAT TILE
+   Props: number (large bold), label (small muted), icon, sub-content (avatar row or icon)
+
+5. BALANCE PROGRESS BAR
+   Props: value, max, colour (auto based on threshold)
+
+6. PERSON ROW (list item)
+   Avatar + name (bold) + title (muted) + right slot (action / pill / chevron)
+
+7. LEAVE BAR (timeline entry)
+   Props: employee, start-date, end-date, type (vacation/sick/personal), status (approved/pending)
+
+8. REQUEST CARD (pending approval row)
+   Props: employee, date-range, duration, submitted-date
+   Actions: Approve, Decline
+
+9. EMPTY STATE
+   Props: icon, heading, subtext, optional CTA button
+
+10. ADP SYNC STRIP
+    Always-bottom strip: "Synced from ADP · [timestamp]" + refresh icon
+
+11. FACILITY TAG PILL
+    Values: AGC / AQM / ASP / SCF
+    Colours: all use brand-blue bg, white text (same colour, differentiated by label)
+
+12. SECTION CARD WRAPPER
+    White card, border-radius 12px, shadow card
+    Optional: coloured left border (4px) for highlighted sections
+
+
+══════════════════════════════════════════════════════════════════
+SECTION 4 — INTERACTION NOTES
+══════════════════════════════════════════════════════════════════
+
+- Clicking any org chart node → opens Employee Profile (Screen 1) as a slide-over panel or navigates to /people/{id}
+- Facility tabs on Hierarchy screen → animated swap of chart content (fade or slide)
+- Timeline month navigation → slide left/right animation of the date grid
+- Approve / Decline buttons → optimistic UI update (row grays out, replaced by "Approved" green pill or "Declined" red pill), with undo toast notification
+- Balance progress bars → animate fill on page load (0 → actual value, 600ms ease)
+- Search bar → dropdown appears below with grouped results (People / Tickets / Events), max-height 320px, overflow-y auto
+- Dark mode toggle → all surfaces invert per the dark-mode palette above; green (#A7D344) becomes the primary accent replacing blue in icon/active states
+
+══════════════════════════════════════════════════════════════════
+SECTION 5 — FIGMA FILE STRUCTURE SUGGESTION
+══════════════════════════════════════════════════════════════════
+
+Pages:
+  🎨 Design System        — colours, typography, spacing, shadows, components
+  📱 Screen / Profile     — Employee Profile (light + dark variants, mobile)
+  📱 Screen / Hierarchy   — Team Hierarchy (light + dark, mobile list fallback)
+  📱 Screen / Vacation    — Vacation Tracker (light + dark, mobile)
+  🔲 Shell                — Sidebar + Top Bar reusable frame
+
+Frame sizes:
+  Desktop: 1440 × 900
+  Tablet:  768 × 1024
+  Mobile:  390 × 844
+
+────────────────────────────────────────────────────────────────
+END OF FIGMA PROMPT
+AGC University Member Portal — ADP Screens
+────────────────────────────────────────────────────────────────
