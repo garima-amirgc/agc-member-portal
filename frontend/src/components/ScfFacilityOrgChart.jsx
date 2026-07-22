@@ -83,6 +83,12 @@ function HBar({ className = "" }) {
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
+const LEADERSHIP = [
+  { name: "Sherry Aziz", title: "Founder, Chief Finance Officer", photoSrc: "/sherry-aziz.png" },
+  { name: "Tony Aziz",   title: "Chief Executive Officer",        photoSrc: orgChartAssetUrl("org-chart/tony-aziz.png") },
+  { name: "Tom Heliotis",title: "President",                      photoSrc: orgChartAssetUrl("org-chart/tom-heliotis.png") },
+];
+
 const ADAM = {
   name: "Adam Aziz", title: "Director of Operations",
   photoSrc: orgChartAssetUrl("org-chart/adam-aziz.png"),
@@ -212,6 +218,18 @@ export default function ScfFacilityOrgChart() {
 
       {/* ── Mobile view ─────────────────────────────────────── */}
       <div className="block rounded-xl border border-slate-200/80 bg-slate-50/90 p-3 sm:hidden dark:border-slate-700 dark:bg-slate-900/40">
+        {/* Leadership */}
+        <div className="mb-2 rounded-lg border border-dashed border-slate-300 p-2 dark:border-slate-600">
+          <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Leadership
+          </div>
+          <div className="flex flex-col items-stretch gap-1.5">
+            {LEADERSHIP.map((p) => (
+              <OrgPersonNode key={p.name} compact name={p.name} title={p.title} photoSrc={p.photoSrc} />
+            ))}
+          </div>
+        </div>
+        <MobileIndent>
         {/* Adam */}
         <MobileNode name={ADAM.name} title={ADAM.title} photoSrc={ADAM.photoSrc} />
 
@@ -245,6 +263,7 @@ export default function ScfFacilityOrgChart() {
             </MobileIndent>
           </MobileIndent>
         </MobileIndent>
+        </MobileIndent>
 
         {/* Supply chain section */}
         <div className="mt-3 border-t border-slate-300 pt-3 dark:border-slate-600">
@@ -261,7 +280,25 @@ export default function ScfFacilityOrgChart() {
       <div className="hidden rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-4 sm:block sm:px-5 dark:border-slate-700 dark:bg-slate-900/40 overflow-x-auto">
         <div className="min-w-[900px]">
 
-          {/* Row 1: Adam Aziz */}
+          {/* Row 1: Leadership — Sherry, Tony, Tom */}
+          <div className="flex justify-center gap-x-6 sm:gap-x-10">
+            {LEADERSHIP.map((p) => (
+              <div key={p.name} className="flex flex-col items-center">
+                <OrgPersonNode name={p.name} title={p.title} photoSrc={p.photoSrc} />
+              </div>
+            ))}
+          </div>
+          <div className="my-0 flex justify-center">
+            <VBar className="mt-2 h-4" />
+          </div>
+          <div className="flex justify-center">
+            <HBar className="w-24" />
+          </div>
+          <div className="flex justify-center">
+            <VBar className="h-4" />
+          </div>
+
+          {/* Row 2: Adam Aziz */}
           <div className="flex flex-col items-center">
             <OrgPersonNode name={ADAM.name} title={ADAM.title} photoSrc={ADAM.photoSrc} />
             <VBar className="mt-2 h-4" />

@@ -174,25 +174,10 @@ export default function AgcFacilityOrgChart() {
       </div>
 
       <div className="block rounded-xl border border-slate-200/80 bg-slate-50/90 p-3 sm:hidden dark:border-slate-700 dark:bg-slate-900/40">
-        <div className="mb-2 rounded-lg border border-dashed border-slate-300 p-2 dark:border-slate-600">
-          <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Leadership (peers)
-          </div>
-          <div className="flex flex-col items-stretch gap-1.5">
-            {TOP.map((p) => (
-              <OrgPersonNode key={p.name} compact name={p.name} title={p.title} photoSrc={p.photoSrc} />
-            ))}
-          </div>
-        </div>
-
-        <div className="ml-2 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
-          <OrgPersonNode
-            compact
-            name="Sherry Aziz"
-            title="Founder, Chief Finance Officer"
-            photoSrc="/sherry-aziz.png"
-          />
-          <div className="ml-2 mt-1.5 flex flex-col items-stretch gap-1.5 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+        {/* Sherry → Finance chain */}
+        <div className="mb-4">
+          <OrgPersonNode compact name="Sherry Aziz" title="Founder, Chief Finance Officer" photoSrc="/sherry-aziz.png" />
+          <div className="ml-2 mt-1.5 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
             <OrgPersonNode
               compact
               name="David Schlosser"
@@ -216,20 +201,28 @@ export default function AgcFacilityOrgChart() {
           </div>
         </div>
 
-        <div className="ml-2 mt-3 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
-          <div className="flex flex-col items-stretch gap-2">
-            {SPINE_ROWS.map((row) => (
-              <div key={row.name}>
-                <OrgPersonNode compact name={row.name} title={row.title} photoSrc={row.photoSrc} />
-                {row.reports?.length ? (
-                  <div className="ml-2 mt-1.5 flex flex-col items-stretch gap-1.5 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
-                    {row.reports.map((r) => (
-                      <OrgPersonNode key={r.name} compact name={r.name} title={r.title} photoSrc={r.photoSrc} />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+        {/* Tony + Tom → Spine chain */}
+        <div>
+          <div className="flex flex-col items-stretch gap-1.5">
+            {TOP.map((p) => (
+              <OrgPersonNode key={p.name} compact name={p.name} title={p.title} photoSrc={p.photoSrc} />
             ))}
+          </div>
+          <div className="ml-2 mt-1.5 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+            <div className="flex flex-col items-stretch gap-2">
+              {SPINE_ROWS.map((row) => (
+                <div key={row.name}>
+                  <OrgPersonNode compact name={row.name} title={row.title} photoSrc={row.photoSrc} />
+                  {row.reports?.length ? (
+                    <div className="ml-2 mt-1.5 flex flex-col items-stretch gap-1.5 border-l-2 border-slate-300 pl-3 dark:border-slate-600">
+                      {row.reports.map((r) => (
+                        <OrgPersonNode key={r.name} compact name={r.name} title={r.title} photoSrc={r.photoSrc} />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -240,28 +233,39 @@ export default function AgcFacilityOrgChart() {
           "overflow-x-auto",
         ].join(" ")}
       >
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap justify-center gap-x-6 gap-y-4 sm:gap-x-10 lg:grid lg:grid-cols-[0.9fr_2.1fr_0.6fr] lg:justify-items-center lg:gap-x-6">
-          <div /> {/* Finance column — Sherry shown in column below */}
-          {TOP.map((p) => (
-            <div key={p.name} className="flex flex-col items-center">
-              <OrgPersonNode name={p.name} title={p.title} photoSrc={p.photoSrc} />
+        {/* Top row — Sherry in Finance column, Tony+Tom in center column */}
+        <div className="mx-auto grid w-full max-w-5xl grid-cols-1 lg:grid-cols-[0.9fr_2.1fr_0.6fr] lg:gap-x-6">
+          {/* Left — Sherry, aligned above David */}
+          <div className="flex justify-center">
+            <div className="flex flex-col items-center">
+              <OrgPersonNode
+                name="Sherry Aziz"
+                title="Founder, Chief Finance Officer"
+                photoSrc="/sherry-aziz.png"
+              />
               <VBar className="mt-2 h-4" />
             </div>
-          ))}
+          </div>
+          {/* Center — Tony + Tom */}
+          <div className="flex justify-center gap-x-6 sm:gap-x-10">
+            {TOP.map((p) => (
+              <div key={p.name} className="flex flex-col items-center">
+                <OrgPersonNode name={p.name} title={p.title} photoSrc={p.photoSrc} />
+                <VBar className="mt-2 h-4" />
+              </div>
+            ))}
+          </div>
+          {/* Right — empty */}
+          <div />
         </div>
         <div className="mx-auto mt-0 flex w-full max-w-5xl justify-center px-4">
           <HBar className="h-px w-full max-w-xl lg:max-w-5xl" />
         </div>
 
         <div className={`${colGrid} mt-6 lg:mt-4`}>
+          {/* Finance column — starts with David (Sherry is now at the top) */}
           <section className="flex min-w-0 flex-col items-center border-t border-slate-200/80 pt-6 lg:border-t-0 lg:pt-0 dark:border-slate-700/80">
             <VBar className="h-4" />
-            <OrgPersonNode
-              name="Sherry Aziz"
-              title="Founder, Chief Finance Officer"
-              photoSrc="/sherry-aziz.png"
-            />
-            <VBar className="mt-2 h-3" />
             <div className="mt-2">
               <OrgPersonNode
                 name="David Schlosser"
