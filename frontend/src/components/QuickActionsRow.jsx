@@ -19,7 +19,7 @@ const ACTIONS = [
 
 export default function QuickActionsRow() {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
+    <div className="flex items-center justify-center gap-2 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40 scrollbar-none">
       <span className="mr-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 shrink-0">
         Quick Actions
       </span>

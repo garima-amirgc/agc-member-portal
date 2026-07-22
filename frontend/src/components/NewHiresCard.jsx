@@ -21,7 +21,7 @@ function SlideCard({ entry }) {
     >
       <div className="flex h-52 overflow-hidden rounded-xl border border-slate-100 dark:border-slate-700">
         {/* Left: Image */}
-        <div className="relative w-1/4 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-800">
+        <div className="relative w-28 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-800">
           {img ? (
             <img src={img} alt={name} className="h-full w-full object-cover object-[50%_20%]" />
           ) : (
