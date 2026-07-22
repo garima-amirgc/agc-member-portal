@@ -13,6 +13,11 @@ export default {
     { pattern: /^(bg|text|border|ring|from|to|via|shadow)-udemy(-.+)?$/ },
     { pattern: /^(bg|text|border|ring|from|to|via|shadow)-brand(-.+)?$/ },
     { pattern: /^rounded-portal$/ },
+    // Brand hex values used as arbitrary Tailwind classes
+    "bg-[#0B3EAF]", "bg-[#082d82]", "bg-[#A7D344]", "bg-[#96c030]", "bg-[#E02B20]",
+    "text-[#0B3EAF]", "text-[#082d82]", "text-[#A7D344]", "text-[#0f0f0f]",
+    "hover:bg-[#082d82]", "hover:bg-[#96c030]", "hover:bg-[#A7D344]",
+    "border-[#0B3EAF]", "from-[#0B3EAF]", "to-[#082d82]",
   ],
   darkMode: "class",
   theme: {
