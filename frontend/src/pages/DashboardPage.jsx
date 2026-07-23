@@ -261,7 +261,7 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <div className="card no-title-underline rounded-2xl p-3 sm:p-4">
                 <SidebarCardHeader
-                  title="Upcoming Events"
+                  title="Events"
                   accent="blue"
                   action={
                     <Link
