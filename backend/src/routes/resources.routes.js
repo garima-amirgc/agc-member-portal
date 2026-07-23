@@ -7,7 +7,7 @@ const { resolveLocalUploadFileUrl } = require("../services/storage.service");
 const { DOC_EXT_TO_MIME } = require("../services/objectStorage.service");
 const { ROLES } = require("../config/constants");
 const { authRequired } = require("../middleware/auth");
-const { requireAdminGrant } = require("../middleware/adminGrants");
+const { requireAdminGrant, requireAdminGrantAny } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
 const { deleteLessonVideoByUrl } = require("../services/objectStorage.service");
 const { syncAssignmentFromResourceLesson } = require("../services/assignmentProgress.service");
@@ -19,7 +19,7 @@ const { clearAllTrainingMilestone, getTrainingSummary } = require("../services/t
 const { syncUserAssignmentsForFacilities } = require("../services/assignmentSync.service");
 
 const FACILITIES = new Set(["AGC", "AQM", "SCF", "ASP"]);
-const RESOURCE_CATEGORIES = new Set(["finance", "sales", "hr", "safety", "production", "it", "fsqa"]);
+const RESOURCE_CATEGORIES = new Set(["finance", "sales", "hr", "safety", "production", "it", "fsqa", "general"]);
 
 function documentDisplayAddedAt(fileUploadedAt, createdAt) {
   if (fileUploadedAt != null && String(fileUploadedAt).trim()) return fileUploadedAt;
@@ -374,7 +374,7 @@ function normalizeCategory(raw) {
   return String(raw).trim().toLowerCase();
 }
 
-router.get("/documents", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+router.get("/documents", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LEARNING_ADMIN, ADMIN_GRANT_KEYS.COMPANY_CONTENT), async (req, res) => {
   const rows = await db
     .prepare(
       `SELECT id, business_unit, category, title, file_url, created_at, file_uploaded_at
@@ -462,7 +462,7 @@ router.get("/documents/:id", authRequired, async (req, res) => {
   });
 });
 
-router.post("/documents", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+router.post("/documents", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LEARNING_ADMIN, ADMIN_GRANT_KEYS.COMPANY_CONTENT), async (req, res) => {
   const { business_unit, category, title, file_url } = req.body || {};
   const facility = String(business_unit || "").toUpperCase();
   const cat = normalizeCategory(category);
@@ -483,7 +483,7 @@ router.post("/documents", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARN
   return res.status(201).json({ id: out.lastInsertRowid });
 });
 
-router.put("/documents/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+router.put("/documents/:id", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LEARNING_ADMIN, ADMIN_GRANT_KEYS.COMPANY_CONTENT), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
 
@@ -518,7 +518,7 @@ router.put("/documents/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LE
   return res.json({ message: "Document updated" });
 });
 
-router.delete("/documents/:id", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+router.delete("/documents/:id", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LEARNING_ADMIN, ADMIN_GRANT_KEYS.COMPANY_CONTENT), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
 

@@ -9,6 +9,20 @@ import { friendlyErrorMessage } from "../services/friendlyError";
 import { uploadResourceDocumentFile } from "../services/directUpload";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 
+const AGC_RESOURCES_TAB = "agc_resources";
+
+function fileExtLabel(url) {
+  if (!url) return "FILE";
+  const p = String(url).split("?")[0].toLowerCase();
+  const m = p.match(/\.([a-z0-9]+)$/);
+  return m ? m[1].toUpperCase() : "FILE";
+}
+function ExtBadge({ url }) {
+  const ext = fileExtLabel(url);
+  const colors = { PDF: "bg-red-100 text-red-700", PPT: "bg-slate-100 text-slate-700", PPTX: "bg-slate-100 text-slate-700", DOC: "bg-blue-100 text-blue-700", DOCX: "bg-blue-100 text-blue-700", XLS: "bg-green-100 text-green-700", XLSX: "bg-green-100 text-green-700" };
+  return <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${colors[ext] || "bg-slate-100 text-slate-600"}`}>{ext}</span>;
+}
+
 const fieldLabel = ADMIN_FIELD_LABEL;
 const fieldInput = ADMIN_FIELD_INPUT;
 
@@ -42,6 +56,126 @@ export default function AdminAboutCompanyPage() {
   const [introSaving, setIntroSaving] = useState(false);
   const [success, setSuccess] = useState("");
   const fileRef = useRef(null);
+
+  // ── AGC Resources tab state ──────────────────────────────
+  const [agcDocs, setAgcDocs] = useState([]);
+  const [agcDocsLoading, setAgcDocsLoading] = useState(false);
+  const [agcFileTitle, setAgcFileTitle] = useState(""); // optional title for single-file upload
+  const [agcUploading, setAgcUploading] = useState(false);
+  const [agcUploadProgress, setAgcUploadProgress] = useState([]); // [{name, status}]
+  const [agcEditId, setAgcEditId] = useState(null);
+  const [agcEditTitle, setAgcEditTitle] = useState("");
+  const [agcEditSaving, setAgcEditSaving] = useState(false);
+  const [agcLinkForm, setAgcLinkForm] = useState({ title: "", url: "" });
+  const [agcLinkMode, setAgcLinkMode] = useState(false); // toggle between file and link
+  const [agcAddingLink, setAgcAddingLink] = useState(false);
+  const agcFileRef = useRef(null);
+  const agcEditFileRef = useRef(null); // file input in edit/replace mode
+
+  const loadAgcDocs = useCallback(() => {
+    setAgcDocsLoading(true);
+    api.get("/resources/documents")
+      .then((r) => setAgcDocs((Array.isArray(r.data) ? r.data : []).filter((d) => String(d.business_unit || "").toUpperCase() === "AGC")))
+      .catch(() => setAgcDocs([]))
+      .finally(() => setAgcDocsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === AGC_RESOURCES_TAB) loadAgcDocs();
+  }, [activeTab, loadAgcDocs]);
+
+  // Upload multiple files — each gets its own DB record, filename used as title
+  const handleAgcUpload = async (e) => {
+    e.preventDefault();
+    const files = Array.from(agcFileRef.current?.files || []);
+    if (!files.length) { setError("Please select at least one file."); return; }
+    setAgcUploading(true); setError(""); setSuccess("");
+    setAgcUploadProgress(files.map((f) => ({ name: f.name, status: "pending", error: "" })));
+    let failed = 0;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setAgcUploadProgress((prev) => prev.map((p, idx) => idx === i ? { ...p, status: "uploading", error: "" } : p));
+      try {
+        const upload = await uploadResourceDocumentFile(file);
+        const fileUrl = upload?.file_url;
+        if (!fileUrl) throw new Error("No URL returned from storage.");
+        // single file + custom title entered → use it; multiple files → use filename
+        const title = files.length === 1 && agcFileTitle.trim()
+          ? agcFileTitle.trim()
+          : file.name.replace(/\.[^/.]+$/, "");
+        await api.post("/resources/documents", { business_unit: "AGC", category: "general", title, file_url: fileUrl });
+        setAgcUploadProgress((prev) => prev.map((p, idx) => idx === i ? { ...p, status: "done" } : p));
+      } catch (err) {
+        const msg = err.response?.data?.message || err.message || "Upload failed.";
+        console.error(`AGC upload failed for ${file.name}:`, msg, err);
+        setAgcUploadProgress((prev) => prev.map((p, idx) => idx === i ? { ...p, status: "error", error: msg } : p));
+        failed++;
+      }
+    }
+    if (agcFileRef.current) agcFileRef.current.value = "";
+    setAgcFileTitle("");
+    setSuccess(failed === 0 ? `${files.length} file${files.length > 1 ? "s" : ""} uploaded.` : `${files.length - failed} uploaded, ${failed} failed.`);
+    setAgcUploading(false);
+    loadAgcDocs();
+  };
+
+  // Add a link (URL) as a resource
+  const handleAgcAddLink = async (e) => {
+    e.preventDefault();
+    if (!agcLinkForm.title.trim()) { setError("Please enter a title."); return; }
+    if (!agcLinkForm.url.trim()) { setError("Please enter a URL."); return; }
+    setAgcAddingLink(true); setError(""); setSuccess("");
+    try {
+      await api.post("/resources/documents", { business_unit: "AGC", category: "general", title: agcLinkForm.title.trim(), file_url: agcLinkForm.url.trim() });
+      setAgcLinkForm({ title: "", url: "" });
+      setSuccess("Link added.");
+      loadAgcDocs();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Could not add link.");
+    } finally {
+      setAgcAddingLink(false);
+    }
+  };
+
+  const handleAgcDelete = async (doc) => {
+    if (!window.confirm(`Delete "${doc.title}"?`)) return;
+    try {
+      await api.delete(`/resources/documents/${doc.id}`);
+      loadAgcDocs();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Could not delete.");
+    }
+  };
+
+  const handleAgcRename = async (doc) => {
+    const trimmed = agcEditTitle.trim();
+    if (!trimmed) { setError("Title cannot be empty."); return; }
+    setAgcEditSaving(true); setError("");
+    try {
+      let fileUrl = doc.file_url;
+      // If a replacement file was chosen, upload it first
+      const newFile = agcEditFileRef.current?.files?.[0];
+      if (newFile) {
+        const upload = await uploadResourceDocumentFile(newFile);
+        if (!upload?.file_url) throw new Error("File upload failed — no URL returned.");
+        fileUrl = upload.file_url;
+      }
+      await api.put(`/resources/documents/${doc.id}`, {
+        business_unit: doc.business_unit,
+        category: doc.category,
+        title: trimmed,
+        file_url: fileUrl,
+      });
+      setAgcEditId(null);
+      if (agcEditFileRef.current) agcEditFileRef.current.value = "";
+      loadAgcDocs();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Could not save.");
+    } finally {
+      setAgcEditSaving(false);
+    }
+  };
+  // ────────────────────────────────────────────────────────
 
   const tabMeta = useMemo(
     () => COMPANY_CONTENT_ADMIN_SECTIONS.find((s) => s.key === activeTab) || COMPANY_CONTENT_ADMIN_SECTIONS[0],
@@ -225,9 +359,218 @@ export default function AdminAboutCompanyPage() {
             {tab.label}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setActiveTab(AGC_RESOURCES_TAB)}
+          className={[
+            "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+            activeTab === AGC_RESOURCES_TAB
+              ? "bg-[#0B3EAF] text-white dark:bg-[#A7D344] dark:text-[#0f0f0f]"
+              : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200",
+          ].join(" ")}
+        >
+          AGC Resources
+        </button>
       </div>
 
-      {tabMeta.aboutIntroTab ? (
+      {activeTab === AGC_RESOURCES_TAB ? (
+        <>
+          {/* Toggle: Upload files vs Add link */}
+          <div className="mb-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setAgcLinkMode(false)}
+              className={[
+                "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                !agcLinkMode
+                  ? "bg-[#0B3EAF] text-white dark:bg-[#A7D344] dark:text-[#0f0f0f]"
+                  : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200",
+              ].join(" ")}
+            >
+              Upload files
+            </button>
+            <button
+              type="button"
+              onClick={() => setAgcLinkMode(true)}
+              className={[
+                "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                agcLinkMode
+                  ? "bg-[#0B3EAF] text-white dark:bg-[#A7D344] dark:text-[#0f0f0f]"
+                  : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200",
+              ].join(" ")}
+            >
+              Add link
+            </button>
+          </div>
+
+          {!agcLinkMode ? (
+            /* ── Upload files form ── */
+            <form onSubmit={handleAgcUpload} className="card mb-6 p-4 sm:p-5">
+              <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Upload files</h2>
+              <div className="grid gap-4">
+                <div>
+                  <label className={fieldLabel}>Title <span className="font-normal text-slate-400">(optional — for single file)</span></label>
+                  <input
+                    className={fieldInput}
+                    placeholder="e.g. PPT Template, Email Signatures… (leave blank to use filename)"
+                    value={agcFileTitle}
+                    onChange={(e) => setAgcFileTitle(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={fieldLabel}>File(s)</label>
+                  <input
+                    ref={agcFileRef}
+                    type="file"
+                    multiple
+                    className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded file:border-0 file:bg-[#0B3EAF] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white hover:file:bg-[#082d82] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                  />
+                  <p className="mt-1 text-xs text-slate-400">Select multiple files to upload in bulk — each will use its filename as the title.</p>
+                </div>
+              </div>
+              {/* Per-file progress */}
+              {agcUploadProgress.length > 0 && (
+                <ul className="mt-3 space-y-1.5">
+                  {agcUploadProgress.map((f, i) => (
+                    <li key={i} className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className={[
+                          "inline-block w-16 shrink-0 rounded px-1.5 py-0.5 text-center font-bold uppercase tracking-wide",
+                          f.status === "done"      ? "bg-green-100 text-green-700"  :
+                          f.status === "error"     ? "bg-red-100 text-red-700"      :
+                          f.status === "uploading" ? "bg-blue-100 text-blue-700"    :
+                                                     "bg-slate-100 text-slate-500",
+                        ].join(" ")}>
+                          {f.status === "uploading" ? "…" : f.status === "done" ? "✓ done" : f.status === "error" ? "✗ fail" : "queued"}
+                        </span>
+                        <span className="truncate text-slate-600 dark:text-slate-300">{f.name}</span>
+                      </div>
+                      {f.status === "error" && f.error && (
+                        <p className="ml-[4.5rem] mt-0.5 text-red-600 dark:text-red-400">{f.error}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="submit"
+                disabled={agcUploading}
+                className="mt-4 rounded-lg bg-[#0B3EAF] px-4 py-2 text-sm font-semibold text-white hover:bg-[#082d82] disabled:opacity-60"
+              >
+                {agcUploading ? "Uploading…" : "Upload"}
+              </button>
+            </form>
+          ) : (
+            /* ── Add link form ── */
+            <form onSubmit={handleAgcAddLink} className="card mb-6 p-4 sm:p-5">
+              <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Add link</h2>
+              <div className="grid gap-4">
+                <div>
+                  <label className={fieldLabel}>Title</label>
+                  <input
+                    className={fieldInput}
+                    placeholder="e.g. AGC Website, Benefits Portal…"
+                    value={agcLinkForm.title}
+                    onChange={(e) => setAgcLinkForm((f) => ({ ...f, title: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className={fieldLabel}>URL</label>
+                  <input
+                    className={fieldInput}
+                    type="url"
+                    placeholder="https://…"
+                    value={agcLinkForm.url}
+                    onChange={(e) => setAgcLinkForm((f) => ({ ...f, url: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={agcAddingLink}
+                className="mt-4 rounded-lg bg-[#0B3EAF] px-4 py-2 text-sm font-semibold text-white hover:bg-[#082d82] disabled:opacity-60"
+              >
+                {agcAddingLink ? "Saving…" : "Add link"}
+              </button>
+            </form>
+          )}
+
+          {/* Existing docs */}
+          <div className="card overflow-hidden">
+            <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                Current resources{" "}
+                {!agcDocsLoading && <span className="text-sm font-normal text-slate-500">({agcDocs.length})</span>}
+              </h2>
+            </div>
+            {agcDocsLoading ? (
+              <p className="p-4 text-sm text-slate-500">Loading…</p>
+            ) : agcDocs.length === 0 ? (
+              <p className="p-4 text-sm text-slate-500">No resources yet. Upload a file or add a link above.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 dark:divide-slate-700">
+                {agcDocs.map((doc) => {
+                  const isLink = doc.file_url && /^https?:\/\//.test(doc.file_url) && !doc.file_url.includes("digitaloceanspaces");
+                  return (
+                    <li key={doc.id} className={`px-4 py-3 ${agcEditId === doc.id ? "" : "flex items-center gap-3"}`}>
+                      {agcEditId === doc.id ? (
+                        /* ── Expanded edit row ── */
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            {isLink
+                              ? <span className="inline-block shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-purple-100 text-purple-700">LINK</span>
+                              : <ExtBadge url={doc.file_url} />
+                            }
+                            <input
+                              className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                              value={agcEditTitle}
+                              onChange={(e) => setAgcEditTitle(e.target.value)}
+                              autoFocus
+                              placeholder="Title"
+                              onKeyDown={(e) => { if (e.key === "Escape") setAgcEditId(null); }}
+                            />
+                          </div>
+                          {!isLink && (
+                            <div>
+                              <p className="mb-1 text-[10px] text-slate-400">Replace file (optional — leave empty to keep existing)</p>
+                              <input
+                                ref={agcEditFileRef}
+                                type="file"
+                                className="block w-full text-xs text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-300 dark:file:bg-slate-700 dark:file:text-slate-200"
+                              />
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <button onClick={() => handleAgcRename(doc)} disabled={agcEditSaving} className="rounded bg-[#0B3EAF] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#082d82] disabled:opacity-60">{agcEditSaving ? "Saving…" : "Save"}</button>
+                            <button onClick={() => { setAgcEditId(null); if (agcEditFileRef.current) agcEditFileRef.current.value = ""; }} className="rounded border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* ── Normal row ── */
+                        <>
+                          {isLink
+                            ? <span className="inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-purple-100 text-purple-700">LINK</span>
+                            : <ExtBadge url={doc.file_url} />
+                          }
+                          <a href={doc.file_url} target="_blank" rel="noreferrer" className="flex-1 truncate text-sm font-medium text-[#0B3EAF] hover:underline dark:text-[#A7D344]">
+                            {doc.title}
+                          </a>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button onClick={() => { setAgcEditId(doc.id); setAgcEditTitle(doc.title); }} className="rounded border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300">Edit</button>
+                            <button onClick={() => handleAgcDelete(doc)} className="rounded border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400">Delete</button>
+                          </div>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </>
+      ) : null}
+
+      {activeTab !== AGC_RESOURCES_TAB && tabMeta.aboutIntroTab ? (
         <div className="card mb-6 p-4 sm:p-5">
           <h2 className="mb-2 text-base font-semibold text-slate-900 dark:text-white">About page intro</h2>
           <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
@@ -250,7 +593,7 @@ export default function AdminAboutCompanyPage() {
         </div>
       ) : null}
 
-      <form onSubmit={onSave} className="card mb-6 p-4 sm:p-5">
+      {activeTab !== AGC_RESOURCES_TAB && <form onSubmit={onSave} className="card mb-6 p-4 sm:p-5">
         <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">
           {editingId ? "Edit item" : "Add item"} — {tabMeta.label}
         </h2>
@@ -346,9 +689,9 @@ export default function AdminAboutCompanyPage() {
             </button>
           ) : null}
         </div>
-      </form>
+      </form>}
 
-      <div className="card overflow-hidden">
+      {activeTab !== AGC_RESOURCES_TAB && <div className="card overflow-hidden">
         <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
           <h2 className="text-base font-semibold text-slate-900 dark:text-white">{tabMeta.label}</h2>
         </div>
@@ -389,7 +732,7 @@ export default function AdminAboutCompanyPage() {
             </table>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

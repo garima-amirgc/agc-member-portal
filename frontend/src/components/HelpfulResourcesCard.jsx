@@ -1,22 +1,18 @@
 import { Link } from "react-router-dom";
-import {
-  IconBuilding,
-  IconChevron,
-  IconClipboard,
-  IconDocument,
-  IconHeart,
-  IconInfo,
-  IconTicket,
-} from "./layout/SidebarIcons";
+import { IconBuilding, IconChevron, IconTicket } from "./layout/SidebarIcons";
+import { COMPANY_CONTENT_SECTIONS } from "../constants/companyContentConfig";
 
-const RESOURCES = [
-  { to: "/about-company", icon: IconInfo, label: "Employee Handbook" },
-  { to: "/about-company", icon: IconDocument, label: "Policies & Procedures" },
-  { to: "/about-company", icon: IconHeart, label: "Benefits Portal" },
-  { to: "/about-company", icon: IconClipboard, label: "Forms" },
+// AGC sections minus policy & policy_changes
+const AGC_ITEMS = COMPANY_CONTENT_SECTIONS
+  .filter((s) => s.key !== "policy" && s.key !== "policy_changes")
+  .map((s) => ({ to: "/about-company", icon: s.navIcon, label: s.label }));
+
+const EXTRA_ITEMS = [
   { to: "/facilities", icon: IconBuilding, label: "Learning Center" },
-  { to: "/it-tickets", icon: IconTicket, label: "IT Service Catalog" },
+  { to: "/it-tickets", icon: IconTicket,   label: "IT Service Catalog" },
 ];
+
+const RESOURCES = [...AGC_ITEMS, ...EXTRA_ITEMS];
 
 export default function HelpfulResourcesCard() {
   return (
@@ -29,7 +25,7 @@ export default function HelpfulResourcesCard() {
       <div className="mt-3 space-y-2">
         {RESOURCES.map(({ to, icon: Icon, label }) => (
           <Link
-            key={to}
+            key={to + label}
             to={to}
             className="flex items-center gap-2.5 rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-[#0B3EAF]/30 hover:shadow-sm dark:border-slate-700 dark:text-slate-200"
           >
