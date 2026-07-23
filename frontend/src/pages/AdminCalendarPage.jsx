@@ -5,7 +5,7 @@ import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import { monthWindow, ymd } from "../utils/calendarDate";
 
-const EMPTY = { title: "", description: "", kind: "holiday", start_date: "", end_date: "", color: "" };
+const EMPTY = { title: "", description: "", kind: "other", start_date: "", end_date: "", color: "" };
 
 export default function AdminCalendarPage() {
   const now = new Date();
@@ -100,7 +100,7 @@ export default function AdminCalendarPage() {
     setMessage("");
     setForm({
       title: ev.title || "",
-      kind: ev.kind || "holiday",
+      kind: ev.kind || "other",
       start_date: ev.start_date || "",
       end_date: ev.end_date || "",
       color: ev.color || "",
