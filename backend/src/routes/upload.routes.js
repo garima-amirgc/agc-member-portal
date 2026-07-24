@@ -56,7 +56,9 @@ const uploadImage = multer({
   limits: { fileSize: (Number(process.env.UPLOAD_IMAGE_MAX_MB) || 8) * 1024 * 1024 },
   fileFilter: (_, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const allowed = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
+    const allowed = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp"]);
+    const heic = new Set([".heic", ".heif"]);
+    if (heic.has(ext)) return cb(new Error("HEIC_NOT_SUPPORTED"));
     if (!allowed.has(ext)) return cb(new Error("INVALID_IMAGE_EXT"));
     return cb(null, true);
   },
@@ -341,7 +343,26 @@ router.post(
   "/upcoming-image",
   authRequired,
   requireAdminGrantAny(...SPOTLIGHT_ADMIN_GRANT_KEYS, ADMIN_GRANT_KEYS.UPCOMING_EVENTS, ADMIN_GRANT_KEYS.SOCIAL_COMMITTEE, ADMIN_GRANT_KEYS.HR_NEWSFEED),
-  uploadImage.single("image"),
+  (req, res, next) => {
+    uploadImage.single("image")(req, res, (err) => {
+      if (err) {
+        console.error("[upload] multer error on /upcoming-image:", err.message);
+        // Ensure CORS header is present so the browser can read the error body
+        const origin = req.headers.origin;
+        if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+        const msg =
+          err.message === "HEIC_NOT_SUPPORTED"
+            ? "HEIC photos can't be displayed in browsers. On iPhone: open the photo, tap Share → Save as File → choose JPG, then upload that."
+            : err.message === "INVALID_IMAGE_EXT"
+              ? "Unsupported image type. Please use JPG, PNG, WEBP, AVIF, or BMP."
+              : err.code === "LIMIT_FILE_SIZE"
+                ? `Image too large (max ${process.env.UPLOAD_IMAGE_MAX_MB || 8} MB).`
+                : err.message || "Upload error.";
+        return res.status(400).json({ message: msg });
+      }
+      next();
+    });
+  },
   async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No image uploaded." });
@@ -383,7 +404,7 @@ router.post(
         storageProvider: "local",
       });
     } catch (err) {
-      console.error("Upcoming image upload failed:", err);
+      console.error("[upload] /upcoming-image failed:", err);
       removeTempFile(localPath);
       const raw = err.message || String(err) || "Upload failed";
       return res.status(502).json({ message: `Storage upload failed: ${raw}` });

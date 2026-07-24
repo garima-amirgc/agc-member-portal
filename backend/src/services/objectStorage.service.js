@@ -38,6 +38,8 @@ const IMAGE_EXT_TO_MIME = {
   ".png": "image/png",
   ".gif": "image/gif",
   ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
 };
 
 function isR2Enabled() {

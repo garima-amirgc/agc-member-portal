@@ -335,6 +335,23 @@ function WinnersSection({ eventId, eventTitle, winners, onRefresh }) {
     try { await api.delete(`/social/winners/${winnerId}`); await onRefresh(); } catch {}
   }
 
+  const sortedWinners = [...(winners || [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+  async function handleMove(index, direction) {
+    const swapIndex = index + direction;
+    if (swapIndex < 0 || swapIndex >= sortedWinners.length) return;
+    const a = sortedWinners[index];
+    const b = sortedWinners[swapIndex];
+    // Use index positions directly so sort_order is always unique and meaningful
+    try {
+      await Promise.all([
+        api.put(`/social/winners/${a.id}`, { sort_order: swapIndex }),
+        api.put(`/social/winners/${b.id}`, { sort_order: index }),
+      ]);
+      await onRefresh();
+    } catch {}
+  }
+
   return (
     <div>
       <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -343,9 +360,9 @@ function WinnersSection({ eventId, eventTitle, winners, onRefresh }) {
       {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
 
       {/* Winners list */}
-      {winners?.length > 0 && (
+      {sortedWinners.length > 0 && (
         <div className="mb-3 space-y-2">
-          {winners.map((w) =>
+          {sortedWinners.map((w, index) =>
             editingId === w.id ? (
               /* ── Inline edit form ── */
               <form
@@ -407,7 +424,7 @@ function WinnersSection({ eventId, eventTitle, winners, onRefresh }) {
                 </div>
 
                 <div>
-                  <label className={labelCls}>Announce as</label>
+                  <label className={labelCls}>Announce as <span className="font-normal text-slate-400">(optional)</span></label>
                   <TierPicker value={editForm.tier} onChange={(v) => setEditForm((f) => ({ ...f, tier: v }))} />
                 </div>
 
@@ -474,6 +491,27 @@ function WinnersSection({ eventId, eventTitle, winners, onRefresh }) {
                     Hidden
                   </span>
                 )}
+                {/* Move up/down */}
+                <div className="flex shrink-0 flex-col gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleMove(index, -1)}
+                    disabled={index === 0}
+                    className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 text-[10px] text-slate-400 hover:border-slate-400 hover:text-slate-600 disabled:opacity-30 dark:border-slate-700"
+                    title="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMove(index, 1)}
+                    disabled={index === sortedWinners.length - 1}
+                    className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 text-[10px] text-slate-400 hover:border-slate-400 hover:text-slate-600 disabled:opacity-30 dark:border-slate-700"
+                    title="Move down"
+                  >
+                    ↓
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => startEdit(w)}
@@ -558,7 +596,7 @@ function WinnersSection({ eventId, eventTitle, winners, onRefresh }) {
 
         {/* Tier */}
         <div>
-          <label className={labelCls}>Announce as</label>
+          <label className={labelCls}>Announce as <span className="font-normal text-slate-400">(optional)</span></label>
           <TierPicker value={form.tier} onChange={(v) => setForm((f) => ({ ...f, tier: v }))} />
         </div>
 
