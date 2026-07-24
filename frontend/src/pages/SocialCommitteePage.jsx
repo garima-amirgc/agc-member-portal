@@ -120,6 +120,43 @@ function GallerySlider({ items }) {
   );
 }
 
+// ─── Lightbox ─────────────────────────────────────────────────────────────────
+
+function Lightbox({ src, alt, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Photo of ${alt}`}
+    >
+      <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+        <img
+          src={src}
+          alt={alt}
+          className="max-h-[85vh] max-w-[85vw] rounded-2xl object-contain shadow-2xl"
+        />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-lg hover:bg-white dark:bg-slate-800 dark:text-white"
+        >
+          ✕
+        </button>
+        <p className="mt-2 text-center text-sm font-semibold text-white/90">{alt}</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Winner card ──────────────────────────────────────────────────────────────
 
 const TIER_ICON  = { Gold: "🥇", Silver: "🥈", Bronze: "🥉" };
@@ -129,7 +166,7 @@ const TIER_COLOR = {
   Bronze: "border-orange-300 bg-orange-50 dark:bg-orange-900/20",
 };
 
-function WinnerCard({ winner }) {
+function WinnerCard({ winner, onPhotoClick }) {
   const img      = resolvePublicMediaUrl(winner.image_url);
   const tierIcon = TIER_ICON[winner.tier];
   const tierRing = winner.tier ? TIER_COLOR[winner.tier] : "border-amber-300/60 bg-slate-100 dark:bg-slate-700";
@@ -145,7 +182,13 @@ function WinnerCard({ winner }) {
 
       {/* Photo */}
       <div className="relative mb-3 h-24 w-24 shrink-0">
-        <div className={`h-full w-full overflow-hidden rounded-full border-4 shadow-md ${tierRing}`}>
+        <button
+          type="button"
+          onClick={() => img && onPhotoClick && onPhotoClick(img, winner.name)}
+          disabled={!img}
+          className={`h-full w-full overflow-hidden rounded-full border-4 shadow-md transition ${img ? "cursor-zoom-in hover:brightness-90" : "cursor-default"} ${tierRing}`}
+          aria-label={img ? `View full photo of ${winner.name}` : undefined}
+        >
           {img ? (
             <img src={img} alt={winner.name} className="h-full w-full object-cover" />
           ) : (
@@ -153,7 +196,7 @@ function WinnerCard({ winner }) {
               {String(winner.name)[0]?.toUpperCase()}
             </div>
           )}
-        </div>
+        </button>
         <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-sm shadow">
           {tierIcon || "🏆"}
         </span>
@@ -173,6 +216,7 @@ function EventSection({ event }) {
   const hasImages = event.images?.length > 0;
   const hasWinners = event.winners?.length > 0;
   const hasVideo = !!event.video_url;
+  const [lightbox, setLightbox] = useState(null); // { src, alt }
 
   if (!hasImages && !hasWinners && !hasVideo) return null;
 
@@ -198,7 +242,9 @@ function EventSection({ event }) {
             🏆 Winners
           </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {event.winners.map((w) => <WinnerCard key={w.id} winner={w} />)}
+            {event.winners.map((w) => (
+              <WinnerCard key={w.id} winner={w} onPhotoClick={(src, alt) => setLightbox({ src, alt })} />
+            ))}
           </div>
         </div>
       )}
@@ -208,6 +254,9 @@ function EventSection({ event }) {
 
       {/* Video */}
       {hasVideo && <VideoEmbed url={event.video_url} />}
+
+      {/* Lightbox */}
+      {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
     </div>
   );
 }

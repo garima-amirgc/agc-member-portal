@@ -364,6 +364,10 @@ router.post(
     });
   },
   async (req, res) => {
+    // Always ensure CORS header is present so the browser can read any error response
+    const reqOrigin = req.headers.origin;
+    if (reqOrigin) res.setHeader("Access-Control-Allow-Origin", reqOrigin);
+
     if (!req.file) {
       return res.status(400).json({ message: "No image uploaded." });
     }
