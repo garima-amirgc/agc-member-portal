@@ -256,6 +256,22 @@ function WinnersSection({ eventId, eventTitle, winners, onRefresh }) {
   const [error, setError] = useState("");
   const imgRef = useRef(null);
 
+  // Edit state
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editUploading, setEditUploading] = useState(false);
+  const [editError, setEditError] = useState("");
+  const editImgRef = useRef(null);
+
+  function startEdit(w) {
+    setEditingId(w.id);
+    setEditForm({ name: w.name || "", award: w.award || "", tier: w.tier || "", active: !!w.active, image_url: w.image_url || "" });
+    setEditError("");
+  }
+
+  function cancelEdit() { setEditingId(null); setEditError(""); }
+
   async function handlePhotoUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -264,8 +280,36 @@ function WinnersSection({ eventId, eventTitle, winners, onRefresh }) {
     try {
       const url = await uploadImageFile(file);
       if (url) setForm((f) => ({ ...f, image_url: url }));
-    } catch { setError("Photo upload failed."); }
-    finally { setUploading(false); if (imgRef.current) imgRef.current.value = ""; }
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || "Photo upload failed.");
+    } finally { setUploading(false); if (imgRef.current) imgRef.current.value = ""; }
+  }
+
+  async function handleEditPhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditUploading(true);
+    setEditError("");
+    try {
+      const url = await uploadImageFile(file);
+      if (url) setEditForm((f) => ({ ...f, image_url: url }));
+    } catch (err) {
+      setEditError(err?.response?.data?.message || err?.message || "Photo upload failed.");
+    } finally { setEditUploading(false); if (editImgRef.current) editImgRef.current.value = ""; }
+  }
+
+  async function handleEditSave(e) {
+    e.preventDefault();
+    if (!editForm.name.trim()) { setEditError("Name is required."); return; }
+    setEditSaving(true);
+    setEditError("");
+    try {
+      await api.put(`/social/winners/${editingId}`, editForm);
+      setEditingId(null);
+      await onRefresh();
+    } catch (err) {
+      setEditError(err?.response?.data?.message || "Failed to save.");
+    } finally { setEditSaving(false); }
   }
 
   async function handleAdd(e) {
@@ -301,63 +345,152 @@ function WinnersSection({ eventId, eventTitle, winners, onRefresh }) {
       {/* Winners list */}
       {winners?.length > 0 && (
         <div className="mb-3 space-y-2">
-          {winners.map((w) => (
-            <div
-              key={w.id}
-              className={`flex items-center gap-3 rounded-xl border p-2.5 ${
-                w.active
-                  ? "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/40"
-                  : "border-dashed border-slate-200 bg-slate-50 opacity-60 dark:border-slate-700 dark:bg-slate-800/30"
-              }`}
-            >
-              {/* Tier icon or avatar */}
-              <div className="relative h-10 w-10 shrink-0">
-                <div className="h-10 w-10 overflow-hidden rounded-full border border-amber-200 bg-slate-100 dark:bg-slate-800">
-                  {resolvePublicMediaUrl(w.image_url) ? (
-                    <img src={resolvePublicMediaUrl(w.image_url)} alt={w.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs font-bold text-[#0B3EAF] dark:text-[#A7D344]">
-                      {w.name?.[0]?.toUpperCase()}
-                    </div>
+          {winners.map((w) =>
+            editingId === w.id ? (
+              /* ── Inline edit form ── */
+              <form
+                key={w.id}
+                onSubmit={handleEditSave}
+                className="space-y-3 rounded-xl border border-[#0B3EAF]/30 bg-blue-50/40 p-3 dark:border-[#A7D344]/30 dark:bg-white/5"
+              >
+                {editError && <p className="text-xs text-red-600 dark:text-red-400">{editError}</p>}
+
+                {/* Photo row */}
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-amber-300 bg-slate-100 dark:bg-slate-800">
+                    {resolvePublicMediaUrl(editForm.image_url) ? (
+                      <img src={resolvePublicMediaUrl(editForm.image_url)} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-bold text-[#0B3EAF] dark:text-[#A7D344]">
+                        {editForm.name?.[0]?.toUpperCase() || "?"}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => editImgRef.current?.click()}
+                    disabled={editUploading}
+                    className="btn-secondary px-2.5 py-1 text-xs"
+                  >
+                    {editUploading ? "Uploading…" : "Change photo"}
+                  </button>
+                  {editForm.image_url && (
+                    <button
+                      type="button"
+                      onClick={() => setEditForm((f) => ({ ...f, image_url: "" }))}
+                      className="text-xs text-slate-400 hover:text-red-500"
+                    >
+                      Remove
+                    </button>
+                  )}
+                  <input ref={editImgRef} type="file" accept="image/*" className="hidden" onChange={handleEditPhotoUpload} />
+                </div>
+
+                {/* Name + Award */}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className={labelCls}>Name *</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.name}
+                      onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>What they won</label>
+                    <input
+                      className={inputCls}
+                      value={editForm.award}
+                      onChange={(e) => setEditForm((f) => ({ ...f, award: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelCls}>Announce as</label>
+                  <TierPicker value={editForm.tier} onChange={(v) => setEditForm((f) => ({ ...f, tier: v }))} />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={editForm.active}
+                      onChange={(e) => setEditForm((f) => ({ ...f, active: e.target.checked }))}
+                      className="h-4 w-4 rounded"
+                    />
+                    Show on portal
+                  </label>
+                  <div className="ml-auto flex gap-2">
+                    <button type="button" onClick={cancelEdit} className="btn-secondary px-3 py-1.5 text-xs">Cancel</button>
+                    <button type="submit" disabled={editSaving || editUploading} className="btn-primary px-3 py-1.5 text-xs">
+                      {editSaving ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            ) : (
+              /* ── Winner row ── */
+              <div
+                key={w.id}
+                className={`flex items-center gap-3 rounded-xl border p-2.5 ${
+                  w.active
+                    ? "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/40"
+                    : "border-dashed border-slate-200 bg-slate-50 opacity-60 dark:border-slate-700 dark:bg-slate-800/30"
+                }`}
+              >
+                {/* Avatar */}
+                <div className="relative h-10 w-10 shrink-0">
+                  <div className="h-10 w-10 overflow-hidden rounded-full border border-amber-200 bg-slate-100 dark:bg-slate-800">
+                    {resolvePublicMediaUrl(w.image_url) ? (
+                      <img src={resolvePublicMediaUrl(w.image_url)} alt={w.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-bold text-[#0B3EAF] dark:text-[#A7D344]">
+                        {w.name?.[0]?.toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  {w.tier && (
+                    <span className="absolute -bottom-1 -right-1 text-base leading-none">{TIER_ICON[w.tier]}</span>
                   )}
                 </div>
-                {w.tier && (
-                  <span className="absolute -bottom-1 -right-1 text-base leading-none">
-                    {TIER_ICON[w.tier]}
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{w.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    {w.tier && (
+                      <span className="text-xs font-semibold text-[#0B3EAF] dark:text-[#A7D344]">
+                        {TIER_ICON[w.tier]} {w.tier}
+                      </span>
+                    )}
+                    {w.award && (
+                      <span className="truncate text-xs text-slate-400">{w.tier ? "·" : ""} {w.award}</span>
+                    )}
+                  </div>
+                </div>
+
+                {!w.active && (
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800">
+                    Hidden
                   </span>
                 )}
+                <button
+                  type="button"
+                  onClick={() => startEdit(w)}
+                  className="shrink-0 btn-secondary px-2.5 py-1 text-xs"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(w.id)}
+                  className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+                >
+                  Delete
+                </button>
               </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{w.name}</p>
-                <div className="flex items-center gap-1.5">
-                  {w.tier && (
-                    <span className="text-xs font-semibold text-[#0B3EAF] dark:text-[#A7D344]">
-                      {TIER_ICON[w.tier]} {w.tier}
-                    </span>
-                  )}
-                  {w.award && (
-                    <span className="truncate text-xs text-slate-400">
-                      {w.tier ? "·" : ""} {w.award}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {!w.active && (
-                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800">
-                  Hidden
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => handleDelete(w.id)}
-                className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
-              >
-                Delete
-              </button>
-            </div>
-          ))}
+            )
+          )}
         </div>
       )}
 
@@ -389,6 +522,15 @@ function WinnersSection({ eventId, eventTitle, winners, onRefresh }) {
           >
             {uploading ? "Uploading…" : "Upload photo"}
           </button>
+          {form.image_url && (
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, image_url: "" }))}
+              className="text-xs text-slate-400 hover:text-red-500"
+            >
+              Remove
+            </button>
+          )}
           <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
         </div>
 

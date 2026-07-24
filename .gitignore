@@ -4,3 +4,5 @@ dist
 *.sqlite
 backend/uploads/*
 !.gitkeep
+.env.example
+
