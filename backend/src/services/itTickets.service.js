@@ -90,6 +90,12 @@ async function listItAssignees() {
     .all();
 }
 
+async function listAllUsersForBehalfDropdown() {
+  return db
+    .prepare("SELECT id, name, email, business_unit, department FROM users ORDER BY name ASC")
+    .all();
+}
+
 function normalizePriority(raw) {
   const v = String(raw ?? TICKET_PRIORITY_DEFAULT).trim().toLowerCase();
   if (!TICKET_PRIORITIES.includes(v)) {
@@ -449,17 +455,19 @@ async function deleteTicket(actor, ticketId) {
   return { deleted: id };
 }
 
-async function createTicketAndNotify(userId, body) {
-  const creator = await db.prepare("SELECT id, name, email, department FROM users WHERE id = ?").get(userId);
-  if (!creator) {
-    const e = new Error("User not found");
+async function createTicketAndNotify(userId, body, behalfOfUserId = null) {
+  // If submitting on behalf of someone, the ticket's requester is that person
+  const requesterId = behalfOfUserId ? Number(behalfOfUserId) : Number(userId);
+  const requester = await db.prepare("SELECT id, name, email, department FROM users WHERE id = ?").get(requesterId);
+  if (!requester) {
+    const e = new Error("Requester user not found");
     e.statusCode = 404;
     throw e;
   }
 
-  const { ticket, assignee } = await createTicket(userId, body);
+  const { ticket, assignee } = await createTicket(requesterId, body);
   try {
-    await notifyItStaffNewTicket(ticket, creator, assignee);
+    await notifyItStaffNewTicket(ticket, requester, assignee);
   } catch (err) {
     console.error("[IT_TICKET] Email notify failed:", err?.message || err);
   }
@@ -601,6 +609,7 @@ async function getUnreadCounts(userId) {
 
 module.exports = {
   listItAssignees,
+  listAllUsersForBehalfDropdown,
   createTicket,
   createTicketAndNotify,
   getTicketById,

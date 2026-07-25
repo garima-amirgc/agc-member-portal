@@ -18,6 +18,22 @@ router.get("/it-assignees", async (req, res) => {
   }
 });
 
+// IT staff only — list all portal users for "submit on behalf of" dropdown
+router.get("/requester-users", async (req, res) => {
+  try {
+    const isFullAdmin = canonicalRole(req.user.role) === ROLES.ADMIN &&
+      (req.user.adminGrants == null || (Array.isArray(req.user.adminGrants) && req.user.adminGrants.length === 0));
+    const hasTicketVisibility = hasAdminGrant(req.user, ADMIN_GRANT_KEYS.IT_TICKETS);
+    const isITDept = await userDeptSvc.hasDepartment(req.user.id, "IT");
+    if (!isFullAdmin && !hasTicketVisibility && !isITDept) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    return res.json(await itTickets.listAllUsersForBehalfDropdown());
+  } catch (e) {
+    return res.status(500).json({ message: e.message || "Server error" });
+  }
+});
+
 router.get("/assigned-to-me", async (req, res) => {
   try {
     if (!(await userDeptSvc.hasDepartment(req.user.id, "IT"))) {
@@ -37,7 +53,18 @@ router.post(
 
 router.post("/", async (req, res) => {
   try {
-    const ticket = await itTickets.createTicketAndNotify(req.user.id, req.body);
+    const isFullAdmin = canonicalRole(req.user.role) === ROLES.ADMIN &&
+      (req.user.adminGrants == null || (Array.isArray(req.user.adminGrants) && req.user.adminGrants.length === 0));
+    const hasTicketVisibility = hasAdminGrant(req.user, ADMIN_GRANT_KEYS.IT_TICKETS);
+    const isITDept = await userDeptSvc.hasDepartment(req.user.id, "IT");
+    const canSubmitOnBehalf = isFullAdmin || hasTicketVisibility || isITDept;
+
+    const behalfOfUserId =
+      canSubmitOnBehalf && req.body?.behalf_of_user_id
+        ? Number(req.body.behalf_of_user_id)
+        : null;
+
+    const ticket = await itTickets.createTicketAndNotify(req.user.id, req.body, behalfOfUserId);
     return res.status(201).json(ticket);
   } catch (e) {
     const code = e.statusCode || 500;
