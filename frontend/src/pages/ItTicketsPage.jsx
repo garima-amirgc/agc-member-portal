@@ -76,6 +76,7 @@ export default function ItTicketsPage() {
 
   const [tickets, setTickets] = useState([]);
   const [assignees, setAssignees] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [issueType, setIssueType] = useState("hardware");
@@ -84,6 +85,7 @@ export default function ItTicketsPage() {
   const [description, setDescription] = useState("");
   const [otherIssue, setOtherIssue] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
+  const [behalfOfUserId, setBehalfOfUserId] = useState("");
   const [error, setError] = useState("");
   const [submittedTicketId, setSubmittedTicketId] = useState(null);
   const [submissionModalTicket, setSubmissionModalTicket] = useState(null);
@@ -136,6 +138,14 @@ export default function ItTicketsPage() {
       .catch(() => setAssignees([]));
   }, []);
 
+  useEffect(() => {
+    if (!canSeeAll) return;
+    api
+      .get("/tickets/requester-users")
+      .then((r) => setAllUsers(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setAllUsers([]));
+  }, [canSeeAll]);
+
   const onSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -162,7 +172,9 @@ export default function ItTicketsPage() {
     setSubmitting(true);
     setSubmittedTicketId(null);
     try {
-      const res = await api.post("/tickets", built.payload);
+      const payload = { ...built.payload };
+      if (behalfOfUserId) payload.behalf_of_user_id = Number(behalfOfUserId);
+      const res = await api.post("/tickets", payload);
       const newTicket = res.data;
       const newId = newTicket?.id;
       if (newId != null) setSubmittedTicketId(Number(newId));
@@ -171,6 +183,7 @@ export default function ItTicketsPage() {
       setDescription("");
       setOtherIssue("");
       setAssigneeId("");
+      setBehalfOfUserId("");
       setIssueType("hardware");
       setPriority("medium");
       setAttachments([]);
@@ -464,6 +477,27 @@ export default function ItTicketsPage() {
                 </p>
               ) : null}
             </div>
+            {canSeeAll && allUsers.length > 0 && (
+              <div>
+                <label className={FORM_LABEL}>
+                  Submit on behalf of{" "}
+                  <span className="font-normal text-slate-400">(optional — IT staff only)</span>
+                </label>
+                <select
+                  className={FORM_FIELD}
+                  value={behalfOfUserId}
+                  onChange={(e) => setBehalfOfUserId(e.target.value)}
+                >
+                  <option value="">Submit as myself</option>
+                  {allUsers.map((u) => (
+                    <option key={u.id} value={String(u.id)}>
+                      {u.name}{u.email ? ` (${u.email})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-3 border-t border-slate-200/80 pt-6 dark:border-white/10">
             <button
               type="submit"

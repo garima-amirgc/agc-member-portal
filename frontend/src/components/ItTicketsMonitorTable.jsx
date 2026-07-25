@@ -268,7 +268,7 @@ export default function ItTicketsMonitorTable({
   deletingId = null,
   currentUser,
 }) {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("open");
   const [typeFilter, setTypeFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState({});
