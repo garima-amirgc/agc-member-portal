@@ -12,6 +12,7 @@
 
 const { db } = require("../config/db");
 const adpSvc = require("./adp.service");
+const { invalidateHierarchyCache } = require("./reportingHierarchy.service");
 
 const SYNC_INTERVAL_MS = (() => {
   const hrs = parseFloat(process.env.ADP_SYNC_INTERVAL_HOURS);
@@ -214,6 +215,9 @@ async function runFullSync() {
     }
 
     console.log(`[ADP Sync] Reporting hierarchy — ${managerUpdated} set from ADP, ${managerSkipped} left as manual`);
+
+    // Clear all cached hierarchies after sync updates manager assignments
+    if (managerUpdated > 0) invalidateHierarchyCache();
   } catch (err) {
     console.error("[ADP Sync] Full sync failed:", err.message);
   }

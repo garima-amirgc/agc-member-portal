@@ -1,5 +1,6 @@
 import { Fragment, useMemo } from "react";
-import ProgressBar from "./ProgressBar";
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function chainForDisplay(chain) {
   const c = Array.isArray(chain) ? [...chain] : [];
@@ -7,161 +8,227 @@ function chainForDisplay(chain) {
   return c;
 }
 
-function trainingStats(member) {
-  const summary = member?.training_summary;
-  const assigns = member?.assignments || [];
-  const avg =
-    summary?.avgProgress ??
-    (assigns.length === 0 ? 0 : Math.round(assigns.reduce((s, a) => s + (a.progress ?? 0), 0) / assigns.length));
-  return { avg: Math.min(100, Math.max(0, Math.round(avg))) };
-}
-
 function initials(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
-function Avatar({ name, size = "md", color = "blue" }) {
-  const sz = size === "lg" ? "h-12 w-12 text-base" : size === "sm" ? "h-8 w-8 text-[11px]" : "h-10 w-10 text-xs";
-  const bg =
-    color === "green"
-      ? "bg-gradient-to-br from-[#A7D344] to-[#86BC25] text-white"
-      : color === "slate"
-        ? "bg-gradient-to-br from-slate-400 to-slate-500 text-white"
-        : "bg-gradient-to-br from-[#0B3EAF] to-[#1a5fd4] text-white";
+function designation(node) {
+  return node?.adp_job_title || node?.designation || "";
+}
+
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+
+const AVATAR_SIZES = {
+  xl: "h-20 w-20 text-xl",
+  lg: "h-14 w-14 text-base",
+  md: "h-12 w-12 text-sm",
+  sm: "h-9  w-9  text-xs",
+};
+
+function Avatar({ name, imageUrl, size = "md", variant = "default" }) {
+  const sz = AVATAR_SIZES[size] ?? AVATAR_SIZES.md;
+  const ring = {
+    you:        "shadow-[0_0_0_4px_rgba(167,211,68,0.28)]",
+    supervisor: "shadow-[0_0_0_4px_rgba(11,62,175,0.25)]",
+    report:     "shadow-[0_0_0_3px_rgba(11,62,175,0.18)]",
+    default:    "shadow-sm",
+  }[variant] ?? "shadow-sm";
+  const bg = {
+    you:        "from-[#A7D344] to-[#6ea017]",
+    supervisor: "from-[#0B3EAF] to-[#0d4fd9]",
+    report:     "from-[#1a5fd4] to-[#0B3EAF]",
+    default:    "from-slate-400 to-slate-500",
+  }[variant] ?? "from-slate-400 to-slate-500";
+
+  const base = `${sz} ${ring} ring-[3px] ring-white dark:ring-slate-900 rounded-full shrink-0 relative z-10`;
+
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt={name}
+        className={`${base} object-cover`}
+      />
+    );
+  }
+
   return (
-    <div className={`${sz} ${bg} shrink-0 rounded-full flex items-center justify-center font-bold shadow-sm`}>
+    <div className={`${base} bg-gradient-to-br ${bg} flex items-center justify-center font-bold text-white`}>
       {initials(name)}
     </div>
   );
 }
 
+// ─── ADP badge ────────────────────────────────────────────────────────────────
+
 function AdpBadge() {
   return (
     <span
-      title="Reporting line is sourced from ADP Workforce Now and updates automatically"
-      className="inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+      title="Reporting line sourced from ADP Workforce Now"
+      className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-[#0B3EAF]/10 text-[#0B3EAF] dark:bg-[#A7D344]/15 dark:text-[#A7D344]"
     >
-      <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/></svg>
-      ADP
+      ✦ ADP
     </span>
   );
 }
 
-function Connector({ tall = false }) {
+// ─── Connectors ───────────────────────────────────────────────────────────────
+
+const LINE = "bg-[#0B3EAF]/20 dark:bg-[#A7D344]/15";
+
+function VLine({ h = "h-8" }) {
   return (
     <div className="flex justify-center">
-      <div className={`w-px ${tall ? "h-8" : "h-5"} bg-gradient-to-b from-[#0B3EAF]/40 to-[#0B3EAF]/20 dark:from-[#A7D344]/40 dark:to-[#A7D344]/20`} />
+      <div className={`w-px ${h} ${LINE}`} />
     </div>
   );
 }
 
-function HierarchyCard({ node, variant, levelHint, training }) {
-  const isYou = variant === "you";
-  const isReport = variant === "report";
-  const stats = (isYou || isReport) ? trainingStats(training) : null;
-  const isAdp = node?.manager_source === "adp";
-
-  const cardCls = isYou
-    ? "border-2 border-[#A7D344] bg-gradient-to-br from-[#f0f9e0] to-white shadow-md ring-2 ring-[#A7D344]/20 dark:from-[#1a2e05] dark:to-slate-800 dark:border-[#A7D344]/60"
-    : variant === "manager"
-      ? "border-2 border-[#0B3EAF]/60 bg-gradient-to-br from-[#eef2fb] to-white shadow-md dark:from-[#0d1a3a] dark:to-slate-800 dark:border-[#0B3EAF]/40"
-      : "border border-slate-200 bg-white shadow-sm dark:border-slate-600/60 dark:bg-slate-800/80";
-
-  const avatarColor = isYou ? "green" : variant === "manager" ? "blue" : "slate";
+/**
+ * Top connector for each child in a multi-child row.
+ *
+ * position:
+ *   "only"   → straight vertical line
+ *   "first"  → bar center→right + vertical stub
+ *   "middle" → bar full width + vertical stub
+ *   "last"   → bar left→center + vertical stub
+ *
+ * Columns must have gap-0 so bar segments from adjacent columns join.
+ */
+function BranchConnector({ position }) {
+  if (position === "only") return <VLine />;
 
   return (
-    <div className={`relative w-52 rounded-2xl px-4 py-3.5 ${cardCls}`}>
-      {/* Label row */}
-      <div className="mb-2.5 flex items-center justify-between">
-        <span className={`text-[9px] font-bold uppercase tracking-widest ${isYou ? "text-[#5a8a00] dark:text-[#A7D344]" : "text-[#0B3EAF] dark:text-[#A7D344]"}`}>
-          {levelHint}
-        </span>
-        {isAdp && <AdpBadge />}
-      </div>
+    <div className="relative h-8 w-full">
+      {position === "first"  && <div className={`absolute top-0 left-1/2 right-0 h-px ${LINE}`} />}
+      {position === "middle" && <div className={`absolute top-0 inset-x-0 h-px ${LINE}`} />}
+      {position === "last"   && <div className={`absolute top-0 left-0 right-1/2 h-px ${LINE}`} />}
+      <div className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 ${LINE}`} />
+    </div>
+  );
+}
 
-      {/* Avatar + name */}
-      <div className="flex items-center gap-3">
-        <Avatar name={node.name} size={isYou ? "lg" : "md"} color={avatarColor} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold text-slate-900 dark:text-white">{node.name}</div>
-          <div className="truncate text-[10px] text-slate-500 dark:text-slate-400">{node.email}</div>
-          {node.business_unit && (
-            <span className="mt-1 inline-block rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-              {node.business_unit}
-            </span>
+// ─── Org node: avatar floating above a name card ──────────────────────────────
+
+/**
+ * cardW controls the card (and therefore column) width.
+ * The avatar overlaps the top edge of the card using negative margin.
+ */
+function OrgNode({ node, variant = "default", size = "md", showAdp = false, cardW = "w-32" }) {
+  const desig = designation(node);
+  const isYou  = variant === "you";
+  const isSup  = variant === "supervisor";
+
+  // Card border colour
+  const border = isYou
+    ? "border-2 border-[#A7D344]"
+    : isSup
+    ? "border-2 border-[#0B3EAF]/60 dark:border-[#0B3EAF]/40"
+    : "border border-slate-200 dark:border-slate-600/70";
+
+  // Avatar size in px (for the overlap offset)
+  const avatarPx = { xl: 80, lg: 56, md: 48, sm: 36 }[size] ?? 48;
+  const overlap  = 20; // px the card slides up under the avatar
+  const cardPtPx = avatarPx - overlap + 8; // padding-top so text clears avatar
+
+  return (
+    <div className={`flex flex-col items-center ${cardW}`}>
+      {/* Avatar — z-10 so it renders above the card */}
+      <Avatar name={node.name} imageUrl={node.profile_image_url} size={size} variant={variant} />
+
+      {/* Card slides up under avatar */}
+      <div
+        className={`w-full rounded-2xl bg-white dark:bg-slate-800 shadow-sm ${border} text-center px-2 pb-2.5`}
+        style={{ marginTop: -overlap, paddingTop: cardPtPx }}
+      >
+        <p className={`text-[11px] font-bold leading-snug ${isYou ? "text-[#4a7a00] dark:text-[#A7D344]" : "text-slate-800 dark:text-slate-100"}`}>
+          {node.name}
+        </p>
+        {desig && (
+          <p className="mt-0.5 text-[9px] leading-snug text-slate-500 dark:text-slate-400">
+            {desig}
+          </p>
+        )}
+        {showAdp && (
+          <div className="mt-1.5 flex justify-center">
+            <AdpBadge />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── One column in the direct-reports row ─────────────────────────────────────
+
+function DirectReportCol({ person, position }) {
+  const subs      = Array.isArray(person.direct_reports) ? person.direct_reports : [];
+  const adpPlaced = person.manager_source === "adp";
+
+  return (
+    <div className="flex flex-col items-center w-24">
+      <BranchConnector position={position} />
+      <OrgNode node={person} variant="report" size="md" showAdp={adpPlaced} cardW="w-full" />
+
+      {/* Second-level reports */}
+      {subs.length > 0 && (
+        <div className="flex flex-col items-center w-full">
+          <VLine h="h-6" />
+          {subs.length === 1 ? (
+            <OrgNode node={subs[0]} variant="default" size="sm" showAdp={subs[0].manager_source === "adp"} cardW="w-full" />
+          ) : (
+            <div className="flex gap-0">
+              {subs.map((s, si) => (
+                <div key={s.id} className="w-20">
+                  <BranchConnector
+                    position={si === 0 ? "first" : si === subs.length - 1 ? "last" : "middle"}
+                  />
+                  <OrgNode node={s} variant="default" size="sm" showAdp={s.manager_source === "adp"} cardW="w-full" />
+                </div>
+              ))}
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Training progress */}
-      {stats !== null && (
-        <div className="mt-3 border-t border-slate-100 pt-2.5 dark:border-slate-700/60">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Training</span>
-            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">{stats.avg}%</span>
-          </div>
-          <ProgressBar value={stats.avg} />
-        </div>
       )}
     </div>
   );
 }
 
-function DirectReportColumn({ person, teamMember }) {
-  const subs = Array.isArray(person.direct_reports) ? person.direct_reports : [];
+// ─── Full direct-reports row ───────────────────────────────────────────────────
+
+function DirectReportsSection({ reports }) {
+  if (!reports.length) return null;
+  const single = reports.length === 1;
+
   return (
     <div className="flex flex-col items-center">
-      <Connector />
-      <HierarchyCard node={person} variant="report" levelHint="Direct report" training={teamMember} />
-      {subs.length > 0 && (
-        <div className="mt-1 flex flex-col items-center">
-          {subs.map((sub) => (
-            <div key={sub.id} className="flex flex-col items-center">
-              <Connector />
-              <HierarchyCard node={sub} variant="report" levelHint="Reports to above" training={null} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DirectReportsRow({ reports, supervisorName, teamById }) {
-  if (!reports.length) return null;
-  const multi = reports.length > 1;
-  return (
-    <div className="mt-1 w-full">
-      <Connector tall />
-      {multi && (
-        <div className="flex justify-center">
-          <div className="h-px w-3/4 max-w-2xl bg-gradient-to-r from-transparent via-[#0B3EAF]/30 to-transparent dark:via-[#A7D344]/30" />
-        </div>
-      )}
-      <div
-        className="mt-3 flex flex-row flex-wrap items-start justify-center gap-4 rounded-2xl border border-dashed border-[#0B3EAF]/20 bg-[#0B3EAF]/[0.03] px-4 py-5 dark:border-[#A7D344]/20 dark:bg-[#A7D344]/[0.03]"
-        role="group"
-        aria-label={`Direct reports to ${supervisorName}`}
-      >
-        {reports.map((emp) => (
-          <DirectReportColumn key={emp.id} person={emp} teamMember={teamById.get(emp.id)} />
+      <VLine h="h-8" />
+      {/* gap-0 so BranchConnector segments join into one continuous bar */}
+      <div className="flex gap-0">
+        {reports.map((emp, i) => (
+          <DirectReportCol
+            key={emp.id}
+            person={emp}
+            position={
+              single          ? "only"
+              : i === 0       ? "first"
+              : i === reports.length - 1 ? "last"
+              : "middle"
+            }
+          />
         ))}
       </div>
     </div>
   );
 }
 
-export default function ReportingHierarchyTree({ hierarchy, currentUserId, team = [], selfTraining = null }) {
-  const rawChain = Array.isArray(hierarchy?.chain) ? hierarchy.chain : [];
-  const chain = useMemo(() => chainForDisplay(rawChain), [rawChain]);
-  const rawDirect = Array.isArray(hierarchy?.direct_reports) ? hierarchy.direct_reports : [];
+// ─── Main export ──────────────────────────────────────────────────────────────
 
-  const teamById = useMemo(() => {
-    const map = new Map();
-    for (const m of team) if (m?.id != null) map.set(m.id, m);
-    return map;
-  }, [team]);
+export default function ReportingHierarchyTree({ hierarchy, currentUserId, team = [] }) {
+  const rawChain  = Array.isArray(hierarchy?.chain) ? hierarchy.chain : [];
+  const chain     = useMemo(() => chainForDisplay(rawChain), [rawChain]);
+  const rawDirect = Array.isArray(hierarchy?.direct_reports) ? hierarchy.direct_reports : [];
 
   const directReports = useMemo(() => {
     const ancestorIds = new Set(chain.filter((n) => n.id !== currentUserId).map((n) => n.id));
@@ -170,61 +237,78 @@ export default function ReportingHierarchyTree({ hierarchy, currentUserId, team 
 
   const selfIndex = chain.findIndex((n) => n.id === currentUserId);
   const ancestors = selfIndex >= 0 ? chain.slice(0, selfIndex) : chain.slice(0, -1);
-  const selfNode = selfIndex >= 0 ? chain[selfIndex] : chain[chain.length - 1] || null;
+  const selfNode  = selfIndex >= 0 ? chain[selfIndex] : chain[chain.length - 1] ?? null;
 
   if (!selfNode && chain.length === 0 && directReports.length === 0) return null;
 
-  const hasAdpNode = [...ancestors, selfNode, ...directReports].some((n) => n?.manager_source === "adp");
+  const hasAdp = [
+    ...ancestors,
+    ...directReports,
+    ...directReports.flatMap((r) => r.direct_reports ?? []),
+  ].some((n) => n?.manager_source === "adp");
 
   return (
-    <section className="card overflow-x-auto">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Reporting hierarchy</h2>
-        {hasAdpNode && (
+    <section className="card">
+      {/* Header */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Reporting hierarchy
+        </h2>
+        {hasAdp && (
           <span className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300">
-            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/></svg>
-            ADP — reporting lines synced automatically from ADP Workforce Now
+            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z" />
+            </svg>
+            Reporting lines synced from ADP Workforce Now
           </span>
         )}
       </div>
 
-      <div className="flex min-w-[280px] flex-col items-center pb-2">
-        {ancestors.map((node, i) => {
-          // Show ADP badge on a supervisor when the person directly below them
-          // in the chain was placed there by ADP (subordinate has adp_reports_to_oid set).
-          const subordinate = i < ancestors.length - 1 ? ancestors[i + 1] : selfNode;
-          const adpPlaced = subordinate?.manager_source === "adp";
-          return (
-            <Fragment key={node.id}>
-              {i > 0 && <Connector tall />}
-              <HierarchyCard
-                node={adpPlaced ? { ...node, manager_source: "adp" } : node}
-                variant="manager"
-                levelHint="Supervisor"
-              />
-            </Fragment>
-          );
-        })}
+      {/* Tree */}
+      <div className="overflow-x-auto">
+        <div className="flex flex-col items-center pb-4 min-w-max mx-auto">
 
-        {selfNode && (
-          <>
-            {ancestors.length > 0 && <Connector tall />}
-            <HierarchyCard node={selfNode} variant="you" levelHint="You" training={selfTraining} />
-          </>
-        )}
+          {/* Supervisor chain */}
+          {ancestors.map((node, i) => {
+            const subordinate = i < ancestors.length - 1 ? ancestors[i + 1] : selfNode;
+            const adpPlaced   = subordinate?.manager_source === "adp";
+            return (
+              <Fragment key={node.id}>
+                {i > 0 && <VLine h="h-8" />}
+                <OrgNode
+                  node={adpPlaced ? { ...node, manager_source: "adp" } : node}
+                  variant="supervisor"
+                  size="lg"
+                  showAdp={adpPlaced}
+                  cardW="w-32"
+                />
+              </Fragment>
+            );
+          })}
 
-        <DirectReportsRow reports={directReports} supervisorName={selfNode?.name || "you"} teamById={teamById} />
+          {/* "You" node */}
+          {selfNode && (
+            <>
+              {ancestors.length > 0 && <VLine h="h-8" />}
+              <OrgNode node={selfNode} variant="you" size="xl" showAdp={selfNode?.manager_source === "adp"} cardW="w-36" />
+            </>
+          )}
 
-        {!selfNode && chain.length === 0 && directReports.length === 0 && (
-          <p className="mt-4 max-w-md text-center text-sm text-slate-500 dark:text-slate-400">
-            No reporting line is set yet. Ask an admin to assign who you report to.
-          </p>
-        )}
-        {selfNode && ancestors.length === 0 && directReports.length === 0 && (
-          <p className="mt-4 max-w-md text-center text-sm text-slate-500 dark:text-slate-400">
-            No one is assigned to report to you yet.
-          </p>
-        )}
+          {/* Direct reports */}
+          <DirectReportsSection reports={directReports} />
+
+          {/* Empty states */}
+          {selfNode && ancestors.length === 0 && directReports.length === 0 && (
+            <p className="mt-6 max-w-xs text-center text-sm text-slate-500 dark:text-slate-400">
+              No one is linked to your reporting line yet.
+            </p>
+          )}
+          {!selfNode && (
+            <p className="mt-6 max-w-xs text-center text-sm text-slate-500 dark:text-slate-400">
+              No reporting line is set up yet — ask an admin to assign your manager.
+            </p>
+          )}
+        </div>
       </div>
     </section>
   );

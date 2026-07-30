@@ -7,7 +7,7 @@ const { syncUserAssignmentsForFacilities } = require("../services/assignmentSync
 const { mergeFacilityAccess } = require("../utils/businessUnitCodes");
 const leaveSvc = require("../services/leaveRequests.service");
 const managerTeamSvc = require("../services/managerTeam.service");
-const { buildReportingHierarchy } = require("../services/reportingHierarchy.service");
+const { buildReportingHierarchy, invalidateHierarchyCache } = require("../services/reportingHierarchy.service");
 const { getTrainingSummary } = require("../services/trainingCompletion.service");
 const { hasDirectReports, resolveReportsToId } = require("../services/supervisor.service");
 const { supervisorRequired } = require("../middleware/supervisorRequired");
@@ -837,6 +837,10 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
     await userDeptSvc.syncForUser(userId, newDeptList);
 
     await syncUserAssignmentsForFacilities(userId);
+
+    // Invalidate hierarchy cache for this user and their old/new manager
+    invalidateHierarchyCache(userId);
+    if (nextManagerId) invalidateHierarchyCache(nextManagerId);
   } catch (err) {
     const msg = String(err?.message || err);
     if (msg.includes("UNIQUE") && msg.includes("email")) {

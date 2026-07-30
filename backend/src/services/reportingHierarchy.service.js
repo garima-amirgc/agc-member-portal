@@ -1,6 +1,15 @@
 const { db } = require("../config/db");
 
-const USER_ROW = "SELECT id, name, email, role, business_unit, manager_id, adp_reports_to_oid FROM users WHERE id = ?";
+const USER_ROW = "SELECT id, name, email, role, business_unit, manager_id, adp_reports_to_oid, adp_job_title, designation, profile_image_url FROM users WHERE id = ?";
+
+// In-memory cache: userId → { data, expiresAt }
+const _cache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function invalidateHierarchyCache(userId) {
+  if (userId != null) _cache.delete(userId);
+  else _cache.clear();
+}
 
 /** Deduplicate rows by normalised email — keeps the first occurrence. */
 function dedupeByEmail(rows) {
@@ -20,12 +29,18 @@ function mapNode(row) {
     email: row.email,
     role: row.role,
     business_unit: row.business_unit,
+    adp_job_title: row.adp_job_title ?? null,
+    designation: row.designation ?? null,
+    profile_image_url: row.profile_image_url ?? null,
     // "adp" when ADP provided the reporting line; "manual" when set by an admin
     manager_source: row.adp_reports_to_oid ? "adp" : "manual",
   };
 }
 
 async function buildReportingHierarchy(userId) {
+  const now = Date.now();
+  const cached = _cache.get(userId);
+  if (cached && now < cached.expiresAt) return cached.data;
   const chainUp = [];
   let id = userId;
   const seen = new Set();
@@ -42,7 +57,7 @@ async function buildReportingHierarchy(userId) {
 
   const directRows = await db
     .prepare(
-      `SELECT id, name, email, role, business_unit, adp_reports_to_oid FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
+      `SELECT id, name, email, role, business_unit, adp_reports_to_oid, adp_job_title, designation, profile_image_url FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
     )
     .all(userId);
 
@@ -59,7 +74,7 @@ async function buildReportingHierarchy(userId) {
     const placeholders = directIds.map(() => "?").join(",");
     allSubs = await db
       .prepare(
-        `SELECT id, name, email, role, business_unit, adp_reports_to_oid, manager_id FROM users WHERE manager_id IN (${placeholders}) ORDER BY name COLLATE NOCASE ASC`
+        `SELECT id, name, email, role, business_unit, adp_reports_to_oid, adp_job_title, designation, profile_image_url, manager_id FROM users WHERE manager_id IN (${placeholders}) ORDER BY name COLLATE NOCASE ASC`
       )
       .all(...directIds);
   }
@@ -84,7 +99,7 @@ async function buildReportingHierarchy(userId) {
       if (mgr) {
         const teamRows = await db
           .prepare(
-            `SELECT id, name, email, role, business_unit, adp_reports_to_oid FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
+            `SELECT id, name, email, role, business_unit, adp_reports_to_oid, adp_job_title, designation, profile_image_url FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
           )
           .all(Number(mgr.id));
         const members = dedupeByEmail(
@@ -105,7 +120,9 @@ async function buildReportingHierarchy(userId) {
     }
   }
 
-  return { chain, direct_reports, team_under_manager };
+  const result = { chain, direct_reports, team_under_manager };
+  _cache.set(userId, { data: result, expiresAt: Date.now() + CACHE_TTL_MS });
+  return result;
 }
 
-module.exports = { buildReportingHierarchy };
+module.exports = { buildReportingHierarchy, invalidateHierarchyCache };

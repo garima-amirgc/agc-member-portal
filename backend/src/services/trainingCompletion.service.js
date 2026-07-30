@@ -15,11 +15,11 @@ async function getUserFacilities(userId) {
   return facilities;
 }
 
-async function getFacilityScopedAssignments(userId) {
-  const facilities = await getUserFacilities(userId);
-  if (facilities.length === 0) return [];
+async function getFacilityScopedAssignments(userId, facilities = null) {
+  const facs = facilities ?? (await getUserFacilities(userId));
+  if (facs.length === 0) return [];
 
-  const placeholders = facilities.map(() => "?").join(",");
+  const placeholders = facs.map(() => "?").join(",");
   return db
     .prepare(
       `SELECT a.id, a.status, a.progress
@@ -27,81 +27,68 @@ async function getFacilityScopedAssignments(userId) {
        JOIN courses c ON c.id = a.course_id
        WHERE a.user_id = ? AND c.business_unit IN (${placeholders})`
     )
-    .all(userId, ...facilities);
+    .all(userId, ...facs);
 }
 
-async function getResourceTrainingSummary(userId) {
-  const facilities = await getUserFacilities(userId);
-  if (facilities.length === 0) {
+async function getResourceTrainingSummary(userId, facilities = null) {
+  const facs = facilities ?? (await getUserFacilities(userId));
+  if (facs.length === 0) {
     return { total: 0, completed: 0, allComplete: false, avgProgress: 0 };
   }
 
-  const progressRows = await db
-    .prepare(
+  const facPH  = facs.map(() => "?").join(",");
+  const catPH  = RESOURCE_CATEGORIES.map(() => "?").join(",");
+
+  // Replaced: 4 facilities × 6 categories × 2 queries (48 sequential) → 3 parallel queries
+  const [progressRows, videos, docs] = await Promise.all([
+    db.prepare(
       "SELECT business_unit, category, resource_kind, resource_id FROM resource_progress WHERE user_id = ?"
-    )
-    .all(userId);
+    ).all(userId),
+    db.prepare(
+      `SELECT l.id, c.business_unit, LOWER(TRIM(COALESCE(c.resource_category, ''))) AS category
+       FROM lessons l
+       INNER JOIN courses c ON c.id = l.course_id
+       WHERE c.business_unit IN (${facPH})
+         AND LOWER(TRIM(COALESCE(c.resource_category, ''))) IN (${catPH})`
+    ).all(...facs, ...RESOURCE_CATEGORIES),
+    db.prepare(
+      `SELECT id, business_unit, LOWER(TRIM(COALESCE(category, ''))) AS category
+       FROM resource_documents
+       WHERE business_unit IN (${facPH})
+         AND LOWER(TRIM(COALESCE(category, ''))) IN (${catPH})`
+    ).all(...facs, ...RESOURCE_CATEGORIES),
+  ]);
+
   const doneSet = new Set(
-    progressRows.map((r) => {
-      const cat = String(r.category || "").trim().toLowerCase();
-      return `${r.business_unit}|${cat}|${r.resource_kind}|${r.resource_id}`;
-    })
+    progressRows.map((r) => `${r.business_unit}|${String(r.category || "").trim().toLowerCase()}|${r.resource_kind}|${r.resource_id}`)
   );
 
-  let total = 0;
-  let completed = 0;
+  const items = [
+    ...videos.map((v) => ({ bu: v.business_unit, cat: v.category, kind: "lesson",   id: v.id })),
+    ...docs.map((d)   => ({ bu: d.business_unit, cat: d.category, kind: "document", id: d.id })),
+  ];
 
-  const videoStmt = db.prepare(
-    `SELECT l.id
-     FROM lessons l
-     INNER JOIN courses c ON c.id = l.course_id
-     WHERE c.business_unit = ?
-       AND LOWER(TRIM(COALESCE(c.resource_category, ''))) = ?`
-  );
-  const docStmt = db.prepare(
-    `SELECT id
-     FROM resource_documents
-     WHERE business_unit = ?
-       AND LOWER(TRIM(COALESCE(category, ''))) = ?`
-  );
-
-  for (const facility of facilities) {
-    for (const category of RESOURCE_CATEGORIES) {
-      const videos = await videoStmt.all(facility, category);
-      const docs = await docStmt.all(facility, category);
-      const items = [
-        ...videos.map((v) => ({ resource_kind: "lesson", resource_id: v.id })),
-        ...docs.map((d) => ({ resource_kind: "document", resource_id: d.id })),
-      ];
-      if (items.length === 0) continue;
-
-      total += items.length;
-      for (const item of items) {
-        const key = `${facility}|${category}|${item.resource_kind}|${item.resource_id}`;
-        if (doneSet.has(key)) completed += 1;
-      }
-    }
-  }
-
+  const total     = items.length;
+  const completed = items.filter((i) => doneSet.has(`${i.bu}|${i.cat}|${i.kind}|${i.id}`)).length;
   const avgProgress = total === 0 ? 0 : Math.round((completed / total) * 100);
-  return {
-    total,
-    completed,
-    allComplete: total > 0 && completed === total,
-    avgProgress,
-  };
+
+  return { total, completed, allComplete: total > 0 && completed === total, avgProgress };
 }
 
 async function getTrainingSummary(userId) {
-  const assignments = await getFacilityScopedAssignments(userId);
+  // Fetch facilities once, then run both queries in parallel (was: sequential + facilities fetched twice)
+  const facilities = await getUserFacilities(userId);
+  const [assignments, resources] = await Promise.all([
+    getFacilityScopedAssignments(userId, facilities),
+    getResourceTrainingSummary(userId, facilities),
+  ]);
+
   const assignmentTotal = assignments.length;
   const assignmentCompleted = assignments.filter((a) => a.status === "completed").length;
   const assignmentAvg =
     assignmentTotal === 0
       ? 0
       : Math.round(assignments.reduce((s, a) => s + (a.progress ?? 0), 0) / assignmentTotal);
-
-  const resources = await getResourceTrainingSummary(userId);
 
   const total = assignmentTotal + resources.total;
   const completed = assignmentCompleted + resources.completed;

@@ -23,29 +23,38 @@ router.use(authRequired);
  * 404  No ADP record found (and no cached data either)
  * 503  ADP not configured
  */
+const ADP_CACHE_TTL_MS = 60 * 60 * 1000; // serve from DB cache for 1 hour
+
 router.get("/me", async (req, res) => {
   const configured = adpSvc.isConfigured();
 
   try {
     if (!configured) throw Object.assign(new Error("ADP not configured"), { statusCode: 503 });
 
-    // 1. Try live ADP — email first, associate OID fallback
+    // 1. Check DB cache first — if synced within the last hour, skip the live ADP call
+    const userRow = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+    const syncedAt = userRow?.adp_synced_at ? new Date(userRow.adp_synced_at).getTime() : 0;
+    const cacheAge = Date.now() - syncedAt;
+
+    if (cacheAge < ADP_CACHE_TTL_MS) {
+      const cached = readAdpFromDb(userRow);
+      if (cached) return res.json(cached);
+    }
+
+    // 2. Cache stale or missing — fetch live from ADP
     let worker = await adpSvc.getWorkerByEmail(req.user.email);
     if (!worker && req.user.adp_associate_oid) {
       worker = await adpSvc.getWorkerByAssociateOID(req.user.adp_associate_oid);
     }
 
     if (!worker) {
-      // Not in ADP — check DB cache before returning 404
-      const userRow = await db
-        .prepare("SELECT * FROM users WHERE id = ?")
-        .get(req.user.id);
+      // Not in ADP — serve whatever is in DB cache
       const cached = readAdpFromDb(userRow);
       if (cached) return res.json(cached);
       return res.status(404).json({ message: "No ADP record found" });
     }
 
-    // 2. Map and sync to DB (fire-and-forget — don't block the response)
+    // 3. Map and sync to DB (fire-and-forget — don't block the response)
     const mapped = adpSvc.mapWorker(worker);
     writeAdpToDb(req.user.id, mapped).catch((e) =>
       console.error("[ADP] DB sync error:", e.message)
