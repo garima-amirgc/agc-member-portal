@@ -46,6 +46,7 @@ export default function AdminUsersSection({ className = "card" }) {
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [saveNotice, setSaveNotice] = useState(null);
   const [inviteBanner, setInviteBanner] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const load = () =>
     api
@@ -764,11 +765,33 @@ export default function AdminUsersSection({ className = "card" }) {
 
         <section className="rounded-2xl border bg-white/70 p-4 ring-1 ring-slate-200/70 dark:border-slate-700 dark:bg-slate-800/40 dark:ring-slate-700/70">
           <h3 className="mb-3 text-sm font-semibold">Manage users</h3>
+          <div className="mb-3">
+            <input
+              type="search"
+              placeholder="Search by name or email…"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus:border-[#0B3EAF] focus:outline-none focus:ring-1 focus:ring-[#0B3EAF] dark:border-slate-600 dark:bg-slate-700 dark:placeholder:text-slate-500 dark:focus:border-[#A7D344] dark:focus:ring-[#A7D344]"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           <div className="space-y-2">
-            {users.length === 0 ? (
-              <div className="text-sm text-slate-500 dark:text-slate-400">No users found.</div>
-            ) : (
-              users.map((u) => (
+            {(() => {
+              const q = searchQuery.trim().toLowerCase();
+              const filtered = q
+                ? users.filter(
+                    (u) =>
+                      String(u.name || "").toLowerCase().includes(q) ||
+                      String(u.email || "").toLowerCase().includes(q)
+                  )
+                : users;
+              if (filtered.length === 0) {
+                return (
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    {q ? `No users match "${searchQuery}".` : "No users found."}
+                  </div>
+                );
+              }
+              return filtered.map((u) => (
                 <div
                   key={u.id}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 text-sm dark:border-slate-700"
@@ -876,8 +899,8 @@ export default function AdminUsersSection({ className = "card" }) {
                     </button>
                   </div>
                 </div>
-              ))
-            )}
+              ));
+            })()}
           </div>
         </section>
       </div>

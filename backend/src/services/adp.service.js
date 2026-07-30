@@ -345,6 +345,9 @@ function mapWorker(worker) {
     if (parts.length > 0) homeAddress = parts.join(", ");
   }
 
+  // Reporting line — reportsTo is an array; use the first entry's associateOID
+  const reportsToOid = wa.reportsTo?.[0]?.associateOID || null;
+
   return {
     associate_oid: worker.associateOID || null,
     worker_id: worker.workerID?.idValue || null,
@@ -364,6 +367,7 @@ function mapWorker(worker) {
     home_address: homeAddress,
     employment_status: wa.workerStatus?.statusCode?.codeValue || null,
     employment_type: wa.workerTypeCode?.codeValue || null,
+    reports_to_oid: reportsToOid,
   };
 }
 

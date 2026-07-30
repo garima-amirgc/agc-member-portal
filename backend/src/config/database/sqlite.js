@@ -1320,6 +1320,9 @@ async function initDb() {
   try {
     rawDb.exec("ALTER TABLE social_winners ADD COLUMN tier TEXT");
   } catch {}
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN adp_reports_to_oid TEXT");
+  } catch {}
 
   persist();
 }

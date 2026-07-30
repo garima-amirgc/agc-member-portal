@@ -480,6 +480,17 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
     return res.status(400).json({ message: "Missing required fields" });
   }
 
+  // Normalise email to lowercase to prevent case-variant duplicates
+  const emailNorm = String(email).trim().toLowerCase();
+
+  // Case-insensitive duplicate check — catches Jayaraj.Govindan vs jayaraj.govindan
+  const existing = await db
+    .prepare("SELECT id FROM users WHERE LOWER(email) = ?")
+    .get(emailNorm);
+  if (existing) {
+    return res.status(409).json({ message: "A user with this email address already exists." });
+  }
+
   const roleNorm = canonicalRole(role);
   if (![ROLES.ADMIN, ROLES.MANAGER, ROLES.EMPLOYEE].includes(roleNorm)) {
     return res.status(400).json({ message: "Invalid role" });
@@ -564,7 +575,7 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
       )
       .run(
         name,
-        email,
+        emailNorm,
         pwHash,
         roleNorm,
         businessUnits[0],

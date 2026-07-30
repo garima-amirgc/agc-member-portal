@@ -45,18 +45,20 @@ async function writeAdpToDb(userId, mapped) {
 
   await db.prepare(`
     UPDATE users SET
-      adp_worker_id       = ?,
-      adp_job_title       = ?,
-      adp_department      = ?,
-      adp_work_phone      = ?,
-      adp_work_email      = ?,
-      adp_work_location   = ?,
-      adp_employment_type = ?,
+      adp_associate_oid     = COALESCE(?, adp_associate_oid),
+      adp_worker_id         = ?,
+      adp_job_title         = ?,
+      adp_department        = ?,
+      adp_work_phone        = ?,
+      adp_work_email        = ?,
+      adp_work_location     = ?,
+      adp_employment_type   = ?,
       adp_employment_status = ?,
-      adp_home_address    = ?,
-      adp_birth_date      = ?,
-      adp_hire_date       = ?,
-      adp_synced_at       = ?,
+      adp_home_address      = ?,
+      adp_birth_date        = ?,
+      adp_hire_date         = ?,
+      adp_synced_at         = ?,
+      adp_reports_to_oid    = ?,
       birth_month = COALESCE(?, birth_month),
       birth_day   = COALESCE(?, birth_day),
       join_month  = COALESCE(?, join_month),
@@ -64,6 +66,7 @@ async function writeAdpToDb(userId, mapped) {
       join_year   = COALESCE(?, join_year)
     WHERE id = ?
   `).run(
+    mapped.associate_oid      ?? null,
     mapped.worker_id          ?? null,
     mapped.job_title          ?? null,
     mapped.department         ?? null,
@@ -76,6 +79,7 @@ async function writeAdpToDb(userId, mapped) {
     mapped.birth_date         ?? null,
     mapped.hire_date          ?? null,
     now,
+    mapped.reports_to_oid     ?? null,
     // birthday/anniversary columns — only write if ADP has them
     birthParts ? birthParts.month : null,
     birthParts ? birthParts.day   : null,
@@ -166,6 +170,50 @@ async function runFullSync() {
 
     const secs = ((Date.now() - started) / 1000).toFixed(1);
     console.log(`[ADP Sync] Done — ${matched}/${users.length} users synced in ${secs}s`);
+
+    // ── Second pass: resolve adp_reports_to_oid → manager_id ─────────────────
+    // Reload users so we have fresh adp_reports_to_oid and adp_associate_oid values
+    const allPortalUsers = await db
+      .prepare("SELECT id, adp_associate_oid, adp_reports_to_oid FROM users WHERE adp_associate_oid IS NOT NULL")
+      .all();
+
+    // Build a lookup map: associateOID → portal user id
+    const oidToUserId = new Map();
+    for (const u of (Array.isArray(allPortalUsers) ? allPortalUsers : [])) {
+      if (u.adp_associate_oid) {
+        oidToUserId.set(String(u.adp_associate_oid).trim().toUpperCase(), u.id);
+      }
+    }
+
+    let managerUpdated = 0;
+    let managerSkipped = 0;
+
+    for (const u of (Array.isArray(allPortalUsers) ? allPortalUsers : [])) {
+      const reportsToOid = u.adp_reports_to_oid
+        ? String(u.adp_reports_to_oid).trim().toUpperCase()
+        : null;
+
+      if (reportsToOid) {
+        const managerId = oidToUserId.get(reportsToOid) ?? null;
+        if (managerId) {
+          // OID resolved to a portal user — update manager_id
+          await db
+            .prepare("UPDATE users SET manager_id = ? WHERE id = ?")
+            .run(managerId, u.id);
+          managerUpdated++;
+        } else {
+          // ADP has reportsTo data but the manager's portal account isn't linked yet
+          // (email mismatch or manager not in portal) — leave manager_id untouched
+          managerSkipped++;
+        }
+      } else {
+        // ADP has no reportsTo for this person — leave manager_id completely untouched
+        // so any manually assigned manager stays in place.
+        managerSkipped++;
+      }
+    }
+
+    console.log(`[ADP Sync] Reporting hierarchy — ${managerUpdated} set from ADP, ${managerSkipped} left as manual`);
   } catch (err) {
     console.error("[ADP Sync] Full sync failed:", err.message);
   }

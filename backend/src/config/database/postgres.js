@@ -628,6 +628,7 @@ async function migrateColumns(client) {
     "ALTER TABLE ticket_messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ DEFAULT NULL",
     "ALTER TABLE social_events ADD COLUMN IF NOT EXISTS video_url TEXT",
     "ALTER TABLE social_winners ADD COLUMN IF NOT EXISTS tier TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS adp_reports_to_oid TEXT",
     `CREATE TABLE IF NOT EXISTS social_events (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,

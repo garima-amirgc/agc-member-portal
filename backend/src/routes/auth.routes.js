@@ -82,12 +82,18 @@ router.post("/register", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.USERS)
     return res.status(e.statusCode || 400).json({ message: e.message || "Invalid password" });
   }
 
+  const emailNorm = String(email).trim().toLowerCase();
+  const existingUser = await db.prepare("SELECT id FROM users WHERE LOWER(email) = ?").get(emailNorm);
+  if (existingUser) {
+    return res.status(409).json({ message: "A user with this email address already exists." });
+  }
+
   const hash = bcrypt.hashSync(password, 10);
   try {
     const stmt = db.prepare(
       "INSERT INTO users(name, email, password, role, business_unit, manager_id) VALUES (?, ?, ?, ?, ?, ?)"
     );
-    const result = await stmt.run(name, email, hash, roleNorm, business_unit, manager_id);
+    const result = await stmt.run(name, emailNorm, hash, roleNorm, business_unit, manager_id);
     return res.status(201).json({ id: result.lastInsertRowid, message: "User created" });
   } catch {
     return res.status(400).json({ message: "User already exists or invalid data" });

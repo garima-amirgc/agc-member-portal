@@ -1,6 +1,29 @@
 const { db } = require("../config/db");
 
-const USER_ROW = "SELECT id, name, email, role, business_unit, manager_id FROM users WHERE id = ?";
+const USER_ROW = "SELECT id, name, email, role, business_unit, manager_id, adp_reports_to_oid FROM users WHERE id = ?";
+
+/** Deduplicate rows by normalised email — keeps the first occurrence. */
+function dedupeByEmail(rows) {
+  const seen = new Set();
+  return rows.filter((r) => {
+    const key = String(r.email || "").toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mapNode(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    business_unit: row.business_unit,
+    // "adp" when ADP provided the reporting line; "manual" when set by an admin
+    manager_source: row.adp_reports_to_oid ? "adp" : "manual",
+  };
+}
 
 async function buildReportingHierarchy(userId) {
   const chainUp = [];
@@ -11,13 +34,7 @@ async function buildReportingHierarchy(userId) {
     seen.add(id);
     const row = await db.prepare(USER_ROW).get(id);
     if (!row) break;
-    chainUp.push({
-      id: row.id,
-      name: row.name,
-      email: row.email,
-      role: row.role,
-      business_unit: row.business_unit,
-    });
+    chainUp.push(mapNode(row));
     id = row.manager_id;
   }
 
@@ -25,35 +42,38 @@ async function buildReportingHierarchy(userId) {
 
   const directRows = await db
     .prepare(
-      `SELECT id, name, email, role, business_unit FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
+      `SELECT id, name, email, role, business_unit, adp_reports_to_oid FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
     )
     .all(userId);
 
   const ancestorIds = new Set(chain.slice(0, -1).map((n) => n.id));
 
-  const directFiltered = directRows.filter((r) => r.id !== userId && !ancestorIds.has(r.id));
-
-  const subStmt = db.prepare(
-    `SELECT id, name, email, role, business_unit FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
+  const directFiltered = dedupeByEmail(
+    directRows.filter((r) => r.id !== userId && !ancestorIds.has(r.id))
   );
-  const direct_reports = [];
-  for (const r of directFiltered) {
-    const subs = await subStmt.all(r.id);
-    direct_reports.push({
-      id: r.id,
-      name: r.name,
-      email: r.email,
-      role: r.role,
-      business_unit: r.business_unit,
-      direct_reports: subs.map((s) => ({
-        id: s.id,
-        name: s.name,
-        email: s.email,
-        role: s.role,
-        business_unit: s.business_unit,
-      })),
-    });
+
+  // Fetch all second-level reports in one query instead of N individual queries
+  const directIds = directFiltered.map((r) => r.id);
+  let allSubs = [];
+  if (directIds.length > 0) {
+    const placeholders = directIds.map(() => "?").join(",");
+    allSubs = await db
+      .prepare(
+        `SELECT id, name, email, role, business_unit, adp_reports_to_oid, manager_id FROM users WHERE manager_id IN (${placeholders}) ORDER BY name COLLATE NOCASE ASC`
+      )
+      .all(...directIds);
   }
+  const subsByManagerId = new Map();
+  for (const s of allSubs) {
+    const arr = subsByManagerId.get(s.manager_id) || [];
+    arr.push(s);
+    subsByManagerId.set(s.manager_id, arr);
+  }
+
+  const direct_reports = directFiltered.map((r) => ({
+    ...mapNode(r),
+    direct_reports: dedupeByEmail(subsByManagerId.get(r.id) || []).map(mapNode),
+  }));
 
   const me = await db.prepare(USER_ROW).get(userId);
   let team_under_manager = null;
@@ -64,39 +84,21 @@ async function buildReportingHierarchy(userId) {
       if (mgr) {
         const teamRows = await db
           .prepare(
-            `SELECT id, name, email, role, business_unit FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
+            `SELECT id, name, email, role, business_unit, adp_reports_to_oid FROM users WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC`
           )
-          .all(mgr.id);
-        const members = teamRows
-          .filter((r) => r.id !== mgr.id && !ancestorIds.has(r.id))
-          .map((r) => ({
-            id: r.id,
-            name: r.name,
-            email: r.email,
-            role: r.role,
-            business_unit: r.business_unit,
-          }));
+          .all(Number(mgr.id));
+        const members = dedupeByEmail(
+          teamRows.filter((r) => r.id !== mgr.id && !ancestorIds.has(r.id))
+        ).map(mapNode);
         team_under_manager = {
-          manager: {
-            id: mgr.id,
-            name: mgr.name,
-            email: mgr.email,
-            role: mgr.role,
-            business_unit: mgr.business_unit,
-          },
+          manager: mapNode(mgr),
           members,
           viewer_is_manager_node: false,
         };
       }
     } else if (direct_reports.length > 0) {
       team_under_manager = {
-        manager: {
-          id: me.id,
-          name: me.name,
-          email: me.email,
-          role: me.role,
-          business_unit: me.business_unit,
-        },
+        manager: mapNode(me),
         members: direct_reports.map((r) => ({ ...r })),
         viewer_is_manager_node: true,
       };
