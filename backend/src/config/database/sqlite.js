@@ -1324,6 +1324,61 @@ async function initDb() {
     rawDb.exec("ALTER TABLE users ADD COLUMN adp_reports_to_oid TEXT");
   } catch {}
 
+  // University topic/tab feature — custom tab names for resources
+  try { rawDb.exec("ALTER TABLE courses ADD COLUMN topic TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE resource_documents ADD COLUMN topic TEXT"); } catch {}
+
+  // Tab sort order table
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS resource_topic_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        facility TEXT NOT NULL,
+        category TEXT NOT NULL,
+        tab_order TEXT NOT NULL DEFAULT '[]',
+        UNIQUE(facility, category)
+      )`
+    );
+  } catch (e) { console.error("[sqlite] resource_topic_orders:", e.message); }
+
+  // New-hire training assignment feature — split each statement for sql.js compatibility
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS department_training_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        department TEXT NOT NULL,
+        resource_kind TEXT NOT NULL CHECK(resource_kind IN ('course','document')),
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        document_id INTEGER REFERENCES resource_documents(id) ON DELETE CASCADE,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] department_training_templates: OK");
+  } catch (e) { console.error("[sqlite] department_training_templates:", e.message); }
+  try {
+    rawDb.exec(`CREATE INDEX IF NOT EXISTS idx_dept_training_dept ON department_training_templates (department)`);
+  } catch {}
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS user_training_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        resource_kind TEXT NOT NULL CHECK(resource_kind IN ('course','document')),
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        document_id INTEGER REFERENCES resource_documents(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed')),
+        assigned_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        completed_at TEXT,
+        assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+      )`
+    );
+    console.log("[sqlite] user_training_assignments: OK");
+  } catch (e) { console.error("[sqlite] user_training_assignments:", e.message); }
+  try {
+    rawDb.exec(`CREATE INDEX IF NOT EXISTS idx_user_training_user ON user_training_assignments (user_id)`);
+  } catch {}
+
   persist();
 }
 

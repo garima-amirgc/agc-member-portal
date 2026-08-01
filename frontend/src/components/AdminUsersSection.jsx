@@ -48,6 +48,77 @@ export default function AdminUsersSection({ className = "card" }) {
   const [inviteBanner, setInviteBanner] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // ── Training assignments (edit modal) ────────────────────────────────────
+  const [editTraining, setEditTraining] = useState({ courses: [], documents: [] });
+  const [editTrainingLoading, setEditTrainingLoading] = useState(false);
+  const [trainingAddKind, setTrainingAddKind] = useState("course");
+  const [trainingAddCourseId, setTrainingAddCourseId] = useState("");
+  const [trainingAddDocId, setTrainingAddDocId] = useState("");
+  const [allPickerCourses, setAllPickerCourses] = useState([]);
+  const [allPickerDocs, setAllPickerDocs] = useState([]);
+  const [addingTraining, setAddingTraining] = useState(false);
+  const [trainingFlash, setTrainingFlash] = useState({ msg: "", err: false });
+
+  const showTrainingFlash = (msg, err = false) => {
+    setTrainingFlash({ msg, err });
+    setTimeout(() => setTrainingFlash({ msg: "", err: false }), 3500);
+  };
+
+  const reloadEditTraining = async (userId) => {
+    try {
+      const r = await api.get(`/training/users/${userId}`);
+      setEditTraining({ courses: r.data?.courses || [], documents: r.data?.documents || [] });
+    } catch {
+      setEditTraining({ courses: [], documents: [] });
+    }
+  };
+
+  const addTrainingItem = async () => {
+    if (!editing) return;
+    const body = { resource_kind: trainingAddKind };
+    if (trainingAddKind === "course") {
+      if (!trainingAddCourseId) return showTrainingFlash("Select a course.", true);
+      body.course_id = Number(trainingAddCourseId);
+    } else {
+      if (!trainingAddDocId) return showTrainingFlash("Select a document.", true);
+      body.document_id = Number(trainingAddDocId);
+    }
+    setAddingTraining(true);
+    try {
+      await api.post(`/training/users/${editing.id}`, body);
+      showTrainingFlash("Assigned.");
+      setTrainingAddCourseId("");
+      setTrainingAddDocId("");
+      await reloadEditTraining(editing.id);
+    } catch (err) {
+      showTrainingFlash(err.response?.data?.message || "Could not assign.", true);
+    } finally {
+      setAddingTraining(false);
+    }
+  };
+
+  const removeTrainingCourse = async (courseId) => {
+    if (!editing) return;
+    if (!window.confirm("Remove this course from the user's required training?")) return;
+    try {
+      await api.delete(`/training/users/${editing.id}/course/${courseId}`);
+      await reloadEditTraining(editing.id);
+    } catch (err) {
+      showTrainingFlash(err.response?.data?.message || "Could not remove.", true);
+    }
+  };
+
+  const removeTrainingDoc = async (documentId) => {
+    if (!editing) return;
+    if (!window.confirm("Remove this document from the user's required training?")) return;
+    try {
+      await api.delete(`/training/users/${editing.id}/document/${documentId}`);
+      await reloadEditTraining(editing.id);
+    } catch (err) {
+      showTrainingFlash(err.response?.data?.message || "Could not remove.", true);
+    }
+  };
+
   const load = () =>
     api
       .get("/users")
@@ -285,6 +356,19 @@ export default function AdminUsersSection({ className = "card" }) {
         facility_university_only: Boolean(data.facility_university_only),
         is_new_hire: Boolean(data.is_new_hire ?? u.is_new_hire),
       });
+      // Load training assignments for this user
+      setEditTrainingLoading(true);
+      api.get(`/training/users/${u.id}`)
+        .then((r) => setEditTraining({ courses: r.data?.courses || [], documents: r.data?.documents || [] }))
+        .catch(() => setEditTraining({ courses: [], documents: [] }))
+        .finally(() => setEditTrainingLoading(false));
+      // Load picker options if not loaded yet
+      if (allPickerCourses.length === 0) {
+        api.get("/courses").then((r) => setAllPickerCourses(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+      }
+      if (allPickerDocs.length === 0) {
+        api.get("/resources/documents").then((r) => setAllPickerDocs(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+      }
     } catch (err) {
       const st = err.response?.status;
       const msg = err.response?.data?.message || err.message;
@@ -1268,6 +1352,106 @@ export default function AdminUsersSection({ className = "card" }) {
                 </span>
               </label>
 
+              {/* ── Required Training panel ── */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-800/50">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Required Training
+                </div>
+                {editTrainingLoading ? (
+                  <p className="text-xs text-slate-400">Loading…</p>
+                ) : (
+                  <div className="space-y-2">
+                    {editTraining.courses.length === 0 && editTraining.documents.length === 0 ? (
+                      <p className="text-xs text-slate-400 dark:text-slate-500">No required training assigned yet.</p>
+                    ) : null}
+                    {editTraining.courses.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-900">
+                        <div className="min-w-0">
+                          <span className="mr-1.5 rounded bg-blue-100 px-1 py-0.5 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Video</span>
+                          <span className="text-xs font-medium">{c.title}</span>
+                          {c.status === "completed" && <span className="ml-1.5 text-[10px] text-green-600 dark:text-green-400">✓ Done</span>}
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 text-[10px] font-semibold text-red-600 underline hover:text-red-800 dark:text-red-400"
+                          onClick={() => removeTrainingCourse(c.course_id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    {editTraining.documents.map((d) => (
+                      <div key={d.id} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-900">
+                        <div className="min-w-0">
+                          <span className="mr-1.5 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-700 dark:text-slate-300">Doc</span>
+                          <span className="text-xs font-medium">{d.title}</span>
+                          {d.status === "completed" && <span className="ml-1.5 text-[10px] text-green-600 dark:text-green-400">✓ Done</span>}
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 text-[10px] font-semibold text-red-600 underline hover:text-red-800 dark:text-red-400"
+                          onClick={() => removeTrainingDoc(d.document_id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add training item */}
+                <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-600">
+                  <div className="flex gap-3">
+                    <label className="flex cursor-pointer items-center gap-1 text-xs">
+                      <input type="radio" name="trainingKind" value="course" checked={trainingAddKind === "course"} onChange={() => setTrainingAddKind("course")} />
+                      Course
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1 text-xs">
+                      <input type="radio" name="trainingKind" value="document" checked={trainingAddKind === "document"} onChange={() => setTrainingAddKind("document")} />
+                      Document
+                    </label>
+                  </div>
+                  {trainingAddKind === "course" ? (
+                    <select
+                      className="w-full rounded border p-1.5 text-xs dark:bg-slate-700"
+                      value={trainingAddCourseId}
+                      onChange={(e) => setTrainingAddCourseId(e.target.value)}
+                      disabled={addingTraining}
+                    >
+                      <option value="">— select a course —</option>
+                      {allPickerCourses.map((c) => (
+                        <option key={c.id} value={c.id}>{c.title} ({c.business_unit})</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select
+                      className="w-full rounded border p-1.5 text-xs dark:bg-slate-700"
+                      value={trainingAddDocId}
+                      onChange={(e) => setTrainingAddDocId(e.target.value)}
+                      disabled={addingTraining}
+                    >
+                      <option value="">— select a document —</option>
+                      {allPickerDocs.map((d) => (
+                        <option key={d.id} value={d.id}>{d.title} ({d.business_unit} · {d.category})</option>
+                      ))}
+                    </select>
+                  )}
+                  {trainingFlash.msg && (
+                    <p className={`rounded p-1.5 text-[11px] font-medium ${trainingFlash.err ? "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300" : "bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-300"}`}>
+                      {trainingFlash.msg}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-outline w-full py-1.5 text-xs"
+                    onClick={addTrainingItem}
+                    disabled={addingTraining}
+                  >
+                    {addingTraining ? "Assigning…" : "Assign to this user"}
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Reset password (optional)
@@ -1290,6 +1474,9 @@ export default function AdminUsersSection({ className = "card" }) {
                 onClick={() => {
                   editGrantsSnapshotRef.current = [];
                   setEditing(null);
+                  setEditTraining({ courses: [], documents: [] });
+                  setTrainingAddCourseId("");
+                  setTrainingAddDocId("");
                 }}
                 className="btn-secondary"
               >

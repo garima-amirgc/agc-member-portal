@@ -99,24 +99,26 @@ function normalizeResourceCategory(raw) {
 }
 
 router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
-  const { title, description, business_unit, resource_category, department } = req.body;
+  const { title, description, business_unit, resource_category, department, topic } = req.body;
   const rc = normalizeResourceCategory(resource_category);
   const dept = department ? String(department).trim() || null : null;
+  const topicVal = topic ? String(topic).trim() || null : null;
   const result = await db
     .prepare(
-      "INSERT INTO courses(title, description, business_unit, created_by, resource_category, department) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO courses(title, description, business_unit, created_by, resource_category, department, topic) VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
-    .run(title, description || "", business_unit, req.user.id, rc, dept);
+    .run(title, description || "", business_unit, req.user.id, rc, dept, topicVal);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
 router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
-  const { title, description, business_unit, resource_category, department } = req.body;
+  const { title, description, business_unit, resource_category, department, topic } = req.body;
   const rc = normalizeResourceCategory(resource_category);
   const dept = department ? String(department).trim() || null : null;
+  const topicVal = topic ? String(topic).trim() || null : null;
   await db
-    .prepare("UPDATE courses SET title=?, description=?, business_unit=?, resource_category=?, department=? WHERE id=?")
-    .run(title, description, business_unit, rc, dept, req.params.id);
+    .prepare("UPDATE courses SET title=?, description=?, business_unit=?, resource_category=?, department=?, topic=? WHERE id=?")
+    .run(title, description, business_unit, rc, dept, topicVal, req.params.id);
   res.json({ message: "Course updated" });
 });
 

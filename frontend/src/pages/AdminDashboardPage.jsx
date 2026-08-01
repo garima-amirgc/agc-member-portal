@@ -7,8 +7,235 @@ import ResourceDocumentGridCard from "../components/resources/ResourceDocumentGr
 import { CATEGORIES } from "../utils/resourcesContent";
 import { DEPARTMENTS } from "../constants/departments";
 
-const EMPTY_COURSE = { title: "", description: "", business_unit: "AGC", resource_category: "", department: "" };
-const EMPTY_DOC = { business_unit: "AGC", category: "finance", title: "" };
+// ─── Training Templates sub-component ────────────────────────────────────────
+function TrainingTemplatesSection() {
+  const [selectedDept, setSelectedDept] = useState(DEPARTMENTS[0]);
+  const [templates, setTemplates] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [courses, setCourses] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [addKind, setAddKind] = useState("course");
+  const [addCourseId, setAddCourseId] = useState("");
+  const [addDocId, setAddDocId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [flash, setFlash] = useState({ msg: "", err: false });
+
+  const showFlash = (msg, err = false) => {
+    setFlash({ msg, err });
+    setTimeout(() => setFlash({ msg: "", err: false }), 3500);
+  };
+
+  const loadTemplates = useCallback(() => {
+    if (!selectedDept) return;
+    setLoadingTemplates(true);
+    api
+      .get(`/training/templates?department=${encodeURIComponent(selectedDept)}`)
+      .then((r) => setTemplates(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setTemplates([]))
+      .finally(() => setLoadingTemplates(false));
+  }, [selectedDept]);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
+
+  useEffect(() => {
+    api.get("/courses").then((r) => setCourses(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    api.get("/resources/documents").then((r) => setDocuments(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+  }, []);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    const body = { department: selectedDept, resource_kind: addKind };
+    if (addKind === "course") {
+      if (!addCourseId) return showFlash("Select a course.", true);
+      body.course_id = Number(addCourseId);
+    } else {
+      if (!addDocId) return showFlash("Select a document.", true);
+      body.document_id = Number(addDocId);
+    }
+    setSaving(true);
+    try {
+      await api.post("/training/templates", body);
+      showFlash("Added to template.");
+      setAddCourseId("");
+      setAddDocId("");
+      loadTemplates();
+    } catch (err) {
+      showFlash(err.response?.data?.message || "Could not add item.", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async (id) => {
+    if (!window.confirm("Remove this item from the department template?")) return;
+    try {
+      await api.delete(`/training/templates/${id}`);
+      loadTemplates();
+    } catch (err) {
+      showFlash(err.response?.data?.message || "Could not remove item.", true);
+    }
+  };
+
+  const courseItems = templates.filter((t) => t.resource_kind === "course");
+  const docItems = templates.filter((t) => t.resource_kind === "document");
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[300px,1fr]">
+      {/* Left: picker */}
+      <section className="card space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Department training template</h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            When a new hire is added to a department, these courses and documents are automatically assigned to them.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Department</label>
+          <select
+            className="w-full rounded border p-2 dark:bg-slate-700"
+            value={selectedDept}
+            onChange={(e) => setSelectedDept(e.target.value)}
+          >
+            {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+
+        <form className="space-y-3" onSubmit={handleAdd}>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Add a…</label>
+            <div className="flex gap-2">
+              <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+                <input type="radio" name="kind" value="course" checked={addKind === "course"} onChange={() => setAddKind("course")} />
+                Course (video)
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+                <input type="radio" name="kind" value="document" checked={addKind === "document"} onChange={() => setAddKind("document")} />
+                Document
+              </label>
+            </div>
+          </div>
+
+          {addKind === "course" ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Course</label>
+              <select
+                className="w-full rounded border p-2 dark:bg-slate-700"
+                value={addCourseId}
+                onChange={(e) => setAddCourseId(e.target.value)}
+                disabled={saving}
+              >
+                <option value="">— select a course —</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>{c.title} ({c.business_unit})</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Document</label>
+              <select
+                className="w-full rounded border p-2 dark:bg-slate-700"
+                value={addDocId}
+                onChange={(e) => setAddDocId(e.target.value)}
+                disabled={saving}
+              >
+                <option value="">— select a document —</option>
+                {documents.map((d) => (
+                  <option key={d.id} value={d.id}>{d.title} ({d.business_unit} · {d.category})</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {flash.msg && (
+            <p className={`rounded p-2 text-xs font-medium ${flash.err ? "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300" : "bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-300"}`}>
+              {flash.msg}
+            </p>
+          )}
+
+          <button type="submit" className="btn-primary w-full" disabled={saving}>
+            {saving ? "Adding…" : "Add to template"}
+          </button>
+        </form>
+      </section>
+
+      {/* Right: current template items */}
+      <section className="card flex flex-col">
+        <h2 className="mb-1 text-lg font-semibold">
+          Required training — <span className="text-brand-blue dark:text-brand-green">{selectedDept}</span>
+        </h2>
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          New hires in {selectedDept} will be assigned all of these automatically.
+        </p>
+
+        {loadingTemplates ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
+        ) : templates.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">No required training configured for {selectedDept} yet.</p>
+        ) : (
+          <div className="space-y-4">
+            {courseItems.length > 0 && (
+              <div>
+                <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Courses</div>
+                <div className="space-y-2">
+                  {courseItems.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{t.course_title || `Course #${t.course_id}`}</div>
+                        {t.course_facility && (
+                          <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{t.course_facility}</div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-danger shrink-0 px-2 py-1 text-xs"
+                        onClick={() => handleRemove(t.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {docItems.length > 0 && (
+              <div>
+                <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Documents</div>
+                <div className="space-y-2">
+                  {docItems.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{t.document_title || `Document #${t.document_id}`}</div>
+                        {(t.document_facility || t.document_category) && (
+                          <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                            {[t.document_facility, t.document_category].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-danger shrink-0 px-2 py-1 text-xs"
+                        onClick={() => handleRemove(t.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+const EMPTY_COURSE = { title: "", description: "", business_unit: "AGC", resource_category: "", department: "", topic: "" };
+const EMPTY_DOC = { business_unit: "AGC", category: "finance", title: "", topic: "" };
 const EMPTY_REPORT = { business_unit: "AGC", title: "", link_url: "", description: "" };
 
 export default function AdminDashboardPage() {
@@ -32,6 +259,15 @@ export default function AdminDashboardPage() {
   const [savingReport, setSavingReport] = useState(false);
   const [reportEdit, setReportEdit] = useState(null);
   const [savingReportEdit, setSavingReportEdit] = useState(false);
+  const [topicSuggestions, setTopicSuggestions] = useState([]);
+
+  const loadTopics = useCallback((facility, category) => {
+    if (!facility || !category) return;
+    api
+      .get(`/resources/topics/${facility}/${category}`)
+      .then((r) => setTopicSuggestions(Array.isArray(r.data?.topics) ? r.data.topics : []))
+      .catch(() => setTopicSuggestions([]));
+  }, []);
 
   const load = () => {
     api.get("/courses").then((r) => setCourses(r.data));
@@ -71,6 +307,7 @@ export default function AdminDashboardPage() {
       const { data } = await api.post("/courses", {
         ...courseForm,
         resource_category: courseForm.resource_category?.trim() || null,
+        topic: courseForm.topic?.trim() || null,
       });
       const courseId = data.id;
       const file = createCourseVideoRef.current?.files?.[0];
@@ -97,7 +334,9 @@ export default function AdminDashboardPage() {
       business_unit: c.business_unit,
       resource_category: c.resource_category || "",
       department: c.department || "",
+      topic: c.topic || "",
     });
+    if (c.resource_category) loadTopics(c.business_unit, c.resource_category);
   };
 
   const saveCourseEdit = async (e) => {
@@ -115,6 +354,7 @@ export default function AdminDashboardPage() {
         business_unit: courseEdit.business_unit,
         resource_category: courseEdit.resource_category?.trim() || null,
         department: courseEdit.department?.trim() || null,
+        topic: courseEdit.topic?.trim() || null,
       });
       setCourseEdit(null);
       load();
@@ -204,6 +444,7 @@ export default function AdminDashboardPage() {
         category: docForm.category,
         title: docForm.title.trim(),
         file_url: fileUrl,
+        topic: docForm.topic?.trim() || null,
       });
       setDocForm(EMPTY_DOC);
       if (docFileRef.current) docFileRef.current.value = "";
@@ -246,8 +487,10 @@ export default function AdminDashboardPage() {
       business_unit: doc.business_unit,
       category: doc.category,
       file_url: doc.file_url,
+      topic: doc.topic || "",
     });
     if (docEditFileRef.current) docEditFileRef.current.value = "";
+    loadTopics(doc.business_unit, doc.category);
   };
 
   const saveDocumentEdit = async (e) => {
@@ -272,6 +515,7 @@ export default function AdminDashboardPage() {
         category: docEdit.category,
         title: docEdit.title.trim(),
         file_url: fileUrl,
+        topic: docEdit.topic?.trim() || null,
       });
       setDocEdit(null);
       if (docEditFileRef.current) docEditFileRef.current.value = "";
@@ -366,6 +610,7 @@ export default function AdminDashboardPage() {
     { id: "videos", label: "Videos" },
     { id: "documents", label: "Documents" },
     { id: "reports", label: "IT report links" },
+    { id: "training", label: "Training templates" },
   ];
 
   return (
@@ -469,6 +714,25 @@ export default function AdminDashboardPage() {
                       ))}
                     </select>
                   </div>
+                  {courseForm.resource_category ? (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                        Tab name (optional — groups content under a custom tab)
+                      </label>
+                      <datalist id="topic-suggestions-course-create">
+                        {topicSuggestions.map((t) => <option key={t} value={t} />)}
+                      </datalist>
+                      <input
+                        className="w-full rounded border p-2 dark:bg-slate-700"
+                        list="topic-suggestions-course-create"
+                        placeholder="e.g. Accounts Payable, Onboarding…"
+                        value={courseForm.topic}
+                        onChange={(e) => setCourseForm({ ...courseForm, topic: e.target.value })}
+                        onFocus={() => loadTopics(courseForm.business_unit, courseForm.resource_category)}
+                        disabled={creatingCourse}
+                      />
+                    </div>
+                  ) : null}
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
                       Video file (optional — add more after save)
@@ -564,9 +828,10 @@ export default function AdminDashboardPage() {
                               <select
                                 className="w-full rounded border p-2 text-sm dark:bg-slate-700"
                                 value={courseEdit.resource_category || ""}
-                                onChange={(e) =>
-                                  setCourseEdit({ ...courseEdit, resource_category: e.target.value })
-                                }
+                                onChange={(e) => {
+                                  setCourseEdit({ ...courseEdit, resource_category: e.target.value });
+                                  if (e.target.value) loadTopics(courseEdit.business_unit, e.target.value);
+                                }}
                                 disabled={savingCourse}
                               >
                                 <option value="">Not listed</option>
@@ -577,6 +842,25 @@ export default function AdminDashboardPage() {
                                 ))}
                               </select>
                             </div>
+                            {courseEdit.resource_category ? (
+                              <div>
+                                <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                  Tab name (optional)
+                                </label>
+                                <datalist id="topic-suggestions-course-edit">
+                                  {topicSuggestions.map((t) => <option key={t} value={t} />)}
+                                </datalist>
+                                <input
+                                  className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                                  list="topic-suggestions-course-edit"
+                                  placeholder="e.g. Accounts Payable"
+                                  value={courseEdit.topic || ""}
+                                  onChange={(e) => setCourseEdit({ ...courseEdit, topic: e.target.value })}
+                                  onFocus={() => loadTopics(courseEdit.business_unit, courseEdit.resource_category)}
+                                  disabled={savingCourse}
+                                />
+                              </div>
+                            ) : null}
                             <button type="submit" className="btn-primary w-full" disabled={savingCourse}>
                               {savingCourse ? "Saving…" : "Save changes"}
                             </button>
@@ -735,6 +1019,23 @@ export default function AdminDashboardPage() {
                     />
                   </div>
                   <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Tab name (optional — groups content under a custom tab)
+                    </label>
+                    <datalist id="topic-suggestions-doc-create">
+                      {topicSuggestions.map((t) => <option key={t} value={t} />)}
+                    </datalist>
+                    <input
+                      className="w-full rounded border p-2 dark:bg-slate-700"
+                      list="topic-suggestions-doc-create"
+                      placeholder="e.g. Accounts Payable, Onboarding…"
+                      value={docForm.topic}
+                      onChange={(e) => setDocForm({ ...docForm, topic: e.target.value })}
+                      onFocus={() => loadTopics(docForm.business_unit, docForm.category)}
+                      disabled={uploadingDoc}
+                    />
+                  </div>
+                  <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">File</label>
                     <input
                       ref={docFileRef}
@@ -837,6 +1138,23 @@ export default function AdminDashboardPage() {
                                 />
                                 <div>
                                   <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                    Tab name (optional)
+                                  </label>
+                                  <datalist id="topic-suggestions-doc-edit">
+                                    {topicSuggestions.map((t) => <option key={t} value={t} />)}
+                                  </datalist>
+                                  <input
+                                    className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                                    list="topic-suggestions-doc-edit"
+                                    placeholder="e.g. Accounts Payable"
+                                    value={docEdit.topic || ""}
+                                    onChange={(e) => setDocEdit({ ...docEdit, topic: e.target.value })}
+                                    onFocus={() => loadTopics(docEdit.business_unit, docEdit.category)}
+                                    disabled={savingDocEdit}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
                                     Replace file (optional)
                                   </label>
                                   <input
@@ -890,6 +1208,8 @@ export default function AdminDashboardPage() {
               </section>
             </div>
           )}
+
+          {active === "training" && <TrainingTemplatesSection />}
 
           {active === "reports" && (
             <div className="grid gap-6 lg:grid-cols-2">

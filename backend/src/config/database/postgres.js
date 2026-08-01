@@ -629,6 +629,40 @@ async function migrateColumns(client) {
     "ALTER TABLE social_events ADD COLUMN IF NOT EXISTS video_url TEXT",
     "ALTER TABLE social_winners ADD COLUMN IF NOT EXISTS tier TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS adp_reports_to_oid TEXT",
+    // University topic/tab feature
+    "ALTER TABLE courses ADD COLUMN IF NOT EXISTS topic TEXT",
+    "ALTER TABLE resource_documents ADD COLUMN IF NOT EXISTS topic TEXT",
+    // New-hire training assignment feature
+    `CREATE TABLE IF NOT EXISTS department_training_templates (
+      id SERIAL PRIMARY KEY,
+      department TEXT NOT NULL,
+      resource_kind TEXT NOT NULL CHECK(resource_kind IN ('course','document')),
+      course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+      document_id INTEGER REFERENCES resource_documents(id) ON DELETE CASCADE,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_dept_training_dept ON department_training_templates (department)",
+    `CREATE TABLE IF NOT EXISTS user_training_assignments (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      resource_kind TEXT NOT NULL CHECK(resource_kind IN ('course','document')),
+      course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+      document_id INTEGER REFERENCES resource_documents(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed')),
+      assigned_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      completed_at TIMESTAMPTZ,
+      assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      UNIQUE(user_id, resource_kind, course_id, document_id)
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_user_training_user ON user_training_assignments (user_id)",
+    `CREATE TABLE IF NOT EXISTS resource_topic_orders (
+      id SERIAL PRIMARY KEY,
+      facility TEXT NOT NULL,
+      category TEXT NOT NULL,
+      tab_order TEXT NOT NULL DEFAULT '[]',
+      UNIQUE(facility, category)
+    )`,
     `CREATE TABLE IF NOT EXISTS social_events (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,

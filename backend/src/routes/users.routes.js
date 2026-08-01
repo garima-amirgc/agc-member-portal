@@ -4,6 +4,7 @@ const { db, isPostgres, getPool } = require("../config/db");
 const { BUSINESS_UNITS, ROLES, canonicalRole } = require("../config/constants");
 const { authRequired, allowRoles } = require("../middleware/auth");
 const { syncUserAssignmentsForFacilities } = require("../services/assignmentSync.service");
+const { autoAssignDepartmentTemplate } = require("./training.routes");
 const { mergeFacilityAccess } = require("../utils/businessUnitCodes");
 const leaveSvc = require("../services/leaveRequests.service");
 const managerTeamSvc = require("../services/managerTeam.service");
@@ -599,6 +600,13 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
 
     await syncUserAssignmentsForFacilities(userId);
 
+    // Auto-assign department training template for new hires
+    if (isNewHireFlag && primaryDept) {
+      void autoAssignDepartmentTemplate(userId, primaryDept, req.user.id).catch((e) =>
+        console.error("[users] auto-assign training template:", e)
+      );
+    }
+
     if (useInvite) {
       const setupUrl = `${inviteSvc.publicAppBaseUrl()}/invite?token=${encodeURIComponent(rawInviteToken)}`;
       const mail = await emailSvc.deliverAccountInviteEmail({
@@ -837,6 +845,13 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
     await userDeptSvc.syncForUser(userId, newDeptList);
 
     await syncUserAssignmentsForFacilities(userId);
+
+    // Auto-assign department training template when is_new_hire is toggled on
+    if (nextIsNewHire && !existingIsNewHire && newDeptList[0]) {
+      void autoAssignDepartmentTemplate(userId, newDeptList[0], req.user.id).catch((e) =>
+        console.error("[users] auto-assign training template (PUT):", e)
+      );
+    }
 
     // Invalidate hierarchy cache for this user and their old/new manager
     invalidateHierarchyCache(userId);
