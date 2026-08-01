@@ -61,6 +61,7 @@ async function start() {
   const courseRoutes = require("./routes/courses.routes");
   const lessonRoutes = require("./routes/lessons.routes");
   const assignmentRoutes = require("./routes/assignments.routes");
+  const trainingRoutes = require("./routes/training.routes");
   const uploadRoutes = require("./routes/upload.routes");
   const notificationsRoutes = require("./routes/notifications.routes");
   const upcomingRoutes = require("./routes/upcoming.routes");
@@ -167,6 +168,7 @@ async function start() {
     ["/courses", courseRoutes],
     ["/lessons", lessonRoutes],
     ["/assignments", assignmentRoutes],
+    ["/training", trainingRoutes],
     ["/notifications", notificationsRoutes],
     ["/upcoming", upcomingRoutes],
     ["/employee-of-month", employeeOfMonthRoutes],

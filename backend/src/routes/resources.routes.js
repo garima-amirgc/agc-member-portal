@@ -206,7 +206,8 @@ router.get("/facility/:facility/category/:category", async (req, res) => {
   const rows = await db
     .prepare(
       `SELECT l.id, l.title, l.video_url, l.order_index, l.video_uploaded_at AS lesson_uploaded_at,
-              c.title AS course_title, c.description AS course_description, c.created_at AS course_created_at
+              c.title AS course_title, c.description AS course_description, c.created_at AS course_created_at,
+              c.topic AS course_topic
        FROM lessons l
        INNER JOIN courses c ON c.id = l.course_id
        WHERE c.business_unit = ?
@@ -234,6 +235,7 @@ router.get("/facility/:facility/category/:category", async (req, res) => {
             ? r.course_created_at
             : null,
       url: r.video_url,
+      topic: r.course_topic ? String(r.course_topic).trim() || null : null,
     };
   });
   res.json({ videos });
@@ -248,7 +250,7 @@ router.get("/facility/:facility/category/:category/documents", async (req, res) 
 
   const rows = await db
     .prepare(
-      `SELECT id, title, file_url, created_at, file_uploaded_at
+      `SELECT id, title, file_url, created_at, file_uploaded_at, topic
        FROM resource_documents
        WHERE business_unit = ?
          AND LOWER(TRIM(COALESCE(category, ''))) = ?
@@ -263,6 +265,7 @@ router.get("/facility/:facility/category/:category/documents", async (req, res) 
     url: r.file_url,
     created_at: r.created_at,
     added_at: documentDisplayAddedAt(r.file_uploaded_at, r.created_at),
+    topic: r.topic ? String(r.topic).trim() || null : null,
   }));
   res.json({ documents });
 });
@@ -377,7 +380,7 @@ function normalizeCategory(raw) {
 router.get("/documents", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LEARNING_ADMIN, ADMIN_GRANT_KEYS.COMPANY_CONTENT), async (req, res) => {
   const rows = await db
     .prepare(
-      `SELECT id, business_unit, category, title, file_url, created_at, file_uploaded_at
+      `SELECT id, business_unit, category, topic, title, file_url, created_at, file_uploaded_at
        FROM resource_documents
        ORDER BY id DESC`
     )
@@ -385,6 +388,7 @@ router.get("/documents", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LEA
   res.json(
     rows.map((r) => ({
       ...r,
+      topic: r.topic ? String(r.topic).trim() || null : null,
       added_at: documentDisplayAddedAt(r.file_uploaded_at, r.created_at),
     }))
   );
@@ -463,11 +467,12 @@ router.get("/documents/:id", authRequired, async (req, res) => {
 });
 
 router.post("/documents", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LEARNING_ADMIN, ADMIN_GRANT_KEYS.COMPANY_CONTENT), async (req, res) => {
-  const { business_unit, category, title, file_url } = req.body || {};
+  const { business_unit, category, title, file_url, topic } = req.body || {};
   const facility = String(business_unit || "").toUpperCase();
   const cat = normalizeCategory(category);
   const t = String(title || "").trim();
   const url = String(file_url || "").trim();
+  const topicVal = topic ? String(topic).trim() || null : null;
 
   if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
   if (!RESOURCE_CATEGORIES.has(cat)) return res.status(400).json({ message: "Invalid category" });
@@ -475,23 +480,29 @@ router.post("/documents", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LE
   if (!url) return res.status(400).json({ message: "file_url is required" });
 
   const uploadedAt = new Date().toISOString();
-  const out = await db
-    .prepare(
-      "INSERT INTO resource_documents(business_unit, category, title, file_url, created_by, file_uploaded_at) VALUES (?, ?, ?, ?, ?, ?)"
-    )
-    .run(facility, cat, t, url, req.user.id, uploadedAt);
-  return res.status(201).json({ id: out.lastInsertRowid });
+  try {
+    const out = await db
+      .prepare(
+        "INSERT INTO resource_documents(business_unit, category, topic, title, file_url, created_by, file_uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      )
+      .run(facility, cat, topicVal, t, url, req.user.id, uploadedAt);
+    return res.status(201).json({ id: out.lastInsertRowid });
+  } catch (e) {
+    console.error("[resources] POST /documents:", e);
+    return res.status(500).json({ message: "Database error — try restarting the server (migration may be pending)." });
+  }
 });
 
 router.put("/documents/:id", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LEARNING_ADMIN, ADMIN_GRANT_KEYS.COMPANY_CONTENT), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
 
-  const { business_unit, category, title, file_url } = req.body || {};
+  const { business_unit, category, title, file_url, topic } = req.body || {};
   const facility = String(business_unit || "").toUpperCase();
   const cat = normalizeCategory(category);
   const t = String(title || "").trim();
   const url = String(file_url || "").trim();
+  const topicVal = topic ? String(topic).trim() || null : null;
 
   if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
   if (!RESOURCE_CATEGORIES.has(cat)) return res.status(400).json({ message: "Invalid category" });
@@ -510,10 +521,10 @@ router.put("/documents/:id", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS
   await db
     .prepare(
       `UPDATE resource_documents
-       SET business_unit = ?, category = ?, title = ?, file_url = ?, file_uploaded_at = ?
+       SET business_unit = ?, category = ?, topic = ?, title = ?, file_url = ?, file_uploaded_at = ?
        WHERE id = ?`
     )
-    .run(facility, cat, t, url, nextUploaded, id);
+    .run(facility, cat, topicVal, t, url, nextUploaded, id);
 
   return res.json({ message: "Document updated" });
 });
@@ -534,6 +545,48 @@ router.delete("/documents/:id", authRequired, requireAdminGrantAny(ADMIN_GRANT_K
 
   await db.prepare("DELETE FROM resource_documents WHERE id = ?").run(id);
   return res.json({ message: "Document deleted" });
+});
+
+// ── GET /topics/:facility/:category  — distinct topic names for autocomplete ──
+router.get("/topics/:facility/:category", authRequired, requireAdminGrantAny(ADMIN_GRANT_KEYS.LEARNING_ADMIN, ADMIN_GRANT_KEYS.COMPANY_CONTENT), async (req, res) => {
+  const facility = String(req.params.facility || "").toUpperCase();
+  const category = String(req.params.category || "").toLowerCase();
+  if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
+  if (!RESOURCE_CATEGORIES.has(category)) return res.status(400).json({ message: "Invalid category" });
+
+  try {
+  const [courseTopics, docTopics] = await Promise.all([
+    db.prepare(
+      `SELECT DISTINCT TRIM(topic) AS topic
+       FROM courses
+       WHERE business_unit = ?
+         AND LOWER(TRIM(COALESCE(resource_category, ''))) = ?
+         AND topic IS NOT NULL AND TRIM(topic) != ''`
+    ).all(facility, category),
+    db.prepare(
+      `SELECT DISTINCT TRIM(topic) AS topic
+       FROM resource_documents
+       WHERE business_unit = ?
+         AND LOWER(TRIM(COALESCE(category, ''))) = ?
+         AND topic IS NOT NULL AND TRIM(topic) != ''`
+    ).all(facility, category),
+  ]);
+
+  const seen = new Set();
+  const topics = [];
+  for (const r of [...courseTopics, ...docTopics]) {
+    const t = String(r.topic || "").trim();
+    if (t && !seen.has(t.toLowerCase())) {
+      seen.add(t.toLowerCase());
+      topics.push(t);
+    }
+  }
+  topics.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return res.json({ topics });
+  } catch (e) {
+    console.error("[resources] GET /topics:", e);
+    return res.json({ topics: [] });
+  }
 });
 
 router.get("/lessons/:lessonId", async (req, res) => {
@@ -565,6 +618,53 @@ router.get("/lessons/:lessonId", async (req, res) => {
     category: cat,
     facility: row.business_unit,
   });
+});
+
+// ── GET /topic-order/:facility/:category — load saved tab order ──────────────
+router.get("/topic-order/:facility/:category", authRequired, async (req, res) => {
+  const facility = String(req.params.facility || "").toUpperCase();
+  const category = String(req.params.category || "").toLowerCase();
+  if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
+  if (!RESOURCE_CATEGORIES.has(category)) return res.status(400).json({ message: "Invalid category" });
+  try {
+    const row = await db.prepare(
+      "SELECT tab_order FROM resource_topic_orders WHERE facility = ? AND category = ?"
+    ).get(facility, category);
+    if (!row) return res.json({ order: [] });
+    let order = [];
+    try { order = JSON.parse(row.tab_order); } catch {}
+    return res.json({ order: Array.isArray(order) ? order : [] });
+  } catch (e) {
+    console.error("[resources] GET /topic-order:", e);
+    return res.json({ order: [] });
+  }
+});
+
+// ── PUT /topic-order/:facility/:category — save tab order (learning admin) ────
+router.put("/topic-order/:facility/:category", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.LEARNING_ADMIN), async (req, res) => {
+  const facility = String(req.params.facility || "").toUpperCase();
+  const category = String(req.params.category || "").toLowerCase();
+  if (!FACILITIES.has(facility)) return res.status(400).json({ message: "Invalid facility" });
+  if (!RESOURCE_CATEGORIES.has(category)) return res.status(400).json({ message: "Invalid category" });
+  const order = req.body?.order;
+  if (!Array.isArray(order)) return res.status(400).json({ message: "order must be an array" });
+  const json = JSON.stringify(order.map(String));
+  try {
+    const existing = await db.prepare(
+      "SELECT id FROM resource_topic_orders WHERE facility = ? AND category = ?"
+    ).get(facility, category);
+    if (existing) {
+      await db.prepare("UPDATE resource_topic_orders SET tab_order = ? WHERE facility = ? AND category = ?")
+        .run(json, facility, category);
+    } else {
+      await db.prepare("INSERT INTO resource_topic_orders (facility, category, tab_order) VALUES (?, ?, ?)")
+        .run(facility, category, json);
+    }
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[resources] PUT /topic-order:", e);
+    return res.status(500).json({ message: e.message || "Server error" });
+  }
 });
 
 module.exports = router;

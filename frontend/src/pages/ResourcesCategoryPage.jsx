@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ProgressBar from "../components/ProgressBar";
 import { normalizeFacilityParam } from "../constants/facilities";
@@ -8,6 +8,10 @@ import { useResourceProgress } from "../hooks/useResourceProgress";
 import api from "../services/api";
 import ResourceDocumentPreview from "../components/resources/ResourceDocumentPreview";
 import { CATEGORIES, computeProgress, mergeLmsResourceItems, seedItems } from "../utils/resourcesContent";
+import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
+import { hasAdminGrant } from "../utils/adminAccess";
+
+const GENERAL_TOPIC = "__general__";
 
 function formatAddedDate(raw) {
   if (raw == null || raw === "") return null;
@@ -20,12 +24,138 @@ function formatAddedDate(raw) {
   }
 }
 
+// ─── Tab button ───────────────────────────────────────────────────────────────
+function TabBtn({ label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "relative -mb-px rounded-t-2xl border px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 sm:text-base",
+        "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
+        "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
+        active
+          ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
+          : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
+      ].join(" ")}
+      role="tab"
+      aria-selected={active}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ─── Video card ───────────────────────────────────────────────────────────────
+function VideoCard({ v, resourcesBase, category: key, completed, toggleComplete }) {
+  const done = completed.has(v.id);
+  const courseTitle =
+    (v.course_title != null && String(v.course_title).trim() ? String(v.course_title).trim() : null) ||
+    (v.meta != null && String(v.meta).trim() ? String(v.meta).trim() : "");
+  const heading =
+    courseTitle || (v.title != null && String(v.title).trim() ? String(v.title).trim() : "Training");
+  const courseDesc =
+    v.description != null && String(v.description).trim() ? String(v.description).trim() : "";
+  const added = formatAddedDate(v.added_at);
+  const videoPath = `${resourcesBase}/${key}/video/${v.id}`;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40">
+      <div className="min-w-0">
+        <Link
+          to={videoPath}
+          className="text-base font-bold leading-snug text-brand-blue hover:text-brand-blue-hover hover:underline dark:text-brand-green"
+        >
+          {heading}
+        </Link>
+        {courseDesc ? (
+          <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            {courseDesc}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-3 dark:border-slate-600/60">
+        <span className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">
+          {added ? <>Uploaded on {added}</> : <span className="text-slate-400">Upload date —</span>}
+        </span>
+        <button
+          type="button"
+          onClick={() => void toggleComplete(v.id)}
+          className={
+            done
+              ? "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-emerald-700 bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.99] dark:border-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+              : "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-[rgba(11,62,175,0.28)] bg-white px-2.5 py-1 text-xs font-semibold text-[#000000] transition hover:border-[#0B3EAF] hover:bg-[#f7f9fe] hover:text-[#0B3EAF] active:scale-[0.99] dark:border-[rgba(167,211,68,0.4)] dark:bg-[#141414] dark:text-[#f5f5f5] dark:hover:border-[#A7D344] dark:hover:bg-[#1a1a1a] dark:hover:text-[#A7D344]"
+          }
+        >
+          {done ? "Completed" : "Mark done"}
+        </button>
+      </div>
+      <div className="overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
+        <Link to={videoPath} className="block" aria-label={`Open video: ${heading}`}>
+          <video preload="metadata" className="aspect-video w-full" src={v.url} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ─── Document card ────────────────────────────────────────────────────────────
+function DocCard({ d, resourcesBase, category: key, completed, toggleComplete }) {
+  const done = completed.has(d.id);
+  const docPath =
+    d.docId != null && resourcesBase ? `${resourcesBase}/${key}/document/${d.docId}` : null;
+  const added = formatAddedDate(d.added_at ?? d.created_at);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40">
+      <div className="min-w-0">
+        {docPath ? (
+          <Link
+            to={docPath}
+            className="text-base font-bold leading-snug text-brand-blue hover:text-brand-blue-hover hover:underline dark:text-brand-green"
+          >
+            {d.title}
+          </Link>
+        ) : (
+          <div className="text-base font-bold leading-snug text-brand-blue dark:text-brand-green">
+            {d.title}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-3 dark:border-slate-600/60">
+        <span className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">
+          {added ? <>Uploaded on {added}</> : <span className="text-slate-400">Upload date —</span>}
+        </span>
+        <button
+          type="button"
+          onClick={() => void toggleComplete(d.id)}
+          className={
+            done
+              ? "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-emerald-700 bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.99] dark:border-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+              : "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-[rgba(11,62,175,0.28)] bg-white px-2.5 py-1 text-xs font-semibold text-[#000000] transition hover:border-[#0B3EAF] hover:bg-[#f7f9fe] hover:text-[#0B3EAF] active:scale-[0.99] dark:border-[rgba(167,211,68,0.4)] dark:bg-[#141414] dark:text-[#f5f5f5] dark:hover:border-[#A7D344] dark:hover:bg-[#1a1a1a] dark:hover:text-[#A7D344]"
+          }
+        >
+          {done ? "Completed" : "Mark done"}
+        </button>
+      </div>
+      <div className="overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
+        {docPath ? (
+          <Link to={docPath} className="block" aria-label={`Open document: ${d.title}`}>
+            <ResourceDocumentPreview url={d.url} />
+          </Link>
+        ) : (
+          <ResourceDocumentPreview url={d.url} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ResourcesCategoryPage() {
   const { facility, category } = useParams();
   const facilityNorm = normalizeFacilityParam(facility);
   const key = (category || "").toLowerCase();
   const { user } = useAuth();
-  const [contentTab, setContentTab] = useState("videos");
   const [videosLoading, setVideosLoading] = useState(false);
   const [docsLoading, setDocsLoading] = useState(false);
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -38,6 +168,8 @@ export default function ResourcesCategoryPage() {
   const [lmsDocs, setLmsDocs] = useState([]);
   const [lmsReports, setLmsReports] = useState([]);
   const [lmsLoadError, setLmsLoadError] = useState(null);
+
+  // Items for progress tracking (merges seed + LMS)
   const items = useMemo(
     () => mergeLmsResourceItems(seedBlock, lmsVideos, lmsDocs),
     [seedBlock, lmsVideos, lmsDocs]
@@ -50,6 +182,135 @@ export default function ResourcesCategoryPage() {
   );
 
   const resourcesBase = facilityNorm ? `/facilities/${facilityNorm}/resources` : "";
+  const isLearningAdmin = hasAdminGrant(user, ADMIN_GRANT_KEYS.LEARNING_ADMIN);
+
+  // ── Tab sort order ────────────────────────────────────────────────────────────
+  const [savedTabOrder, setSavedTabOrder] = useState([]); // persisted order from backend
+  const [showArrange, setShowArrange] = useState(false);
+  const [arrangeOrder, setArrangeOrder] = useState([]); // draft order inside modal
+  const [savingOrder, setSavingOrder] = useState(false);
+  const dragItem = useRef(null);
+  const dragOver = useRef(null);
+
+  // Load saved order when facility/category changes
+  useEffect(() => {
+    if (!facilityNorm || !key) return;
+    api.get(`/resources/topic-order/${facilityNorm}/${key}`)
+      .then((r) => setSavedTabOrder(Array.isArray(r.data?.order) ? r.data.order : []))
+      .catch(() => setSavedTabOrder([]));
+  }, [facilityNorm, key]);
+
+  const saveTabOrder = async (order) => {
+    setSavingOrder(true);
+    try {
+      await api.put(`/resources/topic-order/${facilityNorm}/${key}`, { order });
+      setSavedTabOrder(order);
+      setShowArrange(false);
+    } catch (e) {
+      window.alert(e.response?.data?.message || "Could not save order.");
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
+  // ── Topic tabs ───────────────────────────────────────────────────────────────
+
+  /**
+   * Build a list of unique topic tabs from videos and docs.
+   * Items with no topic (or topic = null/"") are bucketed under GENERAL_TOPIC.
+   * Returns: [{ id, label, videos, docs }]  sorted so "General" is always last.
+   */
+  const topicGroups = useMemo(() => {
+    const map = new Map(); // topic-key → { label, videos: [], docs: [] }
+
+    const getOrCreate = (topicKey, label) => {
+      if (!map.has(topicKey)) map.set(topicKey, { label, videos: [], docs: [] });
+      return map.get(topicKey);
+    };
+
+    for (const v of lmsVideos) {
+      const t = v.topic ? String(v.topic).trim() : "";
+      const key_ = t || GENERAL_TOPIC;
+      const label = t || "General";
+      getOrCreate(key_, label).videos.push(v);
+    }
+    for (const d of lmsDocs) {
+      const t = d.topic ? String(d.topic).trim() : "";
+      const key_ = t || GENERAL_TOPIC;
+      const label = t || "General";
+      getOrCreate(key_, label).docs.push(d);
+    }
+
+    // Also include seed items (they have no topic → General)
+    const seedVideos = items?.videos || [];
+    const seedDocs = items?.docs || [];
+    const lmsVideoIds = new Set(lmsVideos.map((v) => v.id));
+    const lmsDocIds = new Set(lmsDocs.map((d) => d.id));
+
+    // Seed items not already covered by LMS items
+    for (const v of seedVideos) {
+      if (!lmsVideoIds.has(v.id)) {
+        getOrCreate(GENERAL_TOPIC, "General").videos.push(v);
+      }
+    }
+    for (const d of seedDocs) {
+      if (!lmsDocIds.has(d.id)) {
+        getOrCreate(GENERAL_TOPIC, "General").docs.push(d);
+      }
+    }
+
+    // Sort: named topics alphabetically, General always last
+    const entries = [...map.entries()].map(([id, val]) => ({ id, ...val }));
+    entries.sort((a, b) => {
+      if (a.id === GENERAL_TOPIC) return 1;
+      if (b.id === GENERAL_TOPIC) return -1;
+      return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+    });
+
+    return entries.filter((g) => g.videos.length > 0 || g.docs.length > 0);
+  }, [lmsVideos, lmsDocs, items]);
+
+  // Apply saved order (unknown tabs go to end, General always last within unknowns)
+  const orderedTopicGroups = useMemo(() => {
+    if (savedTabOrder.length === 0) return topicGroups;
+    const orderMap = new Map(savedTabOrder.map((id, i) => [id, i]));
+    return [...topicGroups].sort((a, b) => {
+      const ai = orderMap.has(a.id) ? orderMap.get(a.id) : 9999;
+      const bi = orderMap.has(b.id) ? orderMap.get(b.id) : 9999;
+      if (ai !== bi) return ai - bi;
+      // fallback: General last, then alphabetical
+      if (a.id === GENERAL_TOPIC) return 1;
+      if (b.id === GENERAL_TOPIC) return -1;
+      return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+    });
+  }, [topicGroups, savedTabOrder]);
+
+  const hasReports = key === "it" && lmsReports.length > 0;
+
+  // All tab ids: one per topic group + optional "reports" tab
+  const allTabs = useMemo(() => {
+    const tabs = orderedTopicGroups.map((g) => g.id);
+    if (hasReports) tabs.push("__reports__");
+    return tabs;
+  }, [orderedTopicGroups, hasReports]);
+
+  const [activeTab, setActiveTab] = useState(null);
+
+  // When tabs change, reset to first tab
+  useEffect(() => {
+    if (allTabs.length > 0) {
+      setActiveTab((prev) => (allTabs.includes(prev) ? prev : allTabs[0]));
+    } else {
+      setActiveTab(null);
+    }
+  }, [allTabs]);
+
+  // Reset when navigating to a different category
+  useEffect(() => {
+    setActiveTab(null);
+  }, [key, facilityNorm]);
+
+  // ── Data fetching ────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!facilityNorm) return;
@@ -119,7 +380,7 @@ export default function ResourcesCategoryPage() {
         const st = err.response?.status;
         if (st === 403) {
           setLmsLoadError(
-            "You don’t have access to facility training uploads for this page. Ask an admin to add this facility to your profile."
+            "You don't have access to facility training uploads for this page. Ask an admin to add this facility to your profile."
           );
         } else if (st === 401) {
           setLmsLoadError("Your session may have expired — try signing in again.");
@@ -181,9 +442,12 @@ export default function ResourcesCategoryPage() {
     };
   }, [facilityNorm, key, current]);
 
-  useEffect(() => {
-    setContentTab("videos");
-  }, [key, facilityNorm]);
+  // ── Derived ──────────────────────────────────────────────────────────────────
+
+  const visibleCategories = useMemo(() => {
+    if (categoryCountsLoading) return CATEGORIES;
+    return CATEGORIES.filter((c) => (categoryCounts?.[c.key]?.total || 0) > 0);
+  }, [categoryCounts, categoryCountsLoading]);
 
   if (!facilityNorm) {
     return <div className={PAGE_PADDING}>Unknown facility.</div>;
@@ -194,30 +458,10 @@ export default function ResourcesCategoryPage() {
   }
 
   const { totalCount, completedCount, progress } = computeProgress({ items, completedSet: completed });
-  const hasVideos = (items?.videos || []).length > 0;
-  const hasDocs = (items?.docs || []).length > 0;
-  const hasReports = key === "it" && (lmsReports || []).length > 0;
-  const showTabs = hasVideos || hasDocs || hasReports;
-  const visibleCategories = useMemo(() => {
-    if (categoryCountsLoading) return CATEGORIES;
-    return CATEGORIES.filter((c) => (categoryCounts?.[c.key]?.total || 0) > 0);
-  }, [categoryCounts, categoryCountsLoading]);
 
-  useEffect(() => {
-    if (videosLoading || docsLoading || reportsLoading) return;
-    if (contentTab === "videos" && !hasVideos) {
-      if (hasDocs) setContentTab("documentation");
-      else if (hasReports) setContentTab("reports");
-    }
-    if (contentTab === "documentation" && !hasDocs) {
-      if (hasVideos) setContentTab("videos");
-      else if (hasReports) setContentTab("reports");
-    }
-    if (contentTab === "reports" && !hasReports) {
-      if (hasVideos) setContentTab("videos");
-      else if (hasDocs) setContentTab("documentation");
-    }
-  }, [contentTab, hasVideos, hasDocs, hasReports, videosLoading, docsLoading, reportsLoading]);
+  const isLoading = videosLoading || docsLoading || reportsLoading;
+  const hasContent = orderedTopicGroups.length > 0 || hasReports;
+  const activeGroup = orderedTopicGroups.find((g) => g.id === activeTab);
 
   return (
     <main className={PAGE_SHELL}>
@@ -259,63 +503,127 @@ export default function ResourcesCategoryPage() {
 
       <div className="grid gap-4 md:grid-cols-[1fr,176px]">
         <section className="min-w-0">
-          {showTabs ? (
+          {/* Topic tabs */}
+          {hasContent && allTabs.length > 0 ? (
             <div className="relative flex flex-wrap items-end gap-2 sm:gap-3">
-              {hasVideos ? (
-                <button
-                  type="button"
-                  onClick={() => setContentTab("videos")}
-                  className={[
-                    "relative -mb-px rounded-t-2xl border px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 sm:text-base",
-                    "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
-                    "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
-                    contentTab === "videos"
-                      ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
-                      : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
-                  ].join(" ")}
-                  role="tab"
-                  aria-selected={contentTab === "videos"}
-                >
-                  Video
-                </button>
-              ) : null}
-              {hasDocs ? (
-                <button
-                  type="button"
-                  onClick={() => setContentTab("documentation")}
-                  className={[
-                    "relative -mb-px rounded-t-2xl border px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 sm:text-base",
-                    "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
-                    "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
-                    contentTab === "documentation"
-                      ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
-                      : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
-                  ].join(" ")}
-                  role="tab"
-                  aria-selected={contentTab === "documentation"}
-                >
-                  Documentation
-                </button>
-              ) : null}
+              {orderedTopicGroups.map((g) => (
+                <TabBtn
+                  key={g.id}
+                  label={g.label}
+                  active={activeTab === g.id}
+                  onClick={() => setActiveTab(g.id)}
+                />
+              ))}
               {hasReports ? (
+                <TabBtn
+                  label="Reports"
+                  active={activeTab === "__reports__"}
+                  onClick={() => setActiveTab("__reports__")}
+                />
+              ) : null}
+              {isLearningAdmin && orderedTopicGroups.length > 1 ? (
                 <button
                   type="button"
-                  onClick={() => setContentTab("reports")}
-                  className={[
-                    "relative -mb-px rounded-t-2xl border px-3 py-2 text-sm font-semibold transition sm:px-4 sm:py-2.5 sm:text-base",
-                    "border-slate-200 bg-white text-slate-900 hover:text-[#0B3EAF]",
-                    "dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:text-[#0B3EAF]",
-                    contentTab === "reports"
-                      ? "z-10 border-b-transparent bg-[#eef2fb] !text-[#0B3EAF] shadow-sm dark:bg-[#0B3EAF]/10 dark:!text-[#0B3EAF]"
-                      : "border-b-slate-200 bg-slate-50 text-slate-900 dark:border-b-slate-700 dark:bg-slate-950/40 dark:text-white/90",
-                  ].join(" ")}
-                  role="tab"
-                  aria-selected={contentTab === "reports"}
+                  className="ml-auto mb-1 flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 shadow-sm hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                  onClick={() => {
+                    setArrangeOrder(orderedTopicGroups.map((g) => g.id));
+                    setShowArrange(true);
+                  }}
                 >
-                  Reports
+                  <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                    <path d="M2 4h12M2 8h12M2 12h12" strokeLinecap="round" />
+                  </svg>
+                  Arrange tabs
                 </button>
               ) : null}
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-px bg-slate-200 dark:bg-slate-700" />
+            </div>
+          ) : null}
+
+          {/* Arrange tabs modal */}
+          {showArrange ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowArrange(false)}>
+              <div
+                className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="mb-1 text-base font-bold text-slate-900 dark:text-white">Arrange tabs</h3>
+                <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">Drag to reorder, or use the arrows.</p>
+                <div className="space-y-2">
+                  {arrangeOrder.map((id, idx) => {
+                    const label = orderedTopicGroups.find((g) => g.id === id)?.label ?? (id === GENERAL_TOPIC ? "General" : id);
+                    return (
+                      <div
+                        key={id}
+                        draggable
+                        onDragStart={() => { dragItem.current = idx; }}
+                        onDragEnter={() => { dragOver.current = idx; }}
+                        onDragEnd={() => {
+                          const next = [...arrangeOrder];
+                          const [moved] = next.splice(dragItem.current, 1);
+                          next.splice(dragOver.current, 0, moved);
+                          setArrangeOrder(next);
+                          dragItem.current = null;
+                          dragOver.current = null;
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        className="flex cursor-grab items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 select-none active:cursor-grabbing dark:border-slate-700 dark:bg-slate-800"
+                      >
+                        <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-slate-400" fill="currentColor">
+                          <circle cx="5" cy="4" r="1.2" /><circle cx="11" cy="4" r="1.2" />
+                          <circle cx="5" cy="8" r="1.2" /><circle cx="11" cy="8" r="1.2" />
+                          <circle cx="5" cy="12" r="1.2" /><circle cx="11" cy="12" r="1.2" />
+                        </svg>
+                        <span className="flex-1 text-sm font-medium text-slate-800 dark:text-slate-100">{label}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => {
+                              const next = [...arrangeOrder];
+                              [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                              setArrangeOrder(next);
+                            }}
+                            className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20 dark:hover:text-slate-200"
+                          >
+                            <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2}><path d="M2 8l4-4 4 4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === arrangeOrder.length - 1}
+                            onClick={() => {
+                              const next = [...arrangeOrder];
+                              [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                              setArrangeOrder(next);
+                            }}
+                            className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20 dark:hover:text-slate-200"
+                          >
+                            <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2}><path d="M2 4l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary flex-1"
+                    disabled={savingOrder}
+                    onClick={() => saveTabOrder(arrangeOrder)}
+                  >
+                    {savingOrder ? "Saving…" : "Save order"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setShowArrange(false)}
+                    disabled={savingOrder}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -323,144 +631,12 @@ export default function ResourcesCategoryPage() {
             className="rounded-b-2xl border border-t-0 border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"
             role="tabpanel"
           >
-            {!showTabs ? (
+            {isLoading ? (
+              <div className="text-sm text-slate-500 dark:text-slate-400">Loading…</div>
+            ) : !hasContent ? (
               <div className="text-sm text-slate-500 dark:text-slate-400">No content yet.</div>
-            ) : null}
-
-            {contentTab === "videos" && hasVideos ? (
-              <div>
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {items.videos.map((v) => {
-                      const done = completed.has(v.id);
-                      const courseTitle =
-                        (v.course_title != null && String(v.course_title).trim()
-                          ? String(v.course_title).trim()
-                          : null) ||
-                        (v.meta != null && String(v.meta).trim() ? String(v.meta).trim() : "");
-                      const heading =
-                        courseTitle || (v.title != null && String(v.title).trim() ? String(v.title).trim() : "Training");
-                      const courseDesc =
-                        v.description != null && String(v.description).trim()
-                          ? String(v.description).trim()
-                          : "";
-                      const added = formatAddedDate(v.added_at);
-                      const videoPath = `${resourcesBase}/${key}/video/${v.id}`;
-                      return (
-                        <div
-                          key={v.id}
-                          className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40"
-                        >
-                          <div className="min-w-0">
-                            <Link
-                              to={videoPath}
-                              className="text-base font-bold leading-snug text-brand-blue hover:text-brand-blue-hover hover:underline dark:text-brand-green"
-                            >
-                              {heading}
-                            </Link>
-                            {courseDesc ? (
-                              <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                                {courseDesc}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-3 dark:border-slate-600/60">
-                            <span className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">
-                              {added ? <>Uploaded on {added}</> : <span className="text-slate-400">Upload date —</span>}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => void toggleComplete(v.id)}
-                              className={
-                                done
-                                  ? "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-emerald-700 bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.99] dark:border-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600"
-                                  : "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-[rgba(11,62,175,0.28)] bg-white px-2.5 py-1 text-xs font-semibold text-[#000000] transition hover:border-[#0B3EAF] hover:bg-[#f7f9fe] hover:text-[#0B3EAF] active:scale-[0.99] dark:border-[rgba(167,211,68,0.4)] dark:bg-[#141414] dark:text-[#f5f5f5] dark:hover:border-[#A7D344] dark:hover:bg-[#1a1a1a] dark:hover:text-[#A7D344]"
-                              }
-                            >
-                              {done ? "Completed" : "Mark done"}
-                            </button>
-                          </div>
-
-                          <div className="overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
-                            <Link to={videoPath} className="block" aria-label={`Open video: ${heading}`}>
-                              <video preload="metadata" className="aspect-video w-full" src={v.url} />
-                            </Link>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            ) : null}
-
-            {contentTab === "documentation" && hasDocs ? (
-              <div>
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {items.docs.map((d) => {
-                      const done = completed.has(d.id);
-                      const docPath =
-                        d.docId != null && resourcesBase
-                          ? `${resourcesBase}/${key}/document/${d.docId}`
-                          : null;
-                      const added = formatAddedDate(d.added_at ?? d.created_at);
-                      return (
-                        <div
-                          key={d.id}
-                          className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40"
-                        >
-                          <div className="min-w-0">
-                            {docPath ? (
-                              <Link
-                                to={docPath}
-                                className="text-base font-bold leading-snug text-brand-blue hover:text-brand-blue-hover hover:underline dark:text-brand-green"
-                              >
-                                {d.title}
-                              </Link>
-                            ) : (
-                              <div className="text-base font-bold leading-snug text-brand-blue dark:text-brand-green">
-                                {d.title}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-3 dark:border-slate-600/60">
-                            <span className="min-w-0 text-xs font-medium text-slate-500 dark:text-slate-400">
-                              {added ? (
-                                <>Uploaded on {added}</>
-                              ) : (
-                                <span className="text-slate-400">Upload date —</span>
-                              )}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => void toggleComplete(d.id)}
-                              className={
-                                done
-                                  ? "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-emerald-700 bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.99] dark:border-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600"
-                                  : "shrink-0 inline-flex items-center justify-center rounded-full border-2 border-[rgba(11,62,175,0.28)] bg-white px-2.5 py-1 text-xs font-semibold text-[#000000] transition hover:border-[#0B3EAF] hover:bg-[#f7f9fe] hover:text-[#0B3EAF] active:scale-[0.99] dark:border-[rgba(167,211,68,0.4)] dark:bg-[#141414] dark:text-[#f5f5f5] dark:hover:border-[#A7D344] dark:hover:bg-[#1a1a1a] dark:hover:text-[#A7D344]"
-                              }
-                            >
-                              {done ? "Completed" : "Mark done"}
-                            </button>
-                          </div>
-
-                          <div className="overflow-hidden rounded-xl bg-black/5 dark:bg-black/30">
-                            {docPath ? (
-                              <Link to={docPath} className="block" aria-label={`Open document: ${d.title}`}>
-                                <ResourceDocumentPreview url={d.url} />
-                              </Link>
-                            ) : (
-                              <ResourceDocumentPreview url={d.url} />
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            ) : null}
-
-            {contentTab === "reports" && hasReports ? (
+            ) : activeTab === "__reports__" ? (
+              /* Reports tab (IT only) */
               <div className="grid gap-3 md:grid-cols-2">
                 {lmsReports.map((r) => {
                   const desc =
@@ -497,6 +673,52 @@ export default function ResourcesCategoryPage() {
                     </div>
                   );
                 })}
+              </div>
+            ) : activeGroup ? (
+              /* Topic group tab — shows both videos and docs */
+              <div className="space-y-6">
+                {activeGroup.videos.length > 0 && (
+                  <div>
+                    {(activeGroup.videos.length > 0 && activeGroup.docs.length > 0) && (
+                      <div className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Videos
+                      </div>
+                    )}
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                      {activeGroup.videos.map((v) => (
+                        <VideoCard
+                          key={v.id}
+                          v={v}
+                          resourcesBase={resourcesBase}
+                          category={key}
+                          completed={completed}
+                          toggleComplete={toggleComplete}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {activeGroup.docs.length > 0 && (
+                  <div>
+                    {(activeGroup.videos.length > 0 && activeGroup.docs.length > 0) && (
+                      <div className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Documents
+                      </div>
+                    )}
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                      {activeGroup.docs.map((d) => (
+                        <DocCard
+                          key={d.id}
+                          d={d}
+                          resourcesBase={resourcesBase}
+                          category={key}
+                          completed={completed}
+                          toggleComplete={toggleComplete}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>

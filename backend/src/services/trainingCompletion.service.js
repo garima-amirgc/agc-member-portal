@@ -75,12 +75,22 @@ async function getResourceTrainingSummary(userId, facilities = null) {
   return { total, completed, allComplete: total > 0 && completed === total, avgProgress };
 }
 
+async function getUserDocAssignments(userId) {
+  const rows = await db
+    .prepare("SELECT id, status FROM user_training_assignments WHERE user_id = ? AND resource_kind = 'document'")
+    .all(userId);
+  const total = rows.length;
+  const completed = rows.filter((r) => r.status === "completed").length;
+  return { total, completed, allComplete: total === 0 || completed === total };
+}
+
 async function getTrainingSummary(userId) {
-  // Fetch facilities once, then run both queries in parallel (was: sequential + facilities fetched twice)
+  // Fetch facilities once, then run all three queries in parallel
   const facilities = await getUserFacilities(userId);
-  const [assignments, resources] = await Promise.all([
+  const [assignments, resources, docAssignments] = await Promise.all([
     getFacilityScopedAssignments(userId, facilities),
     getResourceTrainingSummary(userId, facilities),
+    getUserDocAssignments(userId),
   ]);
 
   const assignmentTotal = assignments.length;
@@ -90,13 +100,14 @@ async function getTrainingSummary(userId) {
       ? 0
       : Math.round(assignments.reduce((s, a) => s + (a.progress ?? 0), 0) / assignmentTotal);
 
-  const total = assignmentTotal + resources.total;
-  const completed = assignmentCompleted + resources.completed;
+  const total = assignmentTotal + resources.total + docAssignments.total;
+  const completed = assignmentCompleted + resources.completed + docAssignments.completed;
   const avgProgress = total === 0 ? 0 : Math.round((completed / total) * 100);
 
   const assignmentsDone = assignmentTotal === 0 || assignmentCompleted === assignmentTotal;
   const resourcesDone = resources.total === 0 || resources.allComplete;
-  const allComplete = total > 0 && assignmentsDone && resourcesDone;
+  const docAssignmentsDone = docAssignments.allComplete;
+  const allComplete = total > 0 && assignmentsDone && resourcesDone && docAssignmentsDone;
 
   return {
     total,
@@ -115,6 +126,11 @@ async function getTrainingSummary(userId) {
       avgProgress: resources.avgProgress,
       allComplete: resources.allComplete,
     },
+    docAssignments: {
+      total: docAssignments.total,
+      completed: docAssignments.completed,
+      allComplete: docAssignments.allComplete,
+    },
   };
 }
 
@@ -126,6 +142,7 @@ module.exports = {
   getUserFacilities,
   getFacilityScopedAssignments,
   getResourceTrainingSummary,
+  getUserDocAssignments,
   getTrainingSummary,
   clearAllTrainingMilestone,
 };
