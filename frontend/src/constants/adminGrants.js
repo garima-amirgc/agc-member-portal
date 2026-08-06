@@ -16,6 +16,7 @@ export const ADMIN_GRANT_KEYS = Object.freeze({
   COMPANY_CONTENT: "company_content",
   IT_TICKETS: "it_tickets",
   HR_NEWSFEED: "hr_newsfeed",
+  ASSET_TRACKER: "asset_tracker",
 });
 
 export const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
@@ -62,6 +63,7 @@ export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
       { key: ADMIN_GRANT_KEYS.REPORTS, label: "Manage Power BI reports" },
       { key: ADMIN_GRANT_KEYS.SYSTEM, label: "System status" },
       { key: ADMIN_GRANT_KEYS.IT_TICKETS, label: "IT Tickets — view all tickets (full visibility)" },
+      { key: ADMIN_GRANT_KEYS.ASSET_TRACKER, label: "Asset Tracker — manage company equipment inventory" },
     ],
   },
   {

@@ -74,16 +74,29 @@ router.get("/:id", async (req, res) => {
 
   const adminAllCourses = hasAdminGrant(req.user, ADMIN_GRANT_KEYS.LEARNING_ADMIN);
   if (!adminAllCourses) {
-    const facilityAllowed = await db
-      .prepare("SELECT 1 FROM user_facilities WHERE user_id = ? AND business_unit = ? LIMIT 1")
-      .get(req.user.id, course.business_unit);
-    if (!facilityAllowed) return res.status(403).json({ message: "Forbidden for your facilities" });
+    // An explicit assignment is its own grant of access — if this course was
+    // specifically assigned to this user, it must always be openable, even if
+    // their facility/department list doesn't (or no longer) matches the
+    // course's own facility/department. Without this, /assignments/me (which
+    // only filters by facility) and this route (which also filters by
+    // department) can disagree, showing a course on the dashboard that then
+    // silently fails to open.
+    const isAssigned = await db
+      .prepare("SELECT 1 FROM assignments WHERE user_id = ? AND course_id = ? LIMIT 1")
+      .get(req.user.id, course.id);
 
-    if (course.department) {
-      const deptAllowed = await db
-        .prepare("SELECT 1 FROM user_departments WHERE user_id = ? AND department = ? LIMIT 1")
-        .get(req.user.id, course.department);
-      if (!deptAllowed) return res.status(403).json({ message: "Forbidden for your department" });
+    if (!isAssigned) {
+      const facilityAllowed = await db
+        .prepare("SELECT 1 FROM user_facilities WHERE user_id = ? AND business_unit = ? LIMIT 1")
+        .get(req.user.id, course.business_unit);
+      if (!facilityAllowed) return res.status(403).json({ message: "Forbidden for your facilities" });
+
+      if (course.department) {
+        const deptAllowed = await db
+          .prepare("SELECT 1 FROM user_departments WHERE user_id = ? AND department = ? LIMIT 1")
+          .get(req.user.id, course.department);
+        if (!deptAllowed) return res.status(403).json({ message: "Forbidden for your department" });
+      }
     }
   }
 

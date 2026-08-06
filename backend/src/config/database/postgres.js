@@ -734,6 +734,27 @@ async function migrateColumns(client) {
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )`,
+    // Asset tracker — company equipment inventory
+    `CREATE TABLE IF NOT EXISTS assets (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      asset_tag TEXT UNIQUE,
+      category TEXT NOT NULL DEFAULT 'Other',
+      business_unit TEXT NOT NULL CHECK(business_unit IN ('AGC','AQM','SCF','ASP')),
+      status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available','assigned','maintenance','retired')),
+      condition TEXT NOT NULL DEFAULT 'good' CHECK(condition IN ('new','good','fair','poor')),
+      assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      serial_number TEXT,
+      location TEXT,
+      purchase_date TEXT,
+      purchase_cost NUMERIC,
+      notes TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_assets_assigned_to ON assets (assigned_to)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_business_unit ON assets (business_unit)",
   ];
   for (const q of alters) {
     try {

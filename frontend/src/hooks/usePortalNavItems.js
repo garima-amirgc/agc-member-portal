@@ -3,6 +3,7 @@ import {
   IconBuilding,
   IconCalendar,
   IconChart,
+  IconClipboard,
   IconCog,
   IconHome,
   IconTeam,
@@ -81,6 +82,11 @@ export function usePortalNavItems(user) {
         to: "/it-tickets",
         icon: IconTicket,
         label: "IT Ticket",
+      },
+      {
+        to: "/assets",
+        icon: IconClipboard,
+        label: "Asset Tracker",
       },
       {
         to: "/profile",

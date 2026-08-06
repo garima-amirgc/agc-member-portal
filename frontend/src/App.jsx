@@ -60,6 +60,7 @@ const AdminHRNewsfeedPage = lazy(() => import("./pages/AdminHRNewsfeedPage"));
 const NewsfeedPage = lazy(() => import("./pages/NewsfeedPage"));
 const SocialCommitteePage = lazy(() => import("./pages/SocialCommitteePage"));
 const AdminSocialCommitteePage = lazy(() => import("./pages/AdminSocialCommitteePage"));
+const AssetsPage = lazy(() => import("./pages/AssetsPage"));
 
 function pickFacilityForLegacyResources(me) {
   try {
@@ -153,6 +154,7 @@ export default function App() {
           }
         />
         <Route path="it-tickets" element={<ItTicketsPage />} />
+        <Route path="assets" element={<AssetsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="profile" element={<ProfilePage />} />

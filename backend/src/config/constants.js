@@ -24,6 +24,21 @@ const TICKET_STATUS = ["open", "in_progress", "closed"];
 const TICKET_PRIORITIES = ["low", "medium", "high", "urgent"];
 const TICKET_PRIORITY_DEFAULT = "medium";
 
+const ASSET_CATEGORIES = [
+  "Laptop",
+  "Desktop",
+  "Monitor",
+  "Phone",
+  "Tablet",
+  "Vehicle",
+  "Tool",
+  "Machinery",
+  "Furniture",
+  "Other",
+];
+const ASSET_STATUSES = ["available", "assigned", "maintenance", "retired"];
+const ASSET_CONDITIONS = ["new", "good", "fair", "poor"];
+
 module.exports = {
   ROLES,
   BUSINESS_UNITS,
@@ -32,5 +47,8 @@ module.exports = {
   TICKET_STATUS,
   TICKET_PRIORITIES,
   TICKET_PRIORITY_DEFAULT,
+  ASSET_CATEGORIES,
+  ASSET_STATUSES,
+  ASSET_CONDITIONS,
   canonicalRole,
 };

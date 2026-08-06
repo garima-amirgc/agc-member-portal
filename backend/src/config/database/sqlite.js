@@ -1379,6 +1379,37 @@ async function initDb() {
     rawDb.exec(`CREATE INDEX IF NOT EXISTS idx_user_training_user ON user_training_assignments (user_id)`);
   } catch {}
 
+  // Asset tracker — company equipment inventory
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS assets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        asset_tag TEXT UNIQUE,
+        category TEXT NOT NULL DEFAULT 'Other',
+        business_unit TEXT NOT NULL CHECK(business_unit IN ('AGC','AQM','SCF','ASP')),
+        status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available','assigned','maintenance','retired')),
+        condition TEXT NOT NULL DEFAULT 'good' CHECK(condition IN ('new','good','fair','poor')),
+        assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        serial_number TEXT,
+        location TEXT,
+        purchase_date TEXT,
+        purchase_cost REAL,
+        notes TEXT,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] assets: OK");
+  } catch (e) { console.error("[sqlite] assets table:", e.message); }
+  try {
+    rawDb.exec(`
+      CREATE INDEX IF NOT EXISTS idx_assets_assigned_to ON assets (assigned_to);
+      CREATE INDEX IF NOT EXISTS idx_assets_business_unit ON assets (business_unit);
+    `);
+  } catch {}
+
   persist();
 }
 
