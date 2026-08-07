@@ -325,10 +325,23 @@ export default function ProfilePage() {
 
   const formatAdpDate = (iso) => {
     if (!iso) return null;
-    const d = new Date(iso);
-    if (isNaN(d)) return iso;
-    if (d.getFullYear() < 1900) return d.toLocaleDateString("en-CA", { month: "long", day: "numeric" });
-    return d.toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
+    // ADP sends plain date-only strings (e.g. "1990-05-15") with no time
+    // component. `new Date(iso)` parses that as UTC midnight, and
+    // toLocaleDateString then converts it back to the viewer's local time
+    // zone — for anyone west of UTC that rolls the date back a day (e.g.
+    // "May 15" renders as "May 14"). Parsing the year/month/day ourselves
+    // and building the Date in local time avoids any UTC conversion, so
+    // the calendar date shown always matches what ADP sent.
+    const s = String(iso).slice(0, 10);
+    const [y, m, d] = s.split("-").map(Number);
+    // Year can legitimately be 0 (ADP's placeholder for "birth year not on
+    // file" — see the y < 1900 branch below), so check it's a real number
+    // rather than truthy — `!y` would wrongly reject year 0.
+    if (!Number.isFinite(y) || !m || !d) return iso;
+    const date = new Date(y, m - 1, d);
+    if (isNaN(date)) return iso;
+    if (y < 1900) return date.toLocaleDateString("en-CA", { month: "long", day: "numeric" });
+    return date.toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
   };
 
   const avatarUrl = resolvePublicMediaUrl(profile.profile_image_url);
