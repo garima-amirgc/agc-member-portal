@@ -103,7 +103,26 @@ router.get("/:id", async (req, res) => {
   const lessons = await db
     .prepare("SELECT * FROM lessons WHERE course_id = ? ORDER BY order_index ASC")
     .all(req.params.id);
-  return res.json({ ...course, lessons });
+
+  // Tell the player which lessons this user has already completed, so it can
+  // show "Completed" instead of always showing "Mark as Completed" — this is
+  // scoped to the caller's own assignment for this course, not just whatever
+  // assignment id shows up in the query string.
+  let completedLessonIds = [];
+  const assignmentIdRaw = req.query.assignment;
+  if (assignmentIdRaw) {
+    const assignment = await db
+      .prepare("SELECT id FROM assignments WHERE id = ? AND user_id = ? AND course_id = ?")
+      .get(assignmentIdRaw, req.user.id, course.id);
+    if (assignment) {
+      const completions = await db
+        .prepare("SELECT lesson_id FROM lesson_completions WHERE assignment_id = ?")
+        .all(assignment.id);
+      completedLessonIds = completions.map((c) => c.lesson_id);
+    }
+  }
+
+  return res.json({ ...course, lessons, completed_lesson_ids: completedLessonIds });
 });
 
 function normalizeResourceCategory(raw) {

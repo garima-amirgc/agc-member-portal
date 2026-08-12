@@ -320,7 +320,7 @@ export default function NewHireWelcomeCard({ user }) {
                 {pendingCourses.map((a) => (
                   <li key={`c-${a.id}`}>
                     <Link
-                      to={`/course/${a.course_id}`}
+                      to={`/course/${a.course_id}?assignment=${a.id}`}
                       className="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white/60 px-2.5 py-2 text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-[#0B3EAF]/30 hover:shadow-sm dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-200"
                     >
                       <IconChart className="h-4 w-4 shrink-0 text-[#0B3EAF] dark:text-[#A7D344]" aria-hidden />
