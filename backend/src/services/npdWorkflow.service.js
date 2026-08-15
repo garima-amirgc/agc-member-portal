@@ -807,22 +807,9 @@ async function recordApproval({ requestId, stepNumber, user, action, comments })
     return getRequestDetail(requestId, user);
   }
 
-  // action === "approved" — advance only once every configured approver has signed off.
-  const approvers = await getConfiguredApprovers(stepDef.approvalType);
-  if (approvers.length) {
-    const approvedRows = await db
-      .prepare("SELECT approver_id FROM npd_approvals WHERE step_id = ? AND action = 'approved' AND action_at >= ?")
-      .all(step.id, step.started_at);
-    const approvedIds = new Set(approvedRows.map((a) => a.approver_id));
-    const allApproved = approvers.every((a) => approvedIds.has(a.user_id));
-    if (!allApproved) {
-      await db.prepare("UPDATE npd_steps SET status = 'waiting_approval' WHERE id = ?").run(step.id);
-      return getRequestDetail(requestId, user);
-    }
-  }
-
+  // action === "approved" — a single approval from any one configured approver advances the step.
   await db.prepare("UPDATE npd_steps SET status = 'completed', completed_at = ? WHERE id = ?").run(now, step.id);
-  await logActivity({ requestId, stepId: step.id, user, action: "step_completed", newStatus: "completed", description: `All required approvals received for "${stepDef.name}".` });
+  await logActivity({ requestId, stepId: step.id, user, action: "step_completed", newStatus: "completed", description: `${user.name} approved "${stepDef.name}".` });
   if (isSkippedResume) {
     await finalizeIfAllStepsDone({ requestId, user });
   } else {

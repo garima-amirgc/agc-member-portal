@@ -371,7 +371,7 @@ function StepActionBlock({ request, user, step, stepDef, isAdmin, onUpdated, isC
       <div className="space-y-3">
         {header}
         {skipNote}
-        <p className="text-sm text-slate-600 dark:text-slate-400">This step requires sign-off from every configured approver — not just any admin.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400">Any one of the configured approvers can approve this step to move it forward.</p>
         {stepApprovals.length ? (
           <ul className="space-y-1 text-sm">
             {stepApprovals.map((a) => (
@@ -391,9 +391,7 @@ function StepActionBlock({ request, user, step, stepDef, isAdmin, onUpdated, isC
         ) : null}
         {myDecision ? (
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            You recorded <span className="font-semibold">{myDecision.action}</span> for this round. Waiting on the
-            remaining configured approver(s) — check <strong>Manage access &amp; approvers</strong> if you're not sure
-            who that is.
+            You recorded <span className="font-semibold">{myDecision.action}</span> for this step.
           </p>
         ) : (
           <>

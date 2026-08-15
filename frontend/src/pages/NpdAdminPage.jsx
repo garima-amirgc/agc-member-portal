@@ -139,7 +139,7 @@ export default function NpdAdminPage() {
           <section className="card p-4 sm:p-6">
             <h2 className="mb-1 text-lg font-semibold text-[#000000] dark:text-white">Step approvers &amp; access</h2>
             <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-              Only people assigned below can act on a step. Approvals need everyone listed to approve.
+              Only people assigned below can act on a step. For approval steps, any one listed approver can approve.
             </p>
             <div className="space-y-5">
               {NPD_STEP_DEFS.map((step) => {
