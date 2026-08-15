@@ -21,6 +21,7 @@ const {
   uploadUpcomingImageFromDisk,
   uploadPollBannerImageFromDisk,
   uploadTicketAttachmentFromDisk,
+  uploadNpdAttachmentFromDisk,
   createPresignedVideoUpload,
   createPresignedDocumentUpload,
 } = require("../services/objectStorage.service");
@@ -85,6 +86,31 @@ const ticketAttachmentUpload = multer({
       ".webp",
     ]);
     if (!allowed.has(ext)) return cb(new Error("INVALID_TICKET_ATTACHMENT_EXT"));
+    return cb(null, true);
+  },
+});
+
+const npdAttachmentUpload = multer({
+  storage,
+  limits: { fileSize: (Number(process.env.NPD_UPLOAD_MAX_MB) || 25) * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowed = new Set([
+      ".pdf",
+      ".doc",
+      ".docx",
+      ".ppt",
+      ".pptx",
+      ".xls",
+      ".xlsx",
+      ".txt",
+      ".jpg",
+      ".jpeg",
+      ".png",
+      ".gif",
+      ".webp",
+    ]);
+    if (!allowed.has(ext)) return cb(new Error("INVALID_NPD_ATTACHMENT_EXT"));
     return cb(null, true);
   },
 });
@@ -339,6 +365,44 @@ router.post(
   handleTicketAttachmentUpload
 );
 
+// NPD attachments require cloud storage (Spaces/R2) — no local-disk fallback,
+// since this restricted-access module is meant to be a step toward moving
+// its files into SharePoint, not into another local-only folder.
+router.post(
+  "/npd-attachment",
+  authRequired,
+  npdAttachmentUpload.single("file"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded." });
+    }
+
+    const localPath = req.file.path;
+    const filename = req.file.filename;
+    const original_name = String(req.file.originalname || filename).slice(0, 240);
+
+    if (!isUploadStorageEnabled()) {
+      return rejectMissingUploadStorage(res, localPath);
+    }
+
+    try {
+      const { url: fileUrl, provider } = await uploadNpdAttachmentFromDisk(localPath, filename);
+      removeTempFile(localPath);
+      return res.json({
+        filename,
+        original_name,
+        file_url: fileUrl,
+        storageProvider: provider,
+      });
+    } catch (err) {
+      console.error("NPD attachment upload failed:", err);
+      removeTempFile(localPath);
+      const raw = err.message || String(err) || "Upload failed";
+      return res.status(502).json({ message: `Storage upload failed: ${raw}` });
+    }
+  }
+);
+
 router.post(
   "/upcoming-image",
   authRequired,
@@ -474,8 +538,13 @@ router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
       const ticketMax = Number(process.env.IT_TICKET_UPLOAD_MAX_MB) || 15;
+      const npdMax = Number(process.env.NPD_UPLOAD_MAX_MB) || 25;
       const u = String(req.originalUrl || req.url || "");
-      const maxMb = /ticket-attachment/i.test(u) ? ticketMax : Number(process.env.UPLOAD_MAX_MB) || 500;
+      const maxMb = /ticket-attachment/i.test(u)
+        ? ticketMax
+        : /npd-attachment/i.test(u)
+          ? npdMax
+          : Number(process.env.UPLOAD_MAX_MB) || 500;
       return res.status(413).json({ message: `File too large (max ${maxMb} MB).` });
     }
     return res.status(400).json({ message: err.message || "Upload failed." });
@@ -492,6 +561,12 @@ router.use((err, req, res, next) => {
     return res.status(400).json({ message: "Only image files are allowed (jpg, png, gif, webp)." });
   }
   if (err.message === "INVALID_TICKET_ATTACHMENT_EXT") {
+    return res.status(400).json({
+      message:
+        "Allowed: PDF, Word, Excel, PowerPoint, plain text, or images (jpg, png, gif, webp).",
+    });
+  }
+  if (err.message === "INVALID_NPD_ATTACHMENT_EXT") {
     return res.status(400).json({
       message:
         "Allowed: PDF, Word, Excel, PowerPoint, plain text, or images (jpg, png, gif, webp).",

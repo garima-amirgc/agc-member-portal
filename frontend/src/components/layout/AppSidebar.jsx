@@ -4,6 +4,7 @@ import { AMIR_GROUP_LOGO_SRC, APP_DISPLAY_NAME } from "../../constants/branding"
 import { useAuth } from "../../context/AuthContext";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
 import { useMyOpenTicketCount } from "../../hooks/useMyOpenTicketCount";
+import { useMyNpdActionCount } from "../../hooks/useMyNpdActionCount";
 import { isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
 import { IconBuilding, IconChevron, IconHelp, IconSparkle } from "./SidebarIcons";
 import { SidebarAdminGroupDropdown } from "./AdminNavGroupDropdown";
@@ -134,6 +135,7 @@ export default function AppSidebar() {
   const { mainItems, adminGroups, aboutCompanyItems, homeTo } = usePortalNavItems(user);
   const universityOnly = isFacilityUniversityOnlyPortal(user);
   const ticketBadgeCount = useMyOpenTicketCount(user);
+  const npdBadgeCount = useMyNpdActionCount(user);
   const showAdminSection = adminGroups.length > 0 || user?.role === "Admin";
 
   if (!user) return null;
@@ -164,7 +166,7 @@ export default function AppSidebar() {
             <NavItem
               key={item.to + (item.end ? "-e" : "")}
               {...item}
-              badge={item.to === "/it-tickets" ? ticketBadgeCount : 0}
+              badge={item.to === "/it-tickets" ? ticketBadgeCount : item.to === "/npd" ? npdBadgeCount : 0}
             />
           ))}
         </div>

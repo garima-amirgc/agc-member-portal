@@ -17,6 +17,7 @@ export const ADMIN_GRANT_KEYS = Object.freeze({
   IT_TICKETS: "it_tickets",
   HR_NEWSFEED: "hr_newsfeed",
   ASSET_TRACKER: "asset_tracker",
+  NPD: "npd",
 });
 
 export const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
@@ -73,6 +74,16 @@ export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
       {
         key: ADMIN_GRANT_KEYS.LEARNING_ADMIN,
         label: "Learning admin (courses, videos, assignments, resource docs)",
+      },
+    ],
+  },
+  {
+    groupKey: "npd",
+    label: "New Product Development",
+    options: [
+      {
+        key: ADMIN_GRANT_KEYS.NPD,
+        label: "New Product Development — configure approvers, manage all requests, grant access",
       },
     ],
   },

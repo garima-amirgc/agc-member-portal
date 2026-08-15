@@ -55,3 +55,13 @@ export function hasAnyAdminGrant(user, grantKeys) {
   if (!Array.isArray(grantKeys) || grantKeys.length === 0) return false;
   return grantKeys.some((k) => hasAdminGrant(user, k));
 }
+
+// New Product Development is a restricted-access module: visible only to
+// full admins, users granted ADMIN_GRANT_KEYS.NPD, or users explicitly
+// added to the access allowlist (reflected on the user object as
+// npd_access, set by GET /users/me).
+export function hasNpdAccess(user) {
+  if (!user) return false;
+  if (hasAdminGrant(user, ADMIN_GRANT_KEYS.NPD)) return true;
+  return user.npd_access === true;
+}

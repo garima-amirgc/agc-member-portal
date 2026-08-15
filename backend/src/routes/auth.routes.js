@@ -7,12 +7,14 @@ const userDeptSvc = require("../services/userDepartments.service");
 const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS, isFullAdminUser, parseAdminGrantsColumn } = require("../config/adminGrants");
+const { hasNpdAccess } = require("../services/npdWorkflow.service");
 
 async function authResponseUser(userRow, departments, dept) {
   const { password: _pw, invite_token_hash: _i, invite_expires_at: _ie, admin_grants: rawAg, ...safe } = userRow;
   const adminGrants = parseAdminGrantsColumn(rawAg);
   const role = canonicalRole(userRow.role);
   const has_direct_reports = await hasDirectReports(userRow.id);
+  const npd_access = await hasNpdAccess({ id: userRow.id, role, adminGrants });
   return {
     ...safe,
     role,
@@ -22,6 +24,7 @@ async function authResponseUser(userRow, departments, dept) {
     departments,
     department: dept,
     has_direct_reports,
+    npd_access,
   };
 }
 const leaveSvc = require("../services/leaveRequests.service");

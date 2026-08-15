@@ -6,6 +6,7 @@ import {
   IconClipboard,
   IconCog,
   IconHome,
+  IconSparkle,
   IconTeam,
   IconTicket,
   IconUser,
@@ -14,7 +15,7 @@ import {
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import { buildAdminNavGroups } from "../constants/adminNavGroups";
 import { ABOUT_COMPANY_NAV_ITEMS } from "../constants/companyContentConfig";
-import { hasAdminGrant, hasAnyAdminGrant } from "../utils/adminAccess";
+import { hasAdminGrant, hasAnyAdminGrant, hasNpdAccess } from "../utils/adminAccess";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../utils/facilityUniversityOnly";
 
 export function usePortalNavItems(user) {
@@ -88,12 +89,21 @@ export function usePortalNavItems(user) {
         icon: IconClipboard,
         label: "Asset Tracker",
       },
-      {
-        to: "/profile",
-        icon: IconUser,
-        label: "Profile",
-      },
     );
+
+    if (hasNpdAccess(user)) {
+      main.push({
+        to: "/npd",
+        icon: IconSparkle,
+        label: "New Product Development",
+      });
+    }
+
+    main.push({
+      to: "/profile",
+      icon: IconUser,
+      label: "Profile",
+    });
 
     const admin = [];
     if (showAdministrationNav) {
@@ -196,6 +206,15 @@ export function usePortalNavItems(user) {
           end: true,
           grantKey: ADMIN_GRANT_KEYS.LEARNING_ADMIN,
           group: "uofagc",
+        },
+        {
+          to: "/npd/admin",
+          icon: IconSparkle,
+          label: "New Product Development",
+          desc: "Approvers & access",
+          end: true,
+          grantKey: ADMIN_GRANT_KEYS.NPD,
+          group: "npd",
         },
       ];
       for (const item of candidates) {

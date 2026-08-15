@@ -1410,6 +1410,270 @@ async function initDb() {
     `);
   } catch {}
 
+  // ─── New Product Development (NPD) workflow ────────────────────────────────
+  // Restricted-access module: only visible to full admins, users with the
+  // ADMIN_GRANT_KEYS.NPD grant, or users explicitly listed in
+  // npd_access_users (same "exclusive access allowlist" pattern already used
+  // for report_access_users).
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_number TEXT NOT NULL UNIQUE,
+        customer_name TEXT NOT NULL,
+        customer_number TEXT,
+        product_name TEXT NOT NULL,
+        product_description TEXT,
+        sales_rep_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        plant TEXT,
+        requested_launch_date TEXT,
+        estimated_volume TEXT,
+        packaging_requirement TEXT,
+        request_type TEXT NOT NULL DEFAULT 'new_product' CHECK(request_type IN ('new_product','existing_product_modification')),
+        customer_contact TEXT,
+        general_comments TEXT,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN (
+          'draft','submitted','waiting_approval','in_progress','changes_requested',
+          'rejected','customer_rejected','authorized_for_production','completed','cancelled','on_hold'
+        )),
+        current_step INTEGER NOT NULL DEFAULT 1,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        completed_at TEXT
+      )`
+    );
+    console.log("[sqlite] npd_requests: OK");
+  } catch (e) { console.error("[sqlite] npd_requests table:", e.message); }
+
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+        step_number INTEGER NOT NULL,
+        step_key TEXT NOT NULL,
+        step_name TEXT NOT NULL,
+        responsible_department TEXT,
+        assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        status TEXT NOT NULL DEFAULT 'locked' CHECK(status IN (
+          'locked','not_started','in_progress','submitted','waiting_approval',
+          'approved','rejected','changes_requested','completed'
+        )),
+        data_json TEXT,
+        due_date TEXT,
+        started_at TEXT,
+        submitted_at TEXT,
+        completed_at TEXT,
+        UNIQUE(request_id, step_number)
+      )`
+    );
+    console.log("[sqlite] npd_steps: OK");
+  } catch (e) { console.error("[sqlite] npd_steps table:", e.message); }
+
+  // "Skip for now" — tracked alongside status (not as a new status value) so
+  // this stays a plain additive column migration with no CHECK-constraint
+  // rebuild. A step is "skipped" whenever skipped_at is set and completed_at
+  // isn't; the service layer folds that into a display_status for the UI.
+  try { rawDb.exec("ALTER TABLE npd_steps ADD COLUMN skipped_at TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_steps ADD COLUMN skipped_by INTEGER"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_steps ADD COLUMN skip_reason TEXT"); } catch {}
+
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_approvals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+        step_id INTEGER REFERENCES npd_steps(id) ON DELETE CASCADE,
+        approval_type TEXT NOT NULL,
+        approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        approver_name TEXT,
+        action TEXT NOT NULL CHECK(action IN ('submitted','approved','rejected','changes_requested','authorized')),
+        comments TEXT,
+        action_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] npd_approvals: OK");
+  } catch (e) { console.error("[sqlite] npd_approvals table:", e.message); }
+
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_attachments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+        step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+        file_name TEXT NOT NULL,
+        original_file_name TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        file_type TEXT,
+        uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] npd_attachments: OK");
+  } catch (e) { console.error("[sqlite] npd_attachments table:", e.message); }
+
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_comments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+        step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+        comment TEXT NOT NULL,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] npd_comments: OK");
+  } catch (e) { console.error("[sqlite] npd_comments table:", e.message); }
+
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+        step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        user_name TEXT,
+        action TEXT NOT NULL,
+        old_status TEXT,
+        new_status TEXT,
+        description TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] npd_activity_log: OK");
+  } catch (e) { console.error("[sqlite] npd_activity_log table:", e.message); }
+
+  // Exclusive access allowlist — mirrors report_access_users. An admin with
+  // the NPD grant adds specific people here; everyone else never sees the
+  // module exists (main-nav item, dashboard, and every API route all check
+  // this same list).
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_access_users (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] npd_access_users: OK");
+  } catch (e) { console.error("[sqlite] npd_access_users table:", e.message); }
+
+  // Separate, narrower allowlist for who can delete a request — full admins
+  // can always delete; anyone else needs to be explicitly listed here.
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_delete_access_users (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] npd_delete_access_users: OK");
+  } catch (e) { console.error("[sqlite] npd_delete_access_users table:", e.message); }
+
+  // Soft-delete columns on npd_requests — a deleted request drops off the
+  // list but the row (and its full activity/approval/attachment history)
+  // stays in the database.
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN deleted_at TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN deleted_by INTEGER"); } catch {}
+
+  // Configurable named approvers per approval type (e.g. management_approval
+  // = Adam/Tony/Tom today) so admins can change who approves without a code
+  // change.
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_approver_config (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        approval_type TEXT NOT NULL,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(approval_type, user_id)
+      )`
+    );
+    console.log("[sqlite] npd_approver_config: OK");
+  } catch (e) { console.error("[sqlite] npd_approver_config table:", e.message); }
+
+  // Lightweight in-app notifications ("you have a new NPD task/approval").
+  // Same shape as employee_notifications elsewhere in the app.
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+        step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+        kind TEXT NOT NULL DEFAULT 'task_assigned' CHECK(kind IN (
+          'task_assigned','approval_needed','step_completed','request_rejected',
+          'changes_requested','request_completed'
+        )),
+        title TEXT NOT NULL,
+        message TEXT,
+        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        dismissed_at TEXT
+      )`
+    );
+    console.log("[sqlite] npd_notifications: OK");
+  } catch (e) { console.error("[sqlite] npd_notifications table:", e.message); }
+
+  // Optional per-step access list. Empty for a step = fall back to
+  // department gating; non-empty = only these people (plus admins) can
+  // act on that step. Mirrors the report_access_users / npd_access_users
+  // "allowlist narrows it" pattern.
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_step_assignees (
+        step_key TEXT NOT NULL,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (step_key, user_id)
+      )`
+    );
+    console.log("[sqlite] npd_step_assignees: OK");
+  } catch (e) { console.error("[sqlite] npd_step_assignees table:", e.message); }
+
+  try {
+    rawDb.exec(`
+      CREATE INDEX IF NOT EXISTS idx_npd_requests_status ON npd_requests (status);
+      CREATE INDEX IF NOT EXISTS idx_npd_requests_created_by ON npd_requests (created_by);
+      CREATE INDEX IF NOT EXISTS idx_npd_steps_request ON npd_steps (request_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_steps_assigned_to ON npd_steps (assigned_to);
+      CREATE INDEX IF NOT EXISTS idx_npd_approvals_request ON npd_approvals (request_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_approvals_step ON npd_approvals (step_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_attachments_request ON npd_attachments (request_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_comments_request ON npd_comments (request_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_activity_log_request ON npd_activity_log (request_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_approver_config_type ON npd_approver_config (approval_type);
+      CREATE INDEX IF NOT EXISTS idx_npd_notifications_user ON npd_notifications (user_id, status);
+      CREATE INDEX IF NOT EXISTS idx_npd_step_assignees_key ON npd_step_assignees (step_key);
+    `);
+  } catch {}
+
+  // One-time default for the Management Approval step (stands in for
+  // Adam/Tony/Tom from the spec until an NPD admin configures real
+  // approvers). Only seeds while the list is still empty, so it never
+  // overwrites changes made later via Manage access & approvers.
+  try {
+    const cntRow = await db
+      .prepare("SELECT COUNT(*) AS c FROM npd_approver_config WHERE approval_type = 'management_approval'")
+      .get();
+    if (!Number(cntRow?.c ?? 0)) {
+      const defaultEmails = ["garima.singh@amirgc.com", "syed.afroz@amirgc.com"];
+      let order = 0;
+      for (const email of defaultEmails) {
+        const u = await db.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(email);
+        if (u) {
+          await db
+            .prepare("INSERT INTO npd_approver_config (approval_type, user_id, sort_order) VALUES (?, ?, ?)")
+            .run("management_approval", u.id, order++);
+        } else {
+          console.warn(`[db] npd management_approval seed: no user found for ${email}`);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[db] npd_approver_config seed:", e.message || e);
+  }
+
   persist();
 }
 

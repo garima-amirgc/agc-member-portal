@@ -61,6 +61,10 @@ const NewsfeedPage = lazy(() => import("./pages/NewsfeedPage"));
 const SocialCommitteePage = lazy(() => import("./pages/SocialCommitteePage"));
 const AdminSocialCommitteePage = lazy(() => import("./pages/AdminSocialCommitteePage"));
 const AssetsPage = lazy(() => import("./pages/AssetsPage"));
+const NpdDashboardPage = lazy(() => import("./pages/NpdDashboardPage"));
+const NpdNewRequestPage = lazy(() => import("./pages/NpdNewRequestPage"));
+const NpdRequestDetailPage = lazy(() => import("./pages/NpdRequestDetailPage"));
+const NpdAdminPage = lazy(() => import("./pages/NpdAdminPage"));
 
 function pickFacilityForLegacyResources(me) {
   try {
@@ -155,6 +159,38 @@ export default function App() {
         />
         <Route path="it-tickets" element={<ItTicketsPage />} />
         <Route path="assets" element={<AssetsPage />} />
+        <Route
+          path="npd"
+          element={
+            <ProtectedRoute npdAccess>
+              <NpdDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="npd/new"
+          element={
+            <ProtectedRoute npdAccess>
+              <NpdNewRequestPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="npd/requests/:id"
+          element={
+            <ProtectedRoute npdAccess>
+              <NpdRequestDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="npd/admin"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.NPD}>
+              <NpdAdminPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="profile" element={<ProfilePage />} />

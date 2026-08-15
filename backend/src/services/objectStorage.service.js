@@ -597,6 +597,54 @@ async function uploadTicketAttachmentFromDisk(localPath, filename) {
   throw new Error("No object storage (R2 or Spaces) is configured");
 }
 
+const NPD_ATTACHMENT_MIME = { ...DOC_EXT_TO_MIME, ...IMAGE_EXT_TO_MIME };
+
+async function uploadNpdAttachmentFromDisk(localPath, filename) {
+  const key = `npd/${filename}`;
+  const ext = path.extname(filename).toLowerCase();
+  const ContentType = NPD_ATTACHMENT_MIME[ext] || "application/octet-stream";
+  const { size: ContentLength } = fs.statSync(localPath);
+  const stream = fs.createReadStream(localPath);
+  try {
+    if (isSpacesEnabled()) {
+      logSpacesCredentialHintOnce();
+      const bucket = envCred("DO_SPACES_BUCKET") || String(process.env.DO_SPACES_BUCKET || "").trim();
+      await getSpacesClient().send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: stream,
+          ContentLength,
+          ContentType,
+          ACL: "public-read",
+          ContentDisposition: "inline",
+        })
+      );
+      const base = String(process.env.DO_SPACES_PUBLIC_URL).replace(/\/+$/, "");
+      return { url: `${base}/${key}`, provider: "spaces" };
+    }
+
+    if (isR2Enabled()) {
+      await getR2Client().send(
+        new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Key: key,
+          Body: stream,
+          ContentLength,
+          ContentType,
+          ContentDisposition: "inline",
+        })
+      );
+      const base = String(process.env.R2_PUBLIC_URL).replace(/\/+$/, "");
+      return { url: `${base}/${key}`, provider: "r2" };
+    }
+  } finally {
+    stream.destroy();
+  }
+
+  throw new Error("No object storage (R2 or Spaces) is configured");
+}
+
 const VIDEO_UPLOAD_EXTS = new Set([".mp4", ".webm", ".mov", ".mkv"]);
 const DOC_UPLOAD_EXTS = new Set([".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".txt"]);
 const PRESIGN_EXPIRES_SEC = 3600;
@@ -722,6 +770,7 @@ module.exports = {
   uploadOrgChartImageFromDisk,
   uploadAvatarImageFromDisk,
   uploadTicketAttachmentFromDisk,
+  uploadNpdAttachmentFromDisk,
   createPresignedVideoUpload,
   createPresignedDocumentUpload,
   deleteLessonVideoByUrl,

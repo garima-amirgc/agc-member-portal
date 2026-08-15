@@ -4,6 +4,7 @@ export const ADMIN_NAV_GROUPS = Object.freeze([
   { key: "sales", label: "Sales" },
   { key: "it", label: "IT" },
   { key: "uofagc", label: "UofAGC" },
+  { key: "npd", label: "New Product Development" },
 ]);
 
 const GROUP_LABEL_BY_KEY = Object.fromEntries(ADMIN_NAV_GROUPS.map((g) => [g.key, g.label]));

@@ -201,6 +201,37 @@ export async function postItTicketAttachment(fd) {
   return data;
 }
 
+export function npdAttachmentUploadPath() {
+  const b = String(getApiBaseURL() || "");
+  if (b === "/api") return "/upload/npd-attachment";
+  return "/api/upload/npd-attachment";
+}
+
+export async function postNpdAttachment(fd) {
+  const cfg = { timeout: 120000 };
+  if (typeof window !== "undefined") {
+    const pageOrigin = window.location.origin;
+    const base = String(getApiBaseURL() || "");
+    let crossOriginApi = false;
+    if (/^https?:\/\//i.test(base)) {
+      try {
+        crossOriginApi = new URL(base).origin !== pageOrigin;
+      } catch {
+        crossOriginApi = false;
+      }
+    }
+    if (!crossOriginApi) {
+      const { data } = await api.post("/api/upload/npd-attachment", fd, {
+        ...cfg,
+        baseURL: pageOrigin,
+      });
+      return data;
+    }
+  }
+  const { data } = await api.post(npdAttachmentUploadPath(), fd, cfg);
+  return data;
+}
+
 const api = axios.create({
   baseURL: "",
   timeout: 90000,

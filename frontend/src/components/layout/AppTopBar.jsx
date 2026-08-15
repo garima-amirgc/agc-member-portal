@@ -5,6 +5,7 @@ import { PAGE_GUTTER_X } from "../../constants/pageLayout";
 import { COMPANY_CONTENT_NAV_TITLE } from "../../constants/companyContentConfig";
 import { usePortalNavItems } from "../../hooks/usePortalNavItems";
 import { useMyOpenTicketCount } from "../../hooks/useMyOpenTicketCount";
+import { useMyNpdActionCount } from "../../hooks/useMyNpdActionCount";
 import { TopBarAdminGroupDropdown } from "./AdminNavGroupDropdown";
 import { resolvePublicMediaUrl } from "../../utils/mediaUrl";
 import { getFacilityUniversityHomePath, isFacilityUniversityOnlyPortal } from "../../utils/facilityUniversityOnly";
@@ -70,6 +71,7 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
   const navigate = useNavigate();
   const { mainItems, adminGroups, aboutCompanyItems } = usePortalNavItems(user);
   const ticketBadgeCount = useMyOpenTicketCount(user);
+  const npdBadgeCount = useMyNpdActionCount(user);
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -157,7 +159,7 @@ export default function AppTopBar({ darkMode, setDarkMode }) {
                       key={item.to + (item.end ? "-e" : "")}
                       item={item}
                       onNavigate={closeMenu}
-                      badge={item.to === "/it-tickets" ? ticketBadgeCount : 0}
+                      badge={item.to === "/it-tickets" ? ticketBadgeCount : item.to === "/npd" ? npdBadgeCount : 0}
                     />
                   ))}
                 </div>

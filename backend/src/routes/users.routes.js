@@ -18,6 +18,7 @@ const inviteSvc = require("../services/invite.service");
 const emailSvc = require("../services/email.service");
 const { issueInviteAndEmail } = require("../services/inviteResend.service");
 const portalVisitsSvc = require("../services/portalVisits.service");
+const { hasNpdAccess } = require("../services/npdWorkflow.service");
 const {
   ADMIN_GRANT_KEYS,
   parseAdminGrantsColumn,
@@ -127,6 +128,10 @@ router.get("/me", async (req, res) => {
     req.query.include_training_summary === "true" || req.query.include_training_summary === "1";
 
   const departments = await userDeptSvc.listForUser(req.user.id);
+  // Cheap indexed lookup; kept out of the hot-path authRequired middleware
+  // (which runs on every request) and computed here once per /me call
+  // instead, same reasoning as reporting_hierarchy/training_summary below.
+  const npd_access = await hasNpdAccess(req.user);
 
   let reporting_hierarchy;
   let has_direct_reports;
@@ -161,6 +166,7 @@ router.get("/me", async (req, res) => {
     is_new_hire: Boolean(rest.is_new_hire),
     facilities,
     departments,
+    npd_access,
   };
   if (!profileOnly) {
     if (has_direct_reports !== undefined) {

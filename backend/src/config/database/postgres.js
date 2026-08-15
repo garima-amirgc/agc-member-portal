@@ -755,6 +755,153 @@ async function migrateColumns(client) {
     )`,
     "CREATE INDEX IF NOT EXISTS idx_assets_assigned_to ON assets (assigned_to)",
     "CREATE INDEX IF NOT EXISTS idx_assets_business_unit ON assets (business_unit)",
+    // New Product Development (NPD) workflow — restricted-access module.
+    `CREATE TABLE IF NOT EXISTS npd_requests (
+      id SERIAL PRIMARY KEY,
+      request_number TEXT NOT NULL UNIQUE,
+      customer_name TEXT NOT NULL,
+      customer_number TEXT,
+      product_name TEXT NOT NULL,
+      product_description TEXT,
+      sales_rep_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      plant TEXT,
+      requested_launch_date TEXT,
+      estimated_volume TEXT,
+      packaging_requirement TEXT,
+      request_type TEXT NOT NULL DEFAULT 'new_product' CHECK(request_type IN ('new_product','existing_product_modification')),
+      customer_contact TEXT,
+      general_comments TEXT,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN (
+        'draft','submitted','waiting_approval','in_progress','changes_requested',
+        'rejected','customer_rejected','authorized_for_production','completed','cancelled','on_hold'
+      )),
+      current_step INTEGER NOT NULL DEFAULT 1,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      completed_at TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS npd_steps (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+      step_number INTEGER NOT NULL,
+      step_key TEXT NOT NULL,
+      step_name TEXT NOT NULL,
+      responsible_department TEXT,
+      assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'locked' CHECK(status IN (
+        'locked','not_started','in_progress','submitted','waiting_approval',
+        'approved','rejected','changes_requested','completed'
+      )),
+      data_json TEXT,
+      due_date TEXT,
+      started_at TIMESTAMPTZ,
+      submitted_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ,
+      UNIQUE(request_id, step_number)
+    )`,
+    `CREATE TABLE IF NOT EXISTS npd_approvals (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+      step_id INTEGER REFERENCES npd_steps(id) ON DELETE CASCADE,
+      approval_type TEXT NOT NULL,
+      approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      approver_name TEXT,
+      action TEXT NOT NULL CHECK(action IN ('submitted','approved','rejected','changes_requested','authorized')),
+      comments TEXT,
+      action_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS npd_attachments (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+      step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+      file_name TEXT NOT NULL,
+      original_file_name TEXT NOT NULL,
+      file_url TEXT NOT NULL,
+      file_type TEXT,
+      uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS npd_comments (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+      step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+      comment TEXT NOT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS npd_activity_log (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+      step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      user_name TEXT,
+      action TEXT NOT NULL,
+      old_status TEXT,
+      new_status TEXT,
+      description TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS npd_access_users (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // Separate, narrower allowlist for who can delete a request — full
+    // admins can always delete; anyone else needs to be listed here.
+    `CREATE TABLE IF NOT EXISTS npd_delete_access_users (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // Soft-delete columns — a deleted request drops off the list but the
+    // row (and its full activity/approval/attachment history) stays put.
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS deleted_by INTEGER",
+    `CREATE TABLE IF NOT EXISTS npd_approver_config (
+      id SERIAL PRIMARY KEY,
+      approval_type TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(approval_type, user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS npd_notifications (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+      step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+      kind TEXT NOT NULL DEFAULT 'task_assigned' CHECK(kind IN (
+        'task_assigned','approval_needed','step_completed','request_rejected',
+        'changes_requested','request_completed'
+      )),
+      title TEXT NOT NULL,
+      message TEXT,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      dismissed_at TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS npd_step_assignees (
+      step_key TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (step_key, user_id)
+    )`,
+    // "Skip for now" — tracked alongside status (not as a new status value)
+    // so this stays a plain additive column, no CHECK-constraint rebuild. A
+    // step is "skipped" whenever skipped_at is set and completed_at isn't;
+    // the service layer folds that into a display_status for the UI.
+    "ALTER TABLE npd_steps ADD COLUMN IF NOT EXISTS skipped_at TIMESTAMPTZ",
+    "ALTER TABLE npd_steps ADD COLUMN IF NOT EXISTS skipped_by INTEGER",
+    "ALTER TABLE npd_steps ADD COLUMN IF NOT EXISTS skip_reason TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_npd_requests_status ON npd_requests (status)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_requests_created_by ON npd_requests (created_by)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_steps_request ON npd_steps (request_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_steps_assigned_to ON npd_steps (assigned_to)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_approvals_request ON npd_approvals (request_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_approvals_step ON npd_approvals (step_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_attachments_request ON npd_attachments (request_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_comments_request ON npd_comments (request_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_activity_log_request ON npd_activity_log (request_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_approver_config_type ON npd_approver_config (approval_type)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_notifications_user ON npd_notifications (user_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_step_assignees_key ON npd_step_assignees (step_key)",
   ];
   for (const q of alters) {
     try {
@@ -1009,6 +1156,32 @@ async function initDb() {
     }
     const { migrateLegacyUpcomingGrantKey } = require("../../config/adminGrants");
     await migrateLegacyUpcomingGrantKey(db);
+
+    // One-time default for the Management Approval step (stands in for
+    // Adam/Tony/Tom from the spec until an NPD admin configures real
+    // approvers). Only seeds while the list is still empty, so it never
+    // overwrites changes made later via Manage access & approvers.
+    try {
+      const cntRow = await db
+        .prepare("SELECT COUNT(*) AS c FROM npd_approver_config WHERE approval_type = 'management_approval'")
+        .get();
+      if (!Number(cntRow?.c ?? 0)) {
+        const defaultEmails = ["garima.singh@amirgc.com", "syed.afroz@amirgc.com"];
+        let order = 0;
+        for (const email of defaultEmails) {
+          const u = await db.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(email);
+          if (u) {
+            await db
+              .prepare("INSERT INTO npd_approver_config (approval_type, user_id, sort_order) VALUES (?, ?, ?)")
+              .run("management_approval", u.id, order++);
+          } else {
+            console.warn(`[db] npd management_approval seed: no user found for ${email}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[db] npd_approver_config seed:", e.message || e);
+    }
   } finally {
     client.release();
   }

@@ -1,9 +1,9 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { hasAdminGrant, hasAnyAdminGrant } from "../utils/adminAccess";
+import { hasAdminGrant, hasAnyAdminGrant, hasNpdAccess } from "../utils/adminAccess";
 import { isSupervisor } from "../utils/supervisorAccess";
 
-export default function ProtectedRoute({ children, roles, adminGrant, adminGrants, supervisor }) {
+export default function ProtectedRoute({ children, roles, adminGrant, adminGrants, supervisor, npdAccess }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   if (supervisor && !isSupervisor(user)) {
@@ -41,6 +41,15 @@ export default function ProtectedRoute({ children, roles, adminGrant, adminGrant
         <div className="card border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
           You don’t have access to this administration area. Ask a full administrator to grant the required
           permission on your account.
+        </div>
+      </div>
+    );
+  }
+  if (npdAccess && !hasNpdAccess(user)) {
+    return (
+      <div className="p-6">
+        <div className="card border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+          You don’t have access to New Product Development. Ask an administrator to grant you access.
         </div>
       </div>
     );

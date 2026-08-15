@@ -22,6 +22,14 @@ function rewriteSqliteToPostgres(sql) {
     /INSERT\s+OR\s+IGNORE\s+INTO\s+assignments\s*\(\s*user_id\s*,\s*course_id\s*\)\s*VALUES\s*\(\s*\?\s*,\s*\?\s*\)/gi,
     "INSERT INTO assignments (user_id, course_id) VALUES ($1, $2) ON CONFLICT (user_id, course_id) DO NOTHING"
   );
+  s = s.replace(
+    /INSERT\s+OR\s+IGNORE\s+INTO\s+npd_access_users\s*\(\s*user_id\s*\)\s*VALUES\s*\(\s*\?\s*\)/gi,
+    "INSERT INTO npd_access_users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING"
+  );
+  s = s.replace(
+    /INSERT\s+OR\s+IGNORE\s+INTO\s+npd_delete_access_users\s*\(\s*user_id\s*\)\s*VALUES\s*\(\s*\?\s*\)/gi,
+    "INSERT INTO npd_delete_access_users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING"
+  );
 
   if (!/\$(\d+)/.test(s)) {
     s = questionMarksToNumbered(s);
@@ -48,6 +56,9 @@ function insertHasNoSerialId(sqlTrimmed) {
     /^\s*insert\s+into\s+user_facilities\b/i.test(sqlTrimmed) ||
     /^\s*insert\s+into\s+user_departments\b/i.test(sqlTrimmed) ||
     /^\s*insert\s+into\s+report_access_users\b/i.test(sqlTrimmed) ||
+    /^\s*insert\s+into\s+npd_access_users\b/i.test(sqlTrimmed) ||
+    /^\s*insert\s+into\s+npd_delete_access_users\b/i.test(sqlTrimmed) ||
+    /^\s*insert\s+into\s+npd_step_assignees\b/i.test(sqlTrimmed) ||
     /^\s*insert\s+into\s+portal_visits\b/i.test(sqlTrimmed) ||
     /^\s*insert\s+into\s+all_training_milestones\b/i.test(sqlTrimmed) ||
     /^\s*insert\s+into\s+portal_settings\b/i.test(sqlTrimmed)
