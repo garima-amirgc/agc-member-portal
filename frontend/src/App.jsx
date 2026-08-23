@@ -65,6 +65,7 @@ const NpdDashboardPage = lazy(() => import("./pages/NpdDashboardPage"));
 const NpdNewRequestPage = lazy(() => import("./pages/NpdNewRequestPage"));
 const NpdRequestDetailPage = lazy(() => import("./pages/NpdRequestDetailPage"));
 const NpdAdminPage = lazy(() => import("./pages/NpdAdminPage"));
+const SharePointPage = lazy(() => import("./pages/SharePointPage"));
 
 function pickFacilityForLegacyResources(me) {
   try {
@@ -188,6 +189,14 @@ export default function App() {
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.NPD}>
               <NpdAdminPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="sharepoint"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.SHAREPOINT}>
+              <SharePointPage />
             </ProtectedRoute>
           }
         />

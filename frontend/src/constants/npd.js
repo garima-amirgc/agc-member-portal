@@ -176,3 +176,22 @@ export function npdStepStatusBadgeClass(status) {
 export function npdStepDef(number) {
   return NPD_STEP_DEFS.find((s) => s.number === Number(number)) || null;
 }
+
+// Best-effort "who currently owns this" label for a step — submit steps
+// carry an explicit department, approval steps don't (mapped by approval
+// type instead), and the multi-confirm step lists all three departments at
+// once. Used anywhere the board needs a single display label per step.
+export function npdStepOwnerLabel(stepDef) {
+  if (!stepDef) return "—";
+  if (stepDef.type === "multi_confirm") return (stepDef.confirmations || []).join(" / ");
+  if (stepDef.department) return Array.isArray(stepDef.department) ? stepDef.department.join(" / ") : stepDef.department;
+  if (stepDef.type === "approval") return stepDef.approvalType === "finance_approval" ? "Finance" : "Management";
+  return "—";
+}
+
+export const NPD_DEPARTMENT_FILTERS = ["Sales", "FSQA", "Production", "Finance", "Management"];
+
+export function stepMatchesDepartmentFilter(stepDef, department) {
+  if (!department) return true;
+  return npdStepOwnerLabel(stepDef).split(" / ").includes(department);
+}

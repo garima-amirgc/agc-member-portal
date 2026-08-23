@@ -20,6 +20,7 @@ const ADMIN_GRANT_KEYS = Object.freeze({
   HR_NEWSFEED: "hr_newsfeed",
   ASSET_TRACKER: "asset_tracker",
   NPD: "npd",
+  SHAREPOINT: "sharepoint",
 });
 
 const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([

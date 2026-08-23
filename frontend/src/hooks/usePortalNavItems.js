@@ -5,6 +5,7 @@ import {
   IconChart,
   IconClipboard,
   IconCog,
+  IconDocument,
   IconHome,
   IconSparkle,
   IconTeam,
@@ -96,6 +97,14 @@ export function usePortalNavItems(user) {
         to: "/npd",
         icon: IconSparkle,
         label: "New Product Development",
+      });
+    }
+
+    if (hasAdminGrant(user, ADMIN_GRANT_KEYS.SHAREPOINT)) {
+      main.push({
+        to: "/sharepoint",
+        icon: IconDocument,
+        label: "SharePoint Files",
       });
     }
 

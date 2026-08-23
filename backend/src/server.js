@@ -91,6 +91,7 @@ async function start() {
   const socialRoutes = require("./routes/social.routes");
   const assetsRoutes = require("./routes/assets.routes");
   const npdRoutes = require("./routes/npd.routes");
+  const sharepointRoutes = require("./routes/sharepoint.routes");
   const adpSync = require("./services/adpSync.service");
   adpSync.startSync(); // start background ADP → DB sync
   const { authRequired } = require("./middleware/auth");
@@ -200,6 +201,7 @@ async function start() {
     ["/social", socialRoutes],
     ["/assets", assetsRoutes],
     ["/npd", npdRoutes],
+    ["/sharepoint", sharepointRoutes],
   ];
 
   function mountRoutes(router) {

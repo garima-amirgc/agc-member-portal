@@ -1,5 +1,5 @@
 import { useState } from "react";
-import api from "../../services/api";
+import api, { postNpdAttachment } from "../../services/api";
 import { friendlyErrorMessage } from "../../services/friendlyError";
 import { hasAdminGrant } from "../../utils/adminAccess";
 import { ADMIN_GRANT_KEYS } from "../../constants/adminGrants";
@@ -150,6 +150,80 @@ function WaitingOnEarlierStepView({ step, stepDef, request }) {
   );
 }
 
+// Lets people attach reference documents to one specific step — separate
+// from the request-level "Documents" tab, which shows everything uploaded
+// across the whole request regardless of step. Shown for every step so
+// whoever owns a step can drop in spec sheets, photos, approvals, etc.
+// without waiting for their step to be the active one.
+function StepAttachments({ request, step, onUpdated }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const stepAttachments = (request.attachments || []).filter((a) => a.step_id === step.id);
+
+  const onFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadData = await postNpdAttachment(formData);
+      await api.post(`/npd/requests/${request.id}/attachments`, {
+        file_name: uploadData.filename,
+        original_name: uploadData.original_name,
+        file_url: uploadData.file_url,
+        file_type: file.type,
+        step_id: step.id,
+      });
+      const { data: refreshed } = await api.get(`/npd/requests/${request.id}`);
+      onUpdated(refreshed);
+    } catch (err) {
+      setError(friendlyErrorMessage(err, "Could not upload that file."));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-dashed border-slate-300 p-3 dark:border-slate-700">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Documents for this step
+        </span>
+        <label className="cursor-pointer rounded bg-[#0B3EAF]/10 px-2.5 py-1 text-xs font-semibold text-[#0B3EAF] hover:bg-[#0B3EAF]/20 dark:bg-[#A7D344]/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/20">
+          {uploading ? "Uploading…" : "+ Upload document"}
+          <input type="file" className="hidden" onChange={onFileChange} disabled={uploading} />
+        </label>
+      </div>
+      {error ? <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p> : null}
+      {stepAttachments.length === 0 ? (
+        <p className="text-xs italic text-slate-500 dark:text-slate-400">No documents uploaded for this step yet.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {stepAttachments.map((a) => (
+            <li key={a.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs">
+              <a
+                href={a.file_url}
+                target="_blank"
+                rel="noreferrer"
+                className="min-w-0 truncate font-medium text-[#0B3EAF] hover:underline dark:text-[#A7D344]"
+              >
+                {a.original_file_name}
+              </a>
+              <span className="shrink-0 text-slate-500 dark:text-slate-400">
+                {a.uploaded_by_name}
+                {a.uploaded_at ? ` · ${new Date(a.uploaded_at).toLocaleDateString()}` : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // Renders exactly ONE step at a time — whichever one the stepper list has
 // selected (viewStepNumber), defaulting to the workflow's actual current
 // step. A skipped step's fillable form only shows up here when someone
@@ -241,6 +315,8 @@ export default function NpdStepActionPanel({ request, user, onUpdated, viewStepN
       ) : (
         <LockedStepView step={step} stepDef={stepDef} />
       )}
+
+      <StepAttachments request={request} step={step} onUpdated={onUpdated} />
 
       {isAdmin ? <ReopenBox request={request} user={user} onUpdated={onUpdated} /> : null}
     </div>
