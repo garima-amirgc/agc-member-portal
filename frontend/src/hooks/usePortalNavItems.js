@@ -100,11 +100,11 @@ export function usePortalNavItems(user) {
       });
     }
 
-    if (hasAdminGrant(user, ADMIN_GRANT_KEYS.SHAREPOINT)) {
+    if (hasAdminGrant(user, ADMIN_GRANT_KEYS.CFO)) {
       main.push({
-        to: "/sharepoint",
+        to: "/cfo",
         icon: IconDocument,
-        label: "SharePoint Files",
+        label: "CFO",
       });
     }
 

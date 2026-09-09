@@ -92,8 +92,12 @@ async function start() {
   const assetsRoutes = require("./routes/assets.routes");
   const npdRoutes = require("./routes/npd.routes");
   const sharepointRoutes = require("./routes/sharepoint.routes");
+  const cfoRoutes = require("./routes/cfo.routes");
+  const managerTimeOffRoutes = require("./routes/manager-time-off.routes");
   const adpSync = require("./services/adpSync.service");
   adpSync.startSync(); // start background ADP → DB sync
+  const adpTimeOffSync = require("./services/adpTimeOffSync.service");
+  adpTimeOffSync.startSync(); // start background ADP time off → DB sync
   const { authRequired } = require("./middleware/auth");
   const leaveSvc = require("./services/leaveRequests.service");
   const managerTeamSvc = require("./services/managerTeam.service");
@@ -202,6 +206,8 @@ async function start() {
     ["/assets", assetsRoutes],
     ["/npd", npdRoutes],
     ["/sharepoint", sharepointRoutes],
+    ["/cfo", cfoRoutes],
+    ["/manager-time-off", managerTimeOffRoutes],
   ];
 
   function mountRoutes(router) {

@@ -126,6 +126,34 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   decided_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS adp_time_off_balances (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  policy_code TEXT,
+  policy_name TEXT,
+  entitlement NUMERIC,
+  carried_over NUMERIC,
+  used NUMERIC,
+  scheduled NUMERIC,
+  available NUMERIC,
+  synced_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, policy_code)
+);
+
+CREATE TABLE IF NOT EXISTS adp_time_off_requests (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  adp_request_id TEXT NOT NULL,
+  policy_code TEXT,
+  policy_name TEXT,
+  start_date TEXT,
+  end_date TEXT,
+  hours NUMERIC,
+  status TEXT,
+  synced_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, adp_request_id)
+);
+
 CREATE TABLE IF NOT EXISTS facility_upcoming (
   id SERIAL PRIMARY KEY,
   business_unit TEXT NOT NULL CHECK(business_unit IN ('AGC','AQM','SCF','ASP')),
@@ -304,6 +332,8 @@ CREATE TABLE IF NOT EXISTS polls (
   start_at TEXT,
   end_at TEXT,
   banner_image_url TEXT,
+  is_anonymous INTEGER NOT NULL DEFAULT 0,
+  limit_one_response INTEGER NOT NULL DEFAULT 1,
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -448,6 +478,8 @@ async function migrateColumns(client) {
       start_at TEXT,
       end_at TEXT,
       banner_image_url TEXT,
+      is_anonymous INTEGER NOT NULL DEFAULT 0,
+      limit_one_response INTEGER NOT NULL DEFAULT 1,
       created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -455,6 +487,8 @@ async function migrateColumns(client) {
     "ALTER TABLE polls ADD COLUMN IF NOT EXISTS start_at TEXT",
     "ALTER TABLE polls ADD COLUMN IF NOT EXISTS end_at TEXT",
     "ALTER TABLE polls ADD COLUMN IF NOT EXISTS banner_image_url TEXT",
+    "ALTER TABLE polls ADD COLUMN IF NOT EXISTS is_anonymous INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE polls ADD COLUMN IF NOT EXISTS limit_one_response INTEGER NOT NULL DEFAULT 1",
     `CREATE TABLE IF NOT EXISTS poll_submissions (
       id SERIAL PRIMARY KEY,
       poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
@@ -605,6 +639,9 @@ async function migrateColumns(client) {
     "CREATE INDEX IF NOT EXISTS idx_assignments_course_id ON assignments (course_id)",
     "CREATE INDEX IF NOT EXISTS idx_leave_requests_employee_id ON leave_requests (employee_id)",
     "CREATE INDEX IF NOT EXISTS idx_leave_requests_manager_id ON leave_requests (manager_id)",
+    "CREATE INDEX IF NOT EXISTS idx_adp_time_off_balances_user_id ON adp_time_off_balances (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_adp_time_off_requests_user_id ON adp_time_off_requests (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_adp_time_off_requests_dates ON adp_time_off_requests (start_date, end_date)",
     "CREATE INDEX IF NOT EXISTS idx_it_tickets_user_id ON it_tickets (user_id)",
     "CREATE INDEX IF NOT EXISTS idx_it_tickets_assignee_id ON it_tickets (assignee_id)",
     "CREATE INDEX IF NOT EXISTS idx_company_content_items_section ON company_content_items (section)",

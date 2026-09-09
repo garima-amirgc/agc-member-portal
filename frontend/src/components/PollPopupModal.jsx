@@ -83,6 +83,11 @@ function PollSlide({ poll, answers, setAnswers, saving }) {
             Submit by <span className="font-bold text-[#0B3EAF] dark:text-[#A7D344]">{endAtLabel}</span>
           </div>
         ) : null}
+        {poll.has_previous_response && poll.limit_one_response === false ? (
+          <div className="mt-2 rounded-portal border border-[#b6c9f5]/55 bg-white/65 px-3 py-2 text-xs font-semibold text-[#27418f]/90 dark:border-white/15 dark:bg-white/5 dark:text-slate-200">
+            You've already responded to this — submitting again will update your previous answer.
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 space-y-4">

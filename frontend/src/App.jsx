@@ -66,6 +66,7 @@ const NpdNewRequestPage = lazy(() => import("./pages/NpdNewRequestPage"));
 const NpdRequestDetailPage = lazy(() => import("./pages/NpdRequestDetailPage"));
 const NpdAdminPage = lazy(() => import("./pages/NpdAdminPage"));
 const SharePointPage = lazy(() => import("./pages/SharePointPage"));
+const CfoReportsPage = lazy(() => import("./pages/CfoReportsPage"));
 
 function pickFacilityForLegacyResources(me) {
   try {
@@ -197,6 +198,14 @@ export default function App() {
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.SHAREPOINT}>
               <SharePointPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="cfo"
+          element={
+            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.CFO}>
+              <CfoReportsPage />
             </ProtectedRoute>
           }
         />

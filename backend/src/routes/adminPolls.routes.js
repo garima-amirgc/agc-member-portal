@@ -110,7 +110,7 @@ function contentDispositionAttachment(filename) {
 router.get("/polls", async (_req, res) => {
   const rows = await db
     .prepare(
-      "SELECT id, title, description, active, start_at, end_at, banner_image_url, created_at, updated_at FROM polls ORDER BY updated_at DESC, id DESC"
+      "SELECT id, title, description, active, start_at, end_at, banner_image_url, is_anonymous, limit_one_response, created_at, updated_at FROM polls ORDER BY updated_at DESC, id DESC"
     )
     .all();
   return res.json(rows);
@@ -121,7 +121,7 @@ router.get("/polls/:id", async (req, res) => {
   if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid poll id" });
   const row = await db
     .prepare(
-      "SELECT id, title, description, poll_json, active, start_at, end_at, banner_image_url, created_at, updated_at FROM polls WHERE id = ?"
+      "SELECT id, title, description, poll_json, active, start_at, end_at, banner_image_url, is_anonymous, limit_one_response, created_at, updated_at FROM polls WHERE id = ?"
     )
     .get(id);
   if (!row) return res.status(404).json({ message: "Not found" });
@@ -138,8 +138,11 @@ router.get("/polls/:id/submissions/export", async (req, res) => {
   const id = Number.parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id) || id < 1) return res.status(400).json({ message: "Invalid poll id" });
 
-  const pollRow = await db.prepare("SELECT id, title, poll_json FROM polls WHERE id = ?").get(id);
+  const pollRow = await db
+    .prepare("SELECT id, title, poll_json, is_anonymous FROM polls WHERE id = ?")
+    .get(id);
   if (!pollRow) return res.status(404).json({ message: "Not found" });
+  const isAnonymous = Number(pollRow.is_anonymous) === 1;
 
   const questions = normalizeExportQuestions(pollRow.poll_json);
   const qHeaders = uniqueQuestionHeaders(questions);
@@ -147,7 +150,12 @@ router.get("/polls/:id/submissions/export", async (req, res) => {
 
   const rows = await db
     .prepare(
-      `SELECT s.id AS submission_id, s.submitted_at, s.user_id, s.answers_json,
+      isAnonymous
+        ? `SELECT s.id AS submission_id, s.submitted_at, s.answers_json
+           FROM poll_submissions s
+           WHERE s.poll_id = ?
+           ORDER BY s.submitted_at ASC, s.id ASC`
+        : `SELECT s.id AS submission_id, s.submitted_at, s.user_id, s.answers_json,
               u.name AS user_name, u.email AS user_email, u.role AS user_role,
               u.business_unit AS user_business_unit,
               COALESCE(u.department, '') AS user_department
@@ -170,32 +178,38 @@ router.get("/polls/:id/submissions/export", async (req, res) => {
   workbook.creator = "AGC University LMS";
   const sheet = workbook.addWorksheet(sanitizeExcelSheetName(pollRow.title || `Poll ${id}`));
 
-  const headers = [
-    "Submission ID",
-    "Submitted at",
-    "User ID",
-    "Name",
-    "Email",
-    "Role",
-    "Primary facility",
-    "Department",
-    ...qHeaders,
-  ];
+  const headers = isAnonymous
+    ? ["Response #", "Submitted at", ...qHeaders]
+    : [
+        "Submission ID",
+        "Submitted at",
+        "User ID",
+        "Name",
+        "Email",
+        "Role",
+        "Primary facility",
+        "Department",
+        ...qHeaders,
+      ];
   sheet.addRow(headers);
   sheet.getRow(1).font = { bold: true };
 
+  let responseNum = 0;
   for (const r of rows) {
     const answers = parseAnswersObject(r.answers_json);
-    const cells = [
-      r.submission_id,
-      r.submitted_at != null ? String(r.submitted_at) : "",
-      r.user_id,
-      r.user_name != null ? String(r.user_name) : "",
-      r.user_email != null ? String(r.user_email) : "",
-      r.user_role != null ? String(r.user_role) : "",
-      r.user_business_unit != null ? String(r.user_business_unit) : "",
-      r.user_department != null ? String(r.user_department) : "",
-    ];
+    responseNum += 1;
+    const cells = isAnonymous
+      ? [responseNum, r.submitted_at != null ? String(r.submitted_at) : ""]
+      : [
+          r.submission_id,
+          r.submitted_at != null ? String(r.submitted_at) : "",
+          r.user_id,
+          r.user_name != null ? String(r.user_name) : "",
+          r.user_email != null ? String(r.user_email) : "",
+          r.user_role != null ? String(r.user_role) : "",
+          r.user_business_unit != null ? String(r.user_business_unit) : "",
+          r.user_department != null ? String(r.user_department) : "",
+        ];
     for (const q of questions) {
       cells.push(formatAnswerCell(q, answers[q.id], labelMap));
     }
@@ -231,6 +245,11 @@ router.post("/polls", async (req, res) => {
   const startAt = normalizeOptionalIsoDatetime(req.body?.start_at);
   const endAt = normalizeOptionalIsoDatetime(req.body?.end_at);
   const bannerImageUrl = req.body?.banner_image_url != null ? String(req.body.banner_image_url).trim() : "";
+  const isAnonymous = req.body?.is_anonymous === true || req.body?.is_anonymous === 1 || req.body?.is_anonymous === "1";
+  const limitOneResponse =
+    req.body?.limit_one_response === undefined
+      ? true
+      : req.body?.limit_one_response === true || req.body?.limit_one_response === 1 || req.body?.limit_one_response === "1";
   if (!title) return res.status(400).json({ message: "title is required" });
   if (!definition) return res.status(400).json({ message: "definition is required" });
 
@@ -238,9 +257,22 @@ router.post("/polls", async (req, res) => {
   const ts = nowIso();
   const result = await db
     .prepare(
-      "INSERT INTO polls(title, description, poll_json, active, start_at, end_at, banner_image_url, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO polls(title, description, poll_json, active, start_at, end_at, banner_image_url, is_anonymous, limit_one_response, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-    .run(title, description, json, active ? 1 : 0, startAt, endAt, bannerImageUrl || null, req.user.id, ts, ts);
+    .run(
+      title,
+      description,
+      json,
+      active ? 1 : 0,
+      startAt,
+      endAt,
+      bannerImageUrl || null,
+      isAnonymous ? 1 : 0,
+      limitOneResponse ? 1 : 0,
+      req.user.id,
+      ts,
+      ts
+    );
   const id = Number(result.lastInsertRowid) || null;
   return res.status(201).json({ id });
 });
@@ -258,6 +290,11 @@ router.put("/polls/:id", async (req, res) => {
   const startAt = normalizeOptionalIsoDatetime(req.body?.start_at);
   const endAt = normalizeOptionalIsoDatetime(req.body?.end_at);
   const bannerImageUrl = req.body?.banner_image_url != null ? String(req.body.banner_image_url).trim() : "";
+  const isAnonymous = req.body?.is_anonymous === true || req.body?.is_anonymous === 1 || req.body?.is_anonymous === "1";
+  const limitOneResponse =
+    req.body?.limit_one_response === undefined
+      ? true
+      : req.body?.limit_one_response === true || req.body?.limit_one_response === 1 || req.body?.limit_one_response === "1";
   if (!title) return res.status(400).json({ message: "title is required" });
   if (!definition) return res.status(400).json({ message: "definition is required" });
 
@@ -265,9 +302,21 @@ router.put("/polls/:id", async (req, res) => {
   const ts = nowIso();
   await db
     .prepare(
-      "UPDATE polls SET title=?, description=?, poll_json=?, active=?, start_at=?, end_at=?, banner_image_url=?, updated_at=? WHERE id=?"
+      "UPDATE polls SET title=?, description=?, poll_json=?, active=?, start_at=?, end_at=?, banner_image_url=?, is_anonymous=?, limit_one_response=?, updated_at=? WHERE id=?"
     )
-    .run(title, description, json, active ? 1 : 0, startAt, endAt, bannerImageUrl || null, ts, id);
+    .run(
+      title,
+      description,
+      json,
+      active ? 1 : 0,
+      startAt,
+      endAt,
+      bannerImageUrl || null,
+      isAnonymous ? 1 : 0,
+      limitOneResponse ? 1 : 0,
+      ts,
+      id
+    );
   return res.json({ ok: true });
 });
 

@@ -70,6 +70,8 @@ export default function AdminPollsPage() {
   const savingRef = useRef(false);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerFile, setBannerFile] = useState(null);
+  const [pendingReset, setPendingReset] = useState(null);
+  const [resetting, setResetting] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -93,6 +95,8 @@ export default function AdminPollsPage() {
       start_at: "",
       end_at: "",
       banner_image_url: "",
+      is_anonymous: false,
+      limit_one_response: true,
       definition: { schema_version: 1, questions: [emptyQuestion()] },
     });
     setBannerFile(null);
@@ -110,6 +114,8 @@ export default function AdminPollsPage() {
         start_at: toLocalDatetimeInputValue(data.start_at),
         end_at: toLocalDatetimeInputValue(data.end_at),
         banner_image_url: data.banner_image_url || "",
+        is_anonymous: Number(data.is_anonymous) === 1,
+        limit_one_response: data.limit_one_response == null ? true : Number(data.limit_one_response) === 1,
         definition: normalizeDefinition(data.definition),
       });
       setBannerFile(null);
@@ -154,6 +160,8 @@ export default function AdminPollsPage() {
       start_at: fromLocalDatetimeInputValue(editing.start_at),
       end_at: fromLocalDatetimeInputValue(editing.end_at),
       banner_image_url: String(editing.banner_image_url || "").trim() || null,
+      is_anonymous: Boolean(editing.is_anonymous),
+      limit_one_response: Boolean(editing.limit_one_response),
       definition: def,
     };
 
@@ -208,13 +216,16 @@ export default function AdminPollsPage() {
     }
   };
 
-  const reset = async (id) => {
-    if (!window.confirm("Reset this poll for all users?\n\nThis will make the popup show again until each user submits.")) return;
+  const reset = async (poll) => {
+    setResetting(true);
     try {
-      await api.post(`/admin/polls/${id}/reset`, {});
+      await api.post(`/admin/polls/${poll.id}/reset`, {});
+      setPendingReset(null);
       load();
     } catch (e) {
       window.alert(friendlyErrorMessage(e, "Could not reset poll."));
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -323,6 +334,12 @@ export default function AdminPollsPage() {
                     {p.banner_image_url ? (
                       <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">Banner: yes</div>
                     ) : null}
+                    <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                      {Number(p.is_anonymous) === 1 ? "Anonymous" : "Identified"} ·{" "}
+                      {p.limit_one_response == null || Number(p.limit_one_response) === 1
+                        ? "One response per person"
+                        : "Multiple responses allowed (replaces prior answer)"}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className="btn-outline" onClick={() => openEdit(p.id)}>
@@ -331,7 +348,7 @@ export default function AdminPollsPage() {
                     <button type="button" className="btn-secondary" onClick={() => activate(p.id)} disabled={Number(p.active) === 1}>
                       Set active
                     </button>
-                    <button type="button" className="btn-outline" onClick={() => reset(p.id)}>
+                    <button type="button" className="btn-outline" onClick={() => setPendingReset(p)}>
                       Reset users
                     </button>
                     <button type="button" className="btn-outline" onClick={() => exportSubmissionsExcel(p.id, p.title)}>
@@ -428,6 +445,40 @@ export default function AdminPollsPage() {
                       onChange={(e) => setEditing({ ...editing, end_at: e.target.value })}
                     />
                   </div>
+                </div>
+              </div>
+
+              <div className="rounded-portal border border-slate-200 p-3 dark:border-slate-700">
+                <div className="text-sm font-semibold text-slate-900 dark:text-white">Privacy & responses</div>
+                <div className="mt-2 space-y-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={editing.limit_one_response !== false}
+                      onChange={(e) => setEditing({ ...editing, limit_one_response: e.target.checked })}
+                    />
+                    Limit each person to one response
+                  </label>
+                  {editing.limit_one_response === false ? (
+                    <div className="ml-6 text-[11px] text-slate-500 dark:text-slate-400">
+                      People can submit again — a new submission replaces their previous answer, it does not add a
+                      second entry.
+                    </div>
+                  ) : null}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editing.is_anonymous)}
+                      onChange={(e) => setEditing({ ...editing, is_anonymous: e.target.checked })}
+                    />
+                    Make responses anonymous (don&apos;t record who submitted)
+                  </label>
+                  {editing.is_anonymous ? (
+                    <div className="ml-6 text-[11px] text-slate-500 dark:text-slate-400">
+                      The Excel export and app will not show or export any name, email, or facility info for this
+                      poll's responses.
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -648,6 +699,67 @@ export default function AdminPollsPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {pendingReset ? (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-reset-title"
+            onClick={() => (resetting ? null : setPendingReset(null))}
+          >
+            <div
+              className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="h-5 w-5 text-amber-600 dark:text-amber-400"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 6a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 6Zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <h3 id="confirm-reset-title" className="text-base font-semibold text-slate-900 dark:text-white">
+                  Reset this poll?
+                </h3>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-slate-700 dark:text-slate-300">
+                  Are you sure you want to reset{" "}
+                  <span className="font-semibold text-slate-900 dark:text-white">{pendingReset.title}</span>? This
+                  permanently deletes every submission recorded for this poll so far, and the popup will show again
+                  for all users until they submit. This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setPendingReset(null)}
+                  className="btn-secondary"
+                  disabled={resetting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => reset(pendingReset)}
+                  className="btn-danger"
+                  disabled={resetting}
+                >
+                  {resetting ? "Resetting…" : "Yes, reset"}
+                </button>
               </div>
             </div>
           </div>

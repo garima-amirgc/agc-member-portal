@@ -233,6 +233,41 @@ const SCHEMA = `
     FOREIGN KEY(manager_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
+  -- ADP time off — synced periodically (see adpTimeOffSync.service.js) so
+  -- the Team Time Off board reads from here instead of calling ADP live
+  -- on every page load. One row per (employee, ADP time-off policy).
+  CREATE TABLE IF NOT EXISTS adp_time_off_balances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    policy_code TEXT,
+    policy_name TEXT,
+    entitlement REAL,
+    carried_over REAL,
+    used REAL,
+    scheduled REAL,
+    available REAL,
+    synced_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, policy_code)
+  );
+
+  -- One row per (employee, ADP time-off request). ADP only ever returns
+  -- approved requests, so there's no pending/rejected status here.
+  CREATE TABLE IF NOT EXISTS adp_time_off_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    adp_request_id TEXT NOT NULL,
+    policy_code TEXT,
+    policy_name TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    hours REAL,
+    status TEXT,
+    synced_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, adp_request_id)
+  );
+
   -- Employee of the Month (home page spotlight).
   CREATE TABLE IF NOT EXISTS employee_of_month (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -411,6 +446,8 @@ const SCHEMA = `
     start_at TEXT, -- ISO datetime; popup appears at/after this time (optional)
     end_at TEXT, -- ISO datetime; popup disappears after this time (optional)
     banner_image_url TEXT, -- optional URL or /uploads/... path shown at top of popup
+    is_anonymous INTEGER NOT NULL DEFAULT 0, -- 1 = submissions don't record who submitted
+    limit_one_response INTEGER NOT NULL DEFAULT 1, -- 0 = a person can resubmit (replaces their prior answer)
     created_by INTEGER,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -1001,6 +1038,8 @@ async function initDb() {
         start_at TEXT,
         end_at TEXT,
         banner_image_url TEXT,
+        is_anonymous INTEGER NOT NULL DEFAULT 0,
+        limit_one_response INTEGER NOT NULL DEFAULT 1,
         created_by INTEGER,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -1019,6 +1058,14 @@ async function initDb() {
   }
   try {
     rawDb.exec("ALTER TABLE polls ADD COLUMN banner_image_url TEXT");
+  } catch {
+  }
+  try {
+    rawDb.exec("ALTER TABLE polls ADD COLUMN is_anonymous INTEGER NOT NULL DEFAULT 0");
+  } catch {
+  }
+  try {
+    rawDb.exec("ALTER TABLE polls ADD COLUMN limit_one_response INTEGER NOT NULL DEFAULT 1");
   } catch {
   }
   try {
@@ -1254,6 +1301,9 @@ async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_assignments_course_id ON assignments (course_id);
       CREATE INDEX IF NOT EXISTS idx_leave_requests_employee_id ON leave_requests (employee_id);
       CREATE INDEX IF NOT EXISTS idx_leave_requests_manager_id ON leave_requests (manager_id);
+      CREATE INDEX IF NOT EXISTS idx_adp_time_off_balances_user_id ON adp_time_off_balances (user_id);
+      CREATE INDEX IF NOT EXISTS idx_adp_time_off_requests_user_id ON adp_time_off_requests (user_id);
+      CREATE INDEX IF NOT EXISTS idx_adp_time_off_requests_dates ON adp_time_off_requests (start_date, end_date);
       CREATE INDEX IF NOT EXISTS idx_it_tickets_user_id ON it_tickets (user_id);
       CREATE INDEX IF NOT EXISTS idx_it_tickets_assignee_id ON it_tickets (assignee_id);
       CREATE INDEX IF NOT EXISTS idx_company_content_items_section ON company_content_items (section);

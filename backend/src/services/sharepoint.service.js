@@ -87,6 +87,101 @@ async function graphJson(path, opts = {}) {
   return data;
 }
 
+// ─── Resolve a known site/file path directly (no browsing UI involved) ──────
+// Used by features that always read the same fixed SharePoint file(s), e.g.
+// the CFO reports pulled from a specific site + folder path.
+//
+// Site resolution goes through the same /sites?search= endpoint the
+// SharePoint Files browser uses (rather than guessing the exact
+// hostname:server-relative-path), since that's the part that's easy to get
+// wrong from a screenshot of a site name.
+
+const _siteIdCache = new Map(); // `${host}:${sitePath}` -> siteId
+const _siteIdByNameCache = new Map(); // lowercased site name -> siteId
+
+async function resolveSiteId(siteHost, sitePath) {
+  const key = `${siteHost}:${sitePath}`;
+  if (_siteIdCache.has(key)) return _siteIdCache.get(key);
+  const data = await graphJson(`/sites/${encodeURIComponent(siteHost)}:${sitePath}`);
+  _siteIdCache.set(key, data.id);
+  return data.id;
+}
+
+async function findSiteIdByName(siteName) {
+  const key = String(siteName || "").trim().toLowerCase();
+  if (_siteIdByNameCache.has(key)) return _siteIdByNameCache.get(key);
+  const data = await graphJson(`/sites?search=${encodeURIComponent(siteName)}&$select=id,name,displayName,webUrl`);
+  const candidates = data.value || [];
+  const match =
+    candidates.find(
+      (s) => String(s.name || "").toLowerCase() === key || String(s.displayName || "").toLowerCase() === key
+    ) || candidates[0];
+  if (!match) {
+    throw httpError(
+      404,
+      `Could not find a SharePoint site matching "${siteName}". Check the exact site name and that this app has access to it.`
+    );
+  }
+  _siteIdByNameCache.set(key, match.id);
+  return match.id;
+}
+
+async function fetchDownload(meta, notFoundMessage) {
+  const downloadUrl = meta["@microsoft.graph.downloadUrl"];
+  if (!downloadUrl) throw httpError(404, notFoundMessage || "That file has no downloadable content.");
+  const res = await fetch(downloadUrl);
+  if (!res.ok) throw httpError(502, "Could not download that file from SharePoint.");
+  const arrayBuffer = await res.arrayBuffer();
+  return { buffer: Buffer.from(arrayBuffer), meta };
+}
+
+// Falls back to a filename search across the whole drive when the exact
+// folder path doesn't resolve — protects against small typos/casing
+// mismatches in a hand-typed folder path (e.g. from a screenshot).
+async function searchDriveItemByName({ siteId, fileName }) {
+  const data = await graphJson(
+    `/sites/${encodeURIComponent(siteId)}/drive/root/search(q='${encodeURIComponent(fileName)}')?$select=id,name,webUrl,lastModifiedDateTime,parentReference`
+  );
+  const candidates = data.value || [];
+  const exact = candidates.find((it) => String(it.name || "").toLowerCase() === fileName.toLowerCase());
+  return exact || candidates[0] || null;
+}
+
+async function downloadFileFromSiteId({ siteId, filePath }) {
+  const encodedPath = String(filePath)
+    .split("/")
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+  try {
+    const meta = await graphJson(`/sites/${encodeURIComponent(siteId)}/drive/root:/${encodedPath}`);
+    return await fetchDownload(meta);
+  } catch (e) {
+    if (e && e.statusCode !== 404) throw e;
+    // Exact path missed — try locating the file by name anywhere in the drive.
+    const fileName = String(filePath).split("/").filter(Boolean).pop();
+    const found = await searchDriveItemByName({ siteId, fileName });
+    if (!found) {
+      throw httpError(
+        404,
+        `Could not find "${fileName}" in that SharePoint site (checked the exact path "${filePath}" and searched the whole document library).`
+      );
+    }
+    const itemMeta = await graphJson(`/sites/${encodeURIComponent(siteId)}/drive/items/${encodeURIComponent(found.id)}`);
+    return await fetchDownload(itemMeta);
+  }
+}
+
+async function downloadFileByPath({ siteHost, sitePath, filePath }) {
+  const siteId = await resolveSiteId(siteHost, sitePath);
+  return downloadFileFromSiteId({ siteId, filePath });
+}
+
+async function downloadFileBySiteName({ siteName, filePath }) {
+  const siteId = await findSiteIdByName(siteName);
+  return downloadFileFromSiteId({ siteId, filePath });
+}
+
 // ─── Sites & document libraries ─────────────────────────────────────────────
 
 async function searchSites(query) {
@@ -215,4 +310,7 @@ module.exports = {
   getDownloadStream,
   uploadFile,
   createFolder,
+  downloadFileByPath,
+  downloadFileBySiteName,
+  findSiteIdByName,
 };

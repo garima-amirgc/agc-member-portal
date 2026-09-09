@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import api from "../services/api";
 import { PAGE_SHELL } from "../constants/pageLayout";
-import LeaveRequestPanel from "../components/LeaveRequestPanel";
 import ManagerEmployeeManagement from "../components/ManagerEmployeeManagement";
 import ManagerTrainingNotifications from "../components/ManagerTrainingNotifications";
 import ReportingHierarchyTree from "../components/ReportingHierarchyTree";
@@ -189,27 +188,6 @@ export default function TeamPage() {
         </div>
       ) : null}
 
-      {user?.role !== "Admin" ? (
-        <details className="group card rounded-portal border border-stone-200/90 p-4 open:ring-1 open:ring-brand-blue/20 dark:border-stone-700 dark:open:ring-brand-blue/30">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg py-1 font-semibold text-slate-900 outline-none marker:content-none [&::-webkit-details-marker]:hidden dark:text-slate-100">
-            <span>Leave requests</span>
-            <svg
-              className="h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180 dark:text-slate-400"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              aria-hidden
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-            </svg>
-          </summary>
-          <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-600">
-            <LeaveRequestPanel embedded />
-          </div>
-        </details>
-      ) : null}
     </main>
   );
 }

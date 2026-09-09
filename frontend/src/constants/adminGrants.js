@@ -19,6 +19,7 @@ export const ADMIN_GRANT_KEYS = Object.freeze({
   ASSET_TRACKER: "asset_tracker",
   NPD: "npd",
   SHAREPOINT: "sharepoint",
+  CFO: "cfo",
 });
 
 export const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
@@ -95,6 +96,16 @@ export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
       {
         key: ADMIN_GRANT_KEYS.SHAREPOINT,
         label: "SharePoint Files — browse, download, and upload company files",
+      },
+    ],
+  },
+  {
+    groupKey: "cfo",
+    label: "CFO",
+    options: [
+      {
+        key: ADMIN_GRANT_KEYS.CFO,
+        label: "CFO — view Incident Report and SLT Tracker",
       },
     ],
   },

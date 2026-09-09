@@ -112,6 +112,11 @@ function httpsRequest(urlObj, options, body) {
         if (res.statusCode >= 400) {
           const err = new Error(`ADP API ${res.statusCode}: ${raw}`);
           err.statusCode = res.statusCode;
+          // ADP sends Retry-After (seconds) on 429s sometimes — honor it
+          // when present instead of guessing a backoff.
+          const retryAfter = res.headers["retry-after"];
+          const retryAfterSecs = retryAfter != null ? Number(retryAfter) : NaN;
+          if (Number.isFinite(retryAfterSecs)) err.retryAfterMs = retryAfterSecs * 1000;
           return reject(err);
         }
         try {
@@ -125,6 +130,63 @@ function httpsRequest(urlObj, options, body) {
     if (body) req.write(body);
     req.end();
   });
+}
+
+// ─── Rate limiting + retry ────────────────────────────────────────────────
+// ADP's client-credential apps are subject to a per-app rate limit (seen in
+// practice as 429 "Rate Limit Violated" when several time-off calls fire at
+// once — e.g. one employee's balance call plus several chunked request
+// calls, times several employees, all in flight together). Rather than
+// guess ADP's exact threshold, every adpGet() call is funneled through this
+// queue: only one request in flight at a time, with a minimum gap between
+// requests, plus automatic retry-with-backoff on 429 (Retry-After header
+// respected when ADP sends one). This trades a bit of speed for never
+// hammering ADP — perfectly fine for a background sync that runs every
+// couple of hours, and it benefits the existing worker-profile sync too
+// since it shares this same adpGet().
+const MIN_REQUEST_GAP_MS = (() => {
+  const ms = parseInt(process.env.ADP_MIN_REQUEST_INTERVAL_MS, 10);
+  return Number.isFinite(ms) && ms >= 0 ? ms : 400;
+})();
+const MAX_RETRIES_429 = 5;
+
+let _queueTail = Promise.resolve();
+let _lastRequestAt = 0;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Run `fn` after every previously-queued call has finished, spaced out by MIN_REQUEST_GAP_MS. */
+function scheduleRequest(fn) {
+  const run = _queueTail.then(async () => {
+    const wait = _lastRequestAt + MIN_REQUEST_GAP_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    _lastRequestAt = Date.now();
+    return fn();
+  });
+  // Keep the queue moving even if this particular request ends up failing.
+  _queueTail = run.then(
+    () => {},
+    () => {}
+  );
+  return run;
+}
+
+async function requestWithRetry(fn) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await scheduleRequest(fn);
+    } catch (e) {
+      if (e?.statusCode === 429 && attempt < MAX_RETRIES_429) {
+        const backoff = e.retryAfterMs ?? Math.min(1000 * 2 ** attempt, 15_000);
+        console.warn(`[ADP] 429 rate limited — retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_RETRIES_429})`);
+        await sleep(backoff);
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 // ─── Token exchange ───────────────────────────────────────────────────────────
@@ -169,16 +231,18 @@ async function getAccessToken() {
 // ─── ADP API calls ────────────────────────────────────────────────────────────
 
 async function adpGet(apiPath) {
-  const token = await getAccessToken();
-  const agent = makeAgent();
-  const url = new URL(apiPath, process.env.ADP_API_BASE || DEFAULT_API_BASE);
-  return httpsRequest(url, {
-    method: "GET",
-    agent,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
+  return requestWithRetry(async () => {
+    const token = await getAccessToken();
+    const agent = makeAgent();
+    const url = new URL(apiPath, process.env.ADP_API_BASE || DEFAULT_API_BASE);
+    return httpsRequest(url, {
+      method: "GET",
+      agent,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
   });
 }
 
@@ -380,4 +444,7 @@ module.exports = {
   getWorkerByOID,
   mapWorker,
   clearWorkersCache,
+  // Low-level GET, reused by adpTimeOff.service.js so the time-off calls
+  // share the same OAuth token cache and mTLS agent as the worker calls.
+  adpGet,
 };
