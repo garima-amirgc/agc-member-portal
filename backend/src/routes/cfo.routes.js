@@ -15,7 +15,8 @@ router.get("/status", (req, res) => {
 
 router.get("/report/:key", async (req, res) => {
   try {
-    const data = await cfoReports.getReport(req.params.key);
+    const forceRefresh = req.query.refresh === "1" || req.query.refresh === "true";
+    const data = await cfoReports.getReport(req.params.key, { forceRefresh });
     res.json(data);
   } catch (e) {
     if (e && e.statusCode) return res.status(e.statusCode).json({ message: e.message });

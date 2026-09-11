@@ -805,12 +805,325 @@ function EventCard({ event, onRefresh }) {
   );
 }
 
+// ─── Pending (pre-creation) Images Picker ─────────────────────────────────────
+// Same look as ImagesSection, but holds uploaded image URLs in local state
+// instead of attaching them to an event id — used while a new event hasn't
+// been created yet.
+
+function PendingImagesPicker({ images, onChange }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const imgRef = useRef(null);
+
+  async function handleUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const url = await uploadImageFile(file);
+      if (url) onChange([...images, { tempId: `${Date.now()}-${Math.random()}`, image_url: url }]);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Upload failed.");
+    } finally {
+      setUploading(false);
+      if (imgRef.current) imgRef.current.value = "";
+    }
+  }
+
+  function handleRemove(tempId) {
+    onChange(images.filter((img) => img.tempId !== tempId));
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        📸 Gallery Images
+      </p>
+      {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+      <div className="flex flex-wrap gap-2">
+        {images.map((img) => (
+          <div key={img.tempId} className="group relative shrink-0">
+            <img
+              src={resolvePublicMediaUrl(img.image_url)}
+              alt=""
+              className="h-20 w-28 rounded-lg border border-slate-200 object-cover dark:border-slate-700"
+            />
+            <button
+              type="button"
+              onClick={() => handleRemove(img.tempId)}
+              className="absolute right-1 top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow group-hover:flex"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => imgRef.current?.click()}
+          disabled={uploading}
+          className="flex h-20 w-28 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 transition hover:border-slate-400 hover:text-slate-500 disabled:opacity-60 dark:border-slate-600 dark:text-slate-500"
+        >
+          {uploading ? (
+            <span className="text-xs">Uploading…</span>
+          ) : (
+            <>
+              <span className="text-xl leading-none">+</span>
+              <span className="text-[10px] font-medium">Add image</span>
+            </>
+          )}
+        </button>
+        <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Pending (pre-creation) Video Picker ──────────────────────────────────────
+
+function PendingVideoPicker({ videoUrl, onChange }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const videoRef = useRef(null);
+
+  async function handleVideoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const fd = new FormData();
+      fd.append("video", file);
+      const { data } = await api.post("/upload/", fd, { timeout: VIDEO_TIMEOUT_MS });
+      const url = data?.video_url ?? null;
+      if (url) onChange(url);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Video upload failed.");
+    } finally {
+      setUploading(false);
+      if (videoRef.current) videoRef.current.value = "";
+    }
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        📹 Video
+      </p>
+      {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+      <input
+        className={inputCls}
+        value={videoUrl}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="YouTube link or paste a video URL"
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <span className="text-xs text-slate-400">or upload a video file:</span>
+        <button
+          type="button"
+          onClick={() => videoRef.current?.click()}
+          disabled={uploading}
+          className="btn-secondary px-3 py-1.5 text-xs"
+        >
+          {uploading ? "Uploading…" : "Upload video file"}
+        </button>
+        {videoUrl && (
+          <button type="button" onClick={() => onChange("")} className="text-xs text-red-500 hover:underline">
+            Remove video
+          </button>
+        )}
+      </div>
+      <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={handleVideoUpload} />
+    </div>
+  );
+}
+
+// ─── Pending (pre-creation) Winners Editor ────────────────────────────────────
+
+function PendingWinnersEditor({ winners, onChange }) {
+  const [form, setForm] = useState({ name: "", award: "", tier: "", active: true, image_url: "" });
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const imgRef = useRef(null);
+
+  async function handlePhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const url = await uploadImageFile(file);
+      if (url) setForm((f) => ({ ...f, image_url: url }));
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || "Photo upload failed.");
+    } finally { setUploading(false); if (imgRef.current) imgRef.current.value = ""; }
+  }
+
+  function handleAdd(e) {
+    e.preventDefault();
+    if (!form.name.trim()) { setError("Name is required."); return; }
+    onChange([...winners, { tempId: `${Date.now()}-${Math.random()}`, ...form, name: form.name.trim() }]);
+    setForm({ name: "", award: "", tier: "", active: true, image_url: "" });
+    setError("");
+  }
+
+  function handleRemove(tempId) {
+    onChange(winners.filter((w) => w.tempId !== tempId));
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        🏆 Winners
+      </p>
+
+      {winners.length > 0 && (
+        <div className="mb-3 space-y-2">
+          {winners.map((w) => (
+            <div
+              key={w.tempId}
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900/40"
+            >
+              <div className="relative h-10 w-10 shrink-0">
+                <div className="h-10 w-10 overflow-hidden rounded-full border border-amber-200 bg-slate-100 dark:bg-slate-800">
+                  {resolvePublicMediaUrl(w.image_url) ? (
+                    <img src={resolvePublicMediaUrl(w.image_url)} alt={w.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs font-bold text-[#0B3EAF] dark:text-[#A7D344]">
+                      {w.name?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                {w.tier && (
+                  <span className="absolute -bottom-1 -right-1 text-base leading-none">{TIER_ICON[w.tier]}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{w.name}</p>
+                <div className="flex items-center gap-1.5">
+                  {w.tier && (
+                    <span className="text-xs font-semibold text-[#0B3EAF] dark:text-[#A7D344]">
+                      {TIER_ICON[w.tier]} {w.tier}
+                    </span>
+                  )}
+                  {w.award && (
+                    <span className="truncate text-xs text-slate-400">{w.tier ? "·" : ""} {w.award}</span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRemove(w.tempId)}
+                className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-3 rounded-xl border border-dashed border-slate-300 p-3 dark:border-slate-700">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          Add winner
+        </p>
+        {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-amber-300 bg-slate-100 dark:bg-slate-800">
+            {resolvePublicMediaUrl(form.image_url) ? (
+              <img src={resolvePublicMediaUrl(form.image_url)} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-base font-bold text-[#0B3EAF] dark:text-[#A7D344]">
+                {form.name ? form.name[0].toUpperCase() : "?"}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => imgRef.current?.click()}
+            disabled={uploading}
+            className="btn-secondary px-3 py-1.5 text-xs"
+          >
+            {uploading ? "Uploading…" : "Upload photo"}
+          </button>
+          {form.image_url && (
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, image_url: "" }))}
+              className="text-xs text-slate-400 hover:text-red-500"
+            >
+              Remove
+            </button>
+          )}
+          <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <label className={labelCls}>Name *</label>
+            <input
+              className={inputCls}
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Winner name"
+            />
+          </div>
+          <div>
+            <label className={labelCls}>What they won</label>
+            <input
+              className={inputCls}
+              value={form.award}
+              onChange={(e) => setForm((f) => ({ ...f, award: e.target.value }))}
+              placeholder="e.g. Best Chili, Most Creative…"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className={labelCls}>Announce as <span className="font-normal text-slate-400">(optional)</span></label>
+          <TierPicker value={form.tier} onChange={(v) => setForm((f) => ({ ...f, tier: v }))} />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={form.active}
+              onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+              className="h-4 w-4 rounded"
+            />
+            Show on portal
+          </label>
+          <button type="button" onClick={handleAdd} className="btn-primary ml-auto px-4 py-2 text-sm">
+            Add winner
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Create Event Form ────────────────────────────────────────────────────────
+//
+// Everything for a new event — details, photos, video, and winners — is
+// filled in together here before anything is submitted. Photos/winner photos
+// upload immediately (the upload endpoint doesn't need an event id yet) and
+// are just held in local state; on submit we create the event, then attach
+// the staged images and winners to it, one API call apiece.
 
 function CreateEventForm({ onCreated }) {
-  const [form, setForm] = useState({ title: "", event_date: "", description: "", published: true });
+  const [form, setForm] = useState({ title: "", event_date: "", description: "", published: true, video_url: "" });
+  const [images, setImages] = useState([]);   // [{ tempId, image_url }]
+  const [winners, setWinners] = useState([]); // [{ tempId, name, award, tier, image_url, active }]
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
+
+  function resetAll() {
+    setForm({ title: "", event_date: "", description: "", published: true, video_url: "" });
+    setImages([]);
+    setWinners([]);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -818,8 +1131,34 @@ function CreateEventForm({ onCreated }) {
     setSaving(true);
     setError("");
     try {
-      await api.post("/social/events", form);
-      setForm({ title: "", event_date: "", description: "", published: true });
+      const { data: created } = await api.post("/social/events", {
+        title: form.title,
+        event_date: form.event_date,
+        description: form.description,
+        published: form.published,
+        video_url: form.video_url,
+      });
+      const eventId = created.id;
+
+      for (let i = 0; i < images.length; i++) {
+        await api.post(`/social/events/${eventId}/images`, { image_url: images[i].image_url, sort_order: i });
+      }
+
+      for (let i = 0; i < winners.length; i++) {
+        const w = winners[i];
+        await api.post("/social/winners", {
+          name: w.name,
+          award: w.award,
+          tier: w.tier,
+          image_url: w.image_url,
+          active: w.active,
+          social_event_id: eventId,
+          event_name: form.title,
+          sort_order: i,
+        });
+      }
+
+      resetAll();
       await onCreated();
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to create event.");
@@ -828,43 +1167,46 @@ function CreateEventForm({ onCreated }) {
 
   return (
     <div className="card">
-      <h2 className="mb-4 text-base font-bold text-slate-900 dark:text-white">+ Create New Event</h2>
+      <h2 className="mb-1 text-base font-bold text-slate-900 dark:text-white">+ Create New Event</h2>
+      <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
+        Add the details, photos, video, and winners below, then create it all at once.
+      </p>
       {error && (
         <p className="mb-3 rounded-lg bg-red-50 p-2.5 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
           {error}
         </p>
       )}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className={labelCls}>Title *</label>
-            <input
-              className={inputCls}
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="e.g. Cook-Off 2025"
-            />
+      <form onSubmit={handleSubmit} className="space-y-6 divide-y divide-slate-100 dark:divide-slate-800 [&>*+*]:pt-6">
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className={labelCls}>Title *</label>
+              <input
+                className={inputCls}
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="e.g. Cook-Off 2025"
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Event date</label>
+              <input
+                type="date"
+                className={inputCls}
+                value={form.event_date}
+                onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))}
+              />
+            </div>
           </div>
           <div>
-            <label className={labelCls}>Event date</label>
-            <input
-              type="date"
-              className={inputCls}
-              value={form.event_date}
-              onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))}
+            <label className={labelCls}>Description</label>
+            <textarea
+              className={`${inputCls} min-h-14 resize-y`}
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Brief description of the event…"
             />
           </div>
-        </div>
-        <div>
-          <label className={labelCls}>Description</label>
-          <textarea
-            className={`${inputCls} min-h-14 resize-y`}
-            value={form.description}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            placeholder="Brief description of the event…"
-          />
-        </div>
-        <div className="flex items-center gap-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
             <input
               type="checkbox"
@@ -874,7 +1216,14 @@ function CreateEventForm({ onCreated }) {
             />
             Published
           </label>
-          <button type="submit" disabled={saving} className="btn-primary ml-auto px-4 py-2 text-sm">
+        </div>
+
+        <PendingImagesPicker images={images} onChange={setImages} />
+        <PendingVideoPicker videoUrl={form.video_url} onChange={(v) => setForm((f) => ({ ...f, video_url: v }))} />
+        <PendingWinnersEditor winners={winners} onChange={setWinners} />
+
+        <div className="flex items-center justify-end">
+          <button type="submit" disabled={saving} className="btn-primary px-4 py-2 text-sm">
             {saving ? "Creating…" : "Create event"}
           </button>
         </div>

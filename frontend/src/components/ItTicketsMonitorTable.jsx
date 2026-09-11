@@ -1,4 +1,5 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import api from "../services/api";
 import { ticketRequesterPhotoUrl } from "../utils/ticketUserAvatar";
 import {
@@ -18,6 +19,65 @@ const STATUS_OPTIONS = [
   { value: "in_progress", label: "In progress" },
   { value: "closed", label: "Completed" },
 ];
+
+// Priority is a fixed, small set of values (same shape as Status), so it
+// gets the same pill-tab treatment rather than a dropdown.
+const PRIORITY_FILTER_TABS = [
+  {
+    key: "all",
+    label: "All",
+    active:
+      "bg-white text-[#0B3EAF] shadow-md ring-2 ring-white/80 dark:bg-[#141414] dark:text-[#A7D344] dark:ring-[#A7D344]/40",
+    idle: "bg-white/15 text-white hover:bg-white/25 dark:bg-white/10 dark:hover:bg-white/20",
+  },
+  {
+    key: "low",
+    label: "Low",
+    active: "bg-slate-200 text-slate-900 shadow-md ring-2 ring-slate-100/80",
+    idle: "bg-white/15 text-white hover:bg-white/25",
+  },
+  {
+    key: "medium",
+    label: "Medium",
+    active: "bg-blue-300 text-blue-950 shadow-md ring-2 ring-blue-200/80",
+    idle: "bg-white/15 text-white hover:bg-white/25",
+  },
+  {
+    key: "high",
+    label: "High",
+    active: "bg-orange-300 text-orange-950 shadow-md ring-2 ring-orange-200/80",
+    idle: "bg-white/15 text-white hover:bg-white/25",
+  },
+  {
+    key: "urgent",
+    label: "Urgent",
+    active: "bg-red-300 text-red-950 shadow-md ring-2 ring-red-200/80",
+    idle: "bg-white/15 text-white hover:bg-white/25",
+  },
+];
+
+// "Submitted" is a date, not a fixed category — a quick-range picker (like a
+// calendar slicer) covers the useful cases without needing an actual date
+// picker widget.
+const SUBMITTED_RANGE_OPTIONS = [
+  { key: "all", label: "All time" },
+  { key: "today", label: "Today" },
+  { key: "7d", label: "Last 7 days" },
+  { key: "30d", label: "Last 30 days" },
+];
+
+function withinSubmittedRange(iso, key) {
+  if (key === "all") return true;
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (key === "today") return d >= startOfToday;
+  if (key === "7d") return d >= new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000);
+  if (key === "30d") return d >= new Date(startOfToday.getTime() - 29 * 24 * 60 * 60 * 1000);
+  return true;
+}
 
 const TH_BASE =
   "px-1.5 py-3 text-left text-[9px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300";
@@ -90,6 +150,12 @@ function initialsFromName(name) {
   return String(a + b).toUpperCase() || "U";
 }
 
+function firstNameOnly(name) {
+  const source = String(name || "").trim();
+  if (!source) return "";
+  return source.split(/\s+/)[0];
+}
+
 function titleWithoutTypePrefix(title) {
   const raw = String(title || "").trim();
   return raw.replace(/^\s*\[[^\]]+\]\s*/, "").trim() || raw;
@@ -120,8 +186,11 @@ function formatSubmittedTime(iso) {
   }
 }
 
-const ACTION_BTN =
-  "inline-flex h-8 shrink-0 items-center justify-center px-2.5 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B3EAF]/35 disabled:opacity-50";
+// Stacked vertically (rather than side-by-side) so this control stays a
+// fixed, narrow width no matter how many actions a person can see — that's
+// what keeps the table from needing to grow wider than the viewport.
+const ACTION_BTN_STACK =
+  "flex h-7 w-full items-center justify-center whitespace-nowrap px-2 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B3EAF]/35 disabled:opacity-50";
 
 function TicketRowActions({
   ticket,
@@ -141,23 +210,23 @@ function TicketRowActions({
 
   return (
     <div
-      className="inline-flex max-w-full items-stretch overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm dark:border-white/10 dark:bg-[#1a1a1a]"
+      className="mx-auto flex w-full max-w-[5.25rem] flex-col divide-y divide-slate-200/90 overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm dark:divide-white/10 dark:border-white/10 dark:bg-[#1a1a1a]"
       role="group"
       aria-label={`Actions for ticket ${ticket.id}`}
     >
       {hasEdit ? (
         <button
           type="button"
-          className={`${ACTION_BTN} border-r border-slate-200/90 text-[#0B3EAF] hover:bg-[#0B3EAF]/5 dark:border-white/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/10`}
+          className={`${ACTION_BTN_STACK} text-[#0B3EAF] hover:bg-[#0B3EAF]/5 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/10`}
           onClick={() => onEdit?.(ticket)}
         >
           Edit
         </button>
       ) : null}
       {hasStatus ? (
-        <div className="relative flex min-w-0 items-center border-r border-slate-200/90 dark:border-white/10">
+        <div className="relative flex w-full items-center">
           <select
-            className="h-8 w-[6.5rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-6 text-[10px] font-semibold text-slate-800 outline-none focus:bg-slate-50 dark:text-slate-200 dark:focus:bg-white/5"
+            className="h-7 w-full cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-5 text-center text-[10px] font-semibold text-slate-800 outline-none focus:bg-slate-50 dark:text-slate-200 dark:focus:bg-white/5"
             value={ticket.status}
             onChange={(e) => onStatusChange(ticket.id, e.target.value)}
             aria-label={`Status for ticket ${ticket.id}`}
@@ -169,7 +238,7 @@ function TicketRowActions({
             ))}
           </select>
           <span
-            className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-slate-400 dark:text-slate-500"
+            className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[7px] text-slate-400 dark:text-slate-500"
             aria-hidden
           >
             ▾
@@ -180,7 +249,7 @@ function TicketRowActions({
         <button
           type="button"
           disabled={deletingId === ticket.id}
-          className={`${ACTION_BTN} text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40`}
+          className={`${ACTION_BTN_STACK} text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40`}
           onClick={() => onDelete?.(ticket.id)}
         >
           {deletingId === ticket.id ? "…" : "Delete"}
@@ -204,6 +273,9 @@ function parseTicketAttachments(ticket) {
 function RequesterCell({ ticket, currentUser, compact = false }) {
   const img = ticketRequesterPhotoUrl(ticket, currentUser);
   const name = ticket?.user_name || "—";
+  // Compact (row/card) view shows just the first name to keep the column
+  // narrow; the expanded detail panel still shows the full name.
+  const displayName = compact ? firstNameOnly(name) || name : name;
   const [imgFailed, setImgFailed] = useState(false);
   const showImg = img && !imgFailed;
   const size = compact ? "h-7 w-7" : "h-8 w-8";
@@ -228,7 +300,9 @@ function RequesterCell({ ticket, currentUser, compact = false }) {
         </div>
       </div>
       <div className="min-w-0">
-        <div className="truncate text-xs font-semibold text-slate-900 dark:text-white">{name}</div>
+        <div className="truncate text-xs font-semibold text-slate-900 dark:text-white" title={compact ? name : undefined}>
+          {displayName}
+        </div>
         {ticket?.user_department ? (
           <div className="truncate text-[10px] text-slate-500 dark:text-slate-400">{ticket.user_department}</div>
         ) : null}
@@ -248,11 +322,198 @@ function StatPill({ label, value, accent }) {
   );
 }
 
-function FilterGroup({ label, children, align = "start" }) {
+// ── Excel-style column filters ──────────────────────────────────────────
+//
+// Each filterable column header is itself the filter control (a small caret
+// button) rather than a separate row of controls above the table. The
+// dropdown panel is rendered through a portal into document.body and
+// positioned from the trigger button's on-screen rect, so it always draws on
+// top of — and isn't clipped by — the table's scrolling/sticky containers.
+
+function useClosePopover(open, onClose, extraRefs) {
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e) => {
+      const insideAny = extraRefs.some((r) => r.current && r.current.contains(e.target));
+      if (!insideAny) onClose();
+    };
+    const onScrollOrResize = () => onClose();
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+}
+
+function ColumnFilterHeader({ label, active, align = "left", children }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const panelRef = useRef(null);
+
+  const openMenu = () => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setPos({
+        top: rect.bottom + 4,
+        left: align === "right" ? undefined : Math.max(8, rect.left),
+        right: align === "right" ? Math.max(8, window.innerWidth - rect.right) : undefined,
+      });
+    }
+    setOpen(true);
+  };
+
+  useClosePopover(open, () => setOpen(false), [btnRef, panelRef]);
+
   return (
-    <div className={align === "end" ? "text-right" : ""}>
-      <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-white/70">{label}</p>
-      <div className={["flex flex-wrap gap-1", align === "end" ? "justify-end" : ""].join(" ")}>{children}</div>
+    <>
+      <button
+        type="button"
+        ref={btnRef}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        className={`inline-flex items-center gap-1 rounded px-1 py-0.5 normal-case transition hover:bg-black/5 dark:hover:bg-white/10 ${
+          active ? "text-[#0B3EAF] dark:text-[#A7D344]" : ""
+        }`}
+      >
+        <span className="uppercase">{label}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8" fill="none" className="h-2 w-2.5 shrink-0 opacity-60" aria-hidden>
+          <path d="M1 1l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {active ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" aria-hidden /> : null}
+      </button>
+      {open && pos
+        ? createPortal(
+            <div
+              ref={panelRef}
+              style={{ position: "fixed", top: pos.top, left: pos.left, right: pos.right }}
+              className="z-[100] w-60 rounded-lg border border-slate-200 bg-white p-2 text-xs normal-case text-slate-800 shadow-2xl dark:border-slate-700 dark:bg-[#1a1a1a] dark:text-slate-100"
+            >
+              {children}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  );
+}
+
+// Checkbox multi-select — an empty `selected` set means "no filter" (every
+// value counts as checked); unchecking one materializes the rest as an
+// explicit selection instead of leaving the other boxes ambiguous.
+function CheckboxFilterContent({ options, selected, onChange, searchable = false }) {
+  const [query, setQuery] = useState("");
+  const allValues = options.map((o) => o.value);
+  const isChecked = (v) => selected.size === 0 || selected.has(v);
+  const toggle = (v) => {
+    let base = selected.size === 0 ? new Set(allValues) : new Set(selected);
+    if (base.has(v)) base.delete(v);
+    else base.add(v);
+    if (base.size === allValues.length) base = new Set();
+    onChange(base);
+  };
+  const visible = query.trim()
+    ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+
+  return (
+    <div>
+      {searchable ? (
+        <input
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search…"
+          className="mb-2 w-full rounded border border-slate-200 px-2 py-1 text-xs font-normal outline-none focus:border-[#0B3EAF] dark:border-slate-700 dark:bg-[#141414] dark:focus:border-[#A7D344]"
+        />
+      ) : null}
+      {selected.size > 0 ? (
+        <button
+          type="button"
+          onClick={() => onChange(new Set())}
+          className="mb-1.5 text-[10px] font-semibold text-[#0B3EAF] hover:underline dark:text-[#A7D344]"
+        >
+          Select all
+        </button>
+      ) : null}
+      <div className="max-h-56 space-y-0.5 overflow-y-auto">
+        {visible.length === 0 ? (
+          <p className="px-1 py-2 text-xs italic text-slate-400">No matches.</p>
+        ) : (
+          visible.map((o) => (
+            <label
+              key={o.value}
+              className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs font-normal hover:bg-slate-50 dark:hover:bg-white/5"
+            >
+              <input
+                type="checkbox"
+                checked={isChecked(o.value)}
+                onChange={() => toggle(o.value)}
+                className="h-3.5 w-3.5 shrink-0 rounded border-slate-300 text-[#0B3EAF] focus:ring-[#0B3EAF] dark:border-slate-600"
+              />
+              <span className="min-w-0 flex-1 truncate" title={o.label}>
+                {o.label}
+              </span>
+              <span className="shrink-0 text-slate-400">{o.count}</span>
+            </label>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RadioFilterContent({ options, value, onChange, name }) {
+  return (
+    <div className="space-y-0.5">
+      {options.map((o) => (
+        <label
+          key={o.key}
+          className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs font-normal hover:bg-slate-50 dark:hover:bg-white/5"
+        >
+          <input
+            type="radio"
+            name={name}
+            checked={value === o.key}
+            onChange={() => onChange(o.key)}
+            className="h-3.5 w-3.5 shrink-0 border-slate-300 text-[#0B3EAF] focus:ring-[#0B3EAF] dark:border-slate-600"
+          />
+          <span>{o.label}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function TextFilterContent({ value, onChange, placeholder }) {
+  return (
+    <div>
+      <input
+        autoFocus
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs font-normal outline-none focus:border-[#0B3EAF] dark:border-slate-700 dark:bg-[#141414] dark:focus:border-[#A7D344]"
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="mt-1.5 text-[10px] font-semibold text-[#0B3EAF] hover:underline dark:text-[#A7D344]"
+        >
+          Clear
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -268,8 +529,20 @@ export default function ItTicketsMonitorTable({
   deletingId = null,
   currentUser,
 }) {
-  const [filter, setFilter] = useState("open");
-  const [typeFilter, setTypeFilter] = useState("all");
+  // Each of these is an Excel-style checkbox selection: an empty Set means
+  // "no filter, show every value" — Status starts with just "open" checked
+  // so the board opens on the useful default view, the same as before.
+  const [statusFilter, setStatusFilter] = useState(() => new Set(["open"]));
+  const [priorityFilter, setPriorityFilter] = useState(() => new Set());
+  const [categoryFilter, setCategoryFilter] = useState(() => new Set());
+  const [requesterFilter, setRequesterFilter] = useState(() => new Set());
+  const [assigneeFilter, setAssigneeFilter] = useState(() => new Set());
+  const [submittedFilter, setSubmittedFilter] = useState("all");
+  const [issueQuery, setIssueQuery] = useState("");
+  // Latest request on top by default (highest ticket ID first); clicking the
+  // ID column header flips between newest-first and oldest-first.
+  const [idSortDir, setIdSortDir] = useState("desc");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState({});
 
@@ -313,10 +586,78 @@ export default function ItTicketsMonitorTable({
 
   const filtered = useMemo(() => {
     let list = Array.isArray(tickets) ? [...tickets] : [];
-    if (filter !== "all") list = list.filter((t) => t.status === filter);
-    if (typeFilter !== "all") list = list.filter((t) => ticketMatchesIssueTypeFilter(t, typeFilter));
+    if (statusFilter.size > 0) list = list.filter((t) => statusFilter.has(t.status));
+    if (priorityFilter.size > 0) {
+      list = list.filter((t) => priorityFilter.has(String(t.priority || "medium").toLowerCase()));
+    }
+    if (categoryFilter.size > 0) {
+      list = list.filter((t) => categoryFilter.has(issueTypeFromTicketTitle(t.title)));
+    }
+    if (requesterFilter.size > 0) list = list.filter((t) => requesterFilter.has(String(t.user_name || "").trim()));
+    if (assigneeFilter.size > 0) {
+      list = list.filter((t) => assigneeFilter.has(String(t.assignee_name || "").trim()));
+    }
+    if (submittedFilter !== "all") list = list.filter((t) => withinSubmittedRange(t.created_at, submittedFilter));
+    const q = issueQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((t) => {
+        if (String(t.id).toLowerCase().includes(q)) return true;
+        if (String(t.title || "").toLowerCase().includes(q)) return true;
+        if (String(t.description || "").toLowerCase().includes(q)) return true;
+        return false;
+      });
+    }
+    list.sort((a, b) => {
+      const an = Number(a.id);
+      const bn = Number(b.id);
+      const cmp =
+        Number.isFinite(an) && Number.isFinite(bn) ? an - bn : String(a.id).localeCompare(String(b.id));
+      return idSortDir === "asc" ? cmp : -cmp;
+    });
     return list;
-  }, [tickets, filter, typeFilter]);
+  }, [
+    tickets,
+    statusFilter,
+    priorityFilter,
+    categoryFilter,
+    requesterFilter,
+    assigneeFilter,
+    submittedFilter,
+    issueQuery,
+    idSortDir,
+  ]);
+
+  // Whether the board is showing anything other than its default "Open"
+  // view — drives the empty-state copy and the mobile filter-count badge.
+  const isDefaultView =
+    statusFilter.size === 1 &&
+    statusFilter.has("open") &&
+    priorityFilter.size === 0 &&
+    categoryFilter.size === 0 &&
+    requesterFilter.size === 0 &&
+    assigneeFilter.size === 0 &&
+    submittedFilter === "all" &&
+    issueQuery.trim() === "";
+
+  const activeFilterCount = [
+    statusFilter.size > 0,
+    priorityFilter.size > 0,
+    categoryFilter.size > 0,
+    requesterFilter.size > 0,
+    assigneeFilter.size > 0,
+    submittedFilter !== "all",
+    issueQuery.trim() !== "",
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setStatusFilter(new Set());
+    setPriorityFilter(new Set());
+    setCategoryFilter(new Set());
+    setRequesterFilter(new Set());
+    setAssigneeFilter(new Set());
+    setSubmittedFilter("all");
+    setIssueQuery("");
+  };
 
   const counts = useMemo(() => {
     const list = Array.isArray(tickets) ? tickets : [];
@@ -336,6 +677,68 @@ export default function ItTicketsMonitorTable({
       out[tab.key] = list.filter((t) => ticketMatchesIssueTypeFilter(t, tab.key)).length;
     }
     return out;
+  }, [tickets]);
+
+  const priorityCounts = useMemo(() => {
+    const list = Array.isArray(tickets) ? tickets : [];
+    const out = { all: list.length };
+    for (const tab of PRIORITY_FILTER_TABS) {
+      if (tab.key === "all") continue;
+      out[tab.key] = list.filter((t) => String(t.priority || "medium").toLowerCase() === tab.key).length;
+    }
+    return out;
+  }, [tickets]);
+
+  // Option lists for the checkbox dropdowns — value/label/count triples.
+  // Status/Priority/Category come from the app's known fixed sets; Requester
+  // and Assignee are whatever distinct names are actually in the data.
+  const statusOptions = useMemo(
+    () => IT_FILTER_TABS.filter((t) => t.key !== "all").map((t) => ({ value: t.key, label: t.label, count: counts[t.key] ?? 0 })),
+    [counts]
+  );
+
+  const priorityOptions = useMemo(
+    () =>
+      PRIORITY_FILTER_TABS.filter((t) => t.key !== "all").map((t) => ({
+        value: t.key,
+        label: t.label,
+        count: priorityCounts[t.key] ?? 0,
+      })),
+    [priorityCounts]
+  );
+
+  const categoryOptions = useMemo(
+    () =>
+      IT_TYPE_FILTER_TABS.filter((t) => t.key !== "all").map((t) => ({
+        value: t.key,
+        label: t.label,
+        count: typeCounts[t.key] ?? 0,
+      })),
+    [typeCounts]
+  );
+
+  const requesterOptions = useMemo(() => {
+    const byName = new Map();
+    for (const t of Array.isArray(tickets) ? tickets : []) {
+      const name = String(t.user_name || "").trim();
+      if (!name) continue;
+      byName.set(name, (byName.get(name) || 0) + 1);
+    }
+    return [...byName.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ value: name, label: name, count }));
+  }, [tickets]);
+
+  const assigneeOptions = useMemo(() => {
+    const byName = new Map();
+    for (const t of Array.isArray(tickets) ? tickets : []) {
+      const name = String(t.assignee_name || "").trim();
+      if (!name) continue;
+      byName.set(name, (byName.get(name) || 0) + 1);
+    }
+    return [...byName.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ value: name, label: name, count }));
   }, [tickets]);
 
   return (
@@ -360,50 +763,80 @@ export default function ItTicketsMonitorTable({
             </div>
           </div>
 
-          <div className="grid gap-3 border-t border-white/15 pt-3 sm:grid-cols-2 sm:[&>*:last-child]:justify-self-end">
-            <FilterGroup label="Status">
-              {IT_FILTER_TABS.map((tab) => {
-                const count = counts[tab.key] ?? 0;
-                const isActive = filter === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={() => setFilter(tab.key)}
-                    className={[
-                      "rounded px-2 py-1 text-[11px] font-semibold transition",
-                      isActive ? tab.active : tab.idle,
-                    ].join(" ")}
-                  >
-                    {tab.label} ({count})
-                  </button>
-                );
-              })}
-            </FilterGroup>
+          {!isDefaultView ? (
+            <div className="flex items-center gap-2 border-t border-white/15 pt-3 text-xs">
+              <span className="text-white/70">
+                {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active
+              </span>
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="font-semibold text-white underline decoration-white/40 underline-offset-2 hover:decoration-white"
+              >
+                Clear all
+              </button>
+            </div>
+          ) : null}
 
-            <FilterGroup label="Category" align="end">
-              {IT_TYPE_FILTER_TABS.map((tab) => {
-                const count = typeCounts[tab.key] ?? 0;
-                const isActive = typeFilter === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={() => setTypeFilter(tab.key)}
-                    className={[
-                      "rounded px-2 py-1 text-[11px] font-semibold transition",
-                      isActive ? tab.active : tab.idle,
-                    ].join(" ")}
-                  >
-                    {tab.label} ({count})
-                  </button>
-                );
-              })}
-            </FilterGroup>
+          {/* Mobile has no table header row to attach column filters to, so
+              the same filter state gets a collapsible panel here instead. */}
+          <div className="border-t border-white/15 pt-3 md:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
+                <path d="M1.5 2.5A.5.5 0 0 1 2 2h12a.5.5 0 0 1 .4.8L10 8.5V13a.5.5 0 0 1-.74.44l-2-1.1a.5.5 0 0 1-.26-.44V8.5L1.6 2.8a.5.5 0 0 1-.1-.3Z" />
+              </svg>
+              Filters
+              {activeFilterCount > 0 ? (
+                <span className="rounded-full bg-white px-1.5 text-[10px] font-bold text-[#0B3EAF]">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+              <span className={`text-[9px] transition ${mobileFiltersOpen ? "rotate-180" : ""}`} aria-hidden>
+                ▾
+              </span>
+            </button>
+
+            {mobileFiltersOpen ? (
+              <div className="mt-3 grid grid-cols-2 gap-4 rounded-lg bg-white p-3 text-slate-900 dark:bg-[#1a1a1a] dark:text-slate-100">
+                <div>
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Status</p>
+                  <CheckboxFilterContent options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
+                </div>
+                <div>
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Priority</p>
+                  <CheckboxFilterContent options={priorityOptions} selected={priorityFilter} onChange={setPriorityFilter} />
+                </div>
+                <div>
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Category</p>
+                  <CheckboxFilterContent options={categoryOptions} selected={categoryFilter} onChange={setCategoryFilter} />
+                </div>
+                <div>
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Submitted</p>
+                  <RadioFilterContent
+                    name="it-ticket-submitted-mobile"
+                    options={SUBMITTED_RANGE_OPTIONS}
+                    value={submittedFilter}
+                    onChange={setSubmittedFilter}
+                  />
+                </div>
+                <div>
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Requester</p>
+                  <CheckboxFilterContent options={requesterOptions} selected={requesterFilter} onChange={setRequesterFilter} searchable />
+                </div>
+                <div>
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Assigned to</p>
+                  <CheckboxFilterContent options={assigneeOptions} selected={assigneeFilter} onChange={setAssigneeFilter} searchable />
+                </div>
+                <div className="col-span-2">
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Search issue</p>
+                  <TextFilterContent value={issueQuery} onChange={setIssueQuery} placeholder="Ticket #, title, or description…" />
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -418,12 +851,12 @@ export default function ItTicketsMonitorTable({
       ) : filtered.length === 0 ? (
         <div className="mx-5 my-12 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center dark:border-white/10 dark:bg-white/[0.03]">
           <p className="text-base font-semibold text-slate-800 dark:text-white">
-            {filter === "all" && typeFilter === "all" ? "No tickets yet" : "Nothing in this filter"}
+            {counts.all === 0 ? "No tickets yet" : "Nothing in this filter"}
           </p>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            {filter === "all" && typeFilter === "all"
+            {counts.all === 0
               ? "Submit a request using the form below."
-              : "Try another status or category filter above."}
+              : "Try adjusting the filters above."}
           </p>
         </div>
       ) : (
@@ -494,7 +927,9 @@ export default function ItTicketsMonitorTable({
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <RequesterCell ticket={t} currentUser={currentUser} compact />
                           {t.assignee_name?.trim() ? (
-                            <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400">→ {t.assignee_name}</span>
+                            <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400" title={t.assignee_name}>
+                              → {firstNameOnly(t.assignee_name)}
+                            </span>
                           ) : null}
                         </div>
                       </div>
@@ -560,18 +995,64 @@ export default function ItTicketsMonitorTable({
 
           {/* ── Desktop / tablet table (md and above) ───────────────── */}
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse border border-slate-200 text-xs dark:border-slate-600/50">
+            <table className="w-full min-w-[640px] table-fixed border-collapse border border-slate-200 text-xs dark:border-slate-600/50">
               <thead className="sticky top-0 z-10 border-b-2 border-slate-300 backdrop-blur-sm dark:border-slate-600">
                 <tr>
-                  <th className={thClass("id", "text-center w-[5%]")}>ID</th>
-                  <th className={thClass("requester", "w-[14%]")}>Requester</th>
-                  <th className={thClass("issue", "w-[22%]")}>Issue</th>
-                  <th className={thClass("status", "w-[9%]")}>Status</th>
-                  <th className={thClass("priority", "w-[9%]")}>Priority</th>
-                  <th className={thClass("category", "hidden lg:table-cell w-[9%]")}>Category</th>
-                  <th className={thClass("assignee", "w-[13%]")}>Assignee</th>
-                  <th className={thClass("submitted", "hidden lg:table-cell w-[10%]", !showActionsColumn)}>Submitted</th>
-                  {showActionsColumn ? <th className={thClass("actions", "text-center w-[9%]", true)}>Actions</th> : null}
+                  <th className={thClass("id", "text-center w-[8%]")}>
+                    <button
+                      type="button"
+                      onClick={() => setIdSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+                      className="inline-flex items-center gap-1 rounded px-1 py-0.5 normal-case text-[9px] font-bold uppercase tracking-wide text-slate-600 transition hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10"
+                      title={idSortDir === "desc" ? "Newest first — click for oldest first" : "Oldest first — click for newest first"}
+                    >
+                      <span>ID</span>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 12 8"
+                        fill="none"
+                        className={`h-2 w-2.5 shrink-0 opacity-70 transition-transform ${idSortDir === "asc" ? "rotate-180" : ""}`}
+                        aria-hidden
+                      >
+                        <path d="M1 1l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </th>
+                  <th className={thClass("requester", "w-[12%]")}>
+                    <ColumnFilterHeader label="Requester" active={requesterFilter.size > 0}>
+                      <CheckboxFilterContent options={requesterOptions} selected={requesterFilter} onChange={setRequesterFilter} searchable />
+                    </ColumnFilterHeader>
+                  </th>
+                  <th className={thClass("issue", "w-[25%]")}>
+                    <ColumnFilterHeader label="Issue" active={issueQuery.trim() !== ""}>
+                      <TextFilterContent value={issueQuery} onChange={setIssueQuery} placeholder="Contains…" />
+                    </ColumnFilterHeader>
+                  </th>
+                  <th className={thClass("status", "w-[9%]")}>
+                    <ColumnFilterHeader label="Status" active={statusFilter.size > 0}>
+                      <CheckboxFilterContent options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
+                    </ColumnFilterHeader>
+                  </th>
+                  <th className={thClass("priority", "w-[9%]")}>
+                    <ColumnFilterHeader label="Priority" active={priorityFilter.size > 0}>
+                      <CheckboxFilterContent options={priorityOptions} selected={priorityFilter} onChange={setPriorityFilter} />
+                    </ColumnFilterHeader>
+                  </th>
+                  <th className={thClass("category", "hidden lg:table-cell w-[9%]")}>
+                    <ColumnFilterHeader label="Category" active={categoryFilter.size > 0}>
+                      <CheckboxFilterContent options={categoryOptions} selected={categoryFilter} onChange={setCategoryFilter} />
+                    </ColumnFilterHeader>
+                  </th>
+                  <th className={thClass("assignee", "w-[11%]")}>
+                    <ColumnFilterHeader label="Assignee" active={assigneeFilter.size > 0}>
+                      <CheckboxFilterContent options={assigneeOptions} selected={assigneeFilter} onChange={setAssigneeFilter} searchable />
+                    </ColumnFilterHeader>
+                  </th>
+                  <th className={thClass("submitted", "hidden lg:table-cell w-[10%]", !showActionsColumn)}>
+                    <ColumnFilterHeader label="Submitted" align="right" active={submittedFilter !== "all"}>
+                      <RadioFilterContent name="it-ticket-submitted-desktop" options={SUBMITTED_RANGE_OPTIONS} value={submittedFilter} onChange={setSubmittedFilter} />
+                    </ColumnFilterHeader>
+                  </th>
+                  {showActionsColumn ? <th className={thClass("actions", "text-center w-[7%]", true)}>Actions</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
@@ -607,7 +1088,7 @@ export default function ItTicketsMonitorTable({
                               type="button"
                               onClick={() => setExpandedId(expanded ? null : t.id)}
                               title="Open notes"
-                              className={["relative inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide transition",
+                              className={["relative inline-flex items-center gap-0.5 rounded-full px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide transition",
                                 expanded
                                   ? "bg-[#A7D344]/20 text-[#3a6600] dark:bg-[#A7D344]/25 dark:text-[#A7D344]"
                                   : "bg-[#A7D344]/15 text-[#3a6600] hover:bg-[#A7D344]/30 dark:bg-[#A7D344]/10 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/25",
@@ -653,7 +1134,7 @@ export default function ItTicketsMonitorTable({
                         </td>
                         <td className={tdClass("assignee", rowIdx, "overflow-hidden")}>
                           <span className="block truncate text-[11px] font-medium text-slate-800 dark:text-slate-200" title={t.assignee_name?.trim() || ""}>
-                            {t.assignee_name?.trim() || "—"}
+                            {t.assignee_name?.trim() ? firstNameOnly(t.assignee_name) : "—"}
                           </span>
                         </td>
                         <td className={`${tdClass("submitted", rowIdx, "", lastCol)} hidden lg:table-cell`}>
@@ -665,7 +1146,7 @@ export default function ItTicketsMonitorTable({
                         {showActionsColumn ? (
                           <td className={tdClass("actions", rowIdx, "", true)}>
                             {hasRowActions ? (
-                              <div className="flex justify-end">
+                              <div className="flex justify-center">
                                 <TicketRowActions
                                   ticket={t}
                                   canEdit={canEdit}

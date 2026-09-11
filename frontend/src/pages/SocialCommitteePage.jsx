@@ -212,7 +212,7 @@ function WinnerCard({ winner, onPhotoClick }) {
 
 // ─── Event section ────────────────────────────────────────────────────────────
 
-function EventSection({ event }) {
+function EventSection({ event, expanded, onToggle }) {
   const hasImages = event.images?.length > 0;
   const hasWinners = event.winners?.length > 0;
   const hasVideo = !!event.video_url;
@@ -222,38 +222,55 @@ function EventSection({ event }) {
 
   return (
     <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/50">
-      {/* Event header */}
-      <div>
-        {event.event_date && (
-          <p className="text-xs font-bold uppercase tracking-widest text-[#0B3EAF] dark:text-[#A7D344]">
-            {new Date(event.event_date + "T12:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
-          </p>
-        )}
-        <h2 className="mt-0.5 text-lg font-bold text-slate-900 dark:text-white">{event.title}</h2>
-        {event.description && (
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{event.description}</p>
-        )}
-      </div>
-
-      {/* Winners — 3 per row */}
-      {hasWinners && (
-        <div>
-          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            🏆 Winners
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {event.winners.map((w) => (
-              <WinnerCard key={w.id} winner={w} onPhotoClick={(src, alt) => setLightbox({ src, alt })} />
-            ))}
-          </div>
+      {/* Event header — click to expand/collapse this event */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="flex w-full items-start justify-between gap-3 text-left"
+      >
+        <div className="min-w-0">
+          {event.event_date && (
+            <p className="text-xs font-bold uppercase tracking-widest text-[#0B3EAF] dark:text-[#A7D344]">
+              {new Date(event.event_date + "T12:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
+            </p>
+          )}
+          <h2 className="mt-0.5 text-lg font-bold text-slate-900 dark:text-white">{event.title}</h2>
+          {event.description && (
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{event.description}</p>
+          )}
         </div>
+        <span
+          className={`mt-1 shrink-0 text-lg text-slate-400 transition-transform dark:text-slate-500 ${expanded ? "rotate-90" : ""}`}
+          aria-hidden
+        >
+          ▶
+        </span>
+      </button>
+
+      {expanded && (
+        <>
+          {/* Winners — 3 per row */}
+          {hasWinners && (
+            <div>
+              <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                🏆 Winners
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {event.winners.map((w) => (
+                  <WinnerCard key={w.id} winner={w} onPhotoClick={(src, alt) => setLightbox({ src, alt })} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Full-width gallery slider */}
+          {hasImages && <GallerySlider items={event.images} />}
+
+          {/* Video */}
+          {hasVideo && <VideoEmbed url={event.video_url} />}
+        </>
       )}
-
-      {/* Full-width gallery slider */}
-      {hasImages && <GallerySlider items={event.images} />}
-
-      {/* Video */}
-      {hasVideo && <VideoEmbed url={event.video_url} />}
 
       {/* Lightbox */}
       {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
@@ -266,16 +283,35 @@ function EventSection({ event }) {
 export default function SocialCommitteePage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Accordion: only one event is open at a time.
+  const [expandedId, setExpandedId] = useState(null);
+  const hasAutoExpanded = useRef(false);
 
   useEffect(() => {
     api.get("/social/events")
-      .then((r) => setEvents(Array.isArray(r.data) ? r.data : []))
+      .then((r) => {
+        const list = Array.isArray(r.data) ? r.data : [];
+        setEvents(list);
+        // On first load only, open the most recent event so visitors don't
+        // have to click before seeing anything.
+        if (!hasAutoExpanded.current) {
+          const visible = list.filter((e) => e.images?.length > 0 || e.winners?.length > 0 || e.video_url);
+          if (visible.length > 0) {
+            hasAutoExpanded.current = true;
+            setExpandedId(visible[0].id);
+          }
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const visibleEvents = events.filter(
     (e) => e.images?.length > 0 || e.winners?.length > 0 || e.video_url
   );
+
+  const toggleEvent = (id) => {
+    setExpandedId((current) => (current === id ? null : id));
+  };
 
   return (
     <main className={PAGE_SHELL}>
@@ -297,7 +333,14 @@ export default function SocialCommitteePage() {
 
       {!loading && visibleEvents.length > 0 && (
         <div className="space-y-8">
-          {visibleEvents.map((ev) => <EventSection key={ev.id} event={ev} />)}
+          {visibleEvents.map((ev) => (
+            <EventSection
+              key={ev.id}
+              event={ev}
+              expanded={expandedId === ev.id}
+              onToggle={() => toggleEvent(ev.id)}
+            />
+          ))}
         </div>
       )}
     </main>
