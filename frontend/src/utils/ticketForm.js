@@ -42,6 +42,8 @@ export function ticketToEditForm(ticket) {
       priority: ticket?.priority || "medium",
       assigneeId: ticket?.assignee_id != null ? String(ticket.assignee_id) : "",
       attachments: parseTicketAttachmentsRaw(ticket?.attachments),
+      behalfOfUserId: ticket?.user_id != null ? String(ticket.user_id) : "",
+      createdAt: ticket?.created_at || "",
     };
   }
 
@@ -53,6 +55,8 @@ export function ticketToEditForm(ticket) {
     priority: ticket?.priority || "medium",
     assigneeId: ticket?.assignee_id != null ? String(ticket.assignee_id) : "",
     attachments: parseTicketAttachmentsRaw(ticket?.attachments),
+    behalfOfUserId: ticket?.user_id != null ? String(ticket.user_id) : "",
+    createdAt: ticket?.created_at || "",
   };
 }
 

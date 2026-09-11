@@ -13,7 +13,34 @@ const MAX_TICKET_ATTACHMENTS = 5;
 const TICKET_ACCEPT =
   ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif,.webp";
 
-export default function TicketEditModal({ ticket, assignees, onClose, onSaved }) {
+// Local calendar date (YYYY-MM-DD) for a <input type="date">, derived from
+// however the ticket's created_at happens to be formatted.
+function toDateInputValue(raw) {
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// Combine a newly-picked calendar date with the ORIGINAL time-of-day from
+// the ticket, so editing "submitted date" doesn't reset the time to midnight.
+function combineDateWithOriginalTime(dateStr, originalRaw) {
+  const [y, m, d] = String(dateStr || "").split("-").map((n) => Number(n));
+  if (!y || !m || !d) return null;
+  const orig = originalRaw ? new Date(originalRaw) : null;
+  const hasOrig = orig && !Number.isNaN(orig.getTime());
+  const hh = hasOrig ? orig.getHours() : 12;
+  const mm = hasOrig ? orig.getMinutes() : 0;
+  const ss = hasOrig ? orig.getSeconds() : 0;
+  const combined = new Date(y, m - 1, d, hh, mm, ss);
+  if (Number.isNaN(combined.getTime())) return null;
+  return combined.toISOString();
+}
+
+export default function TicketEditModal({ ticket, assignees, allUsers = [], canEditRequesterFields = false, onClose, onSaved }) {
   const [issueType, setIssueType] = useState("hardware");
   const [priority, setPriority] = useState("medium");
   const [title, setTitle] = useState("");
@@ -21,6 +48,9 @@ export default function TicketEditModal({ ticket, assignees, onClose, onSaved })
   const [otherIssue, setOtherIssue] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [attachments, setAttachments] = useState([]);
+  const [behalfOfUserId, setBehalfOfUserId] = useState("");
+  const [submittedDate, setSubmittedDate] = useState("");
+  const [originalCreatedAt, setOriginalCreatedAt] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -36,6 +66,9 @@ export default function TicketEditModal({ ticket, assignees, onClose, onSaved })
     setOtherIssue(form.otherIssue);
     setAssigneeId(form.assigneeId);
     setAttachments(form.attachments);
+    setBehalfOfUserId(form.behalfOfUserId);
+    setOriginalCreatedAt(form.createdAt);
+    setSubmittedDate(toDateInputValue(form.createdAt));
     setError("");
     setUploadError("");
   }, [ticket]);
@@ -94,9 +127,22 @@ export default function TicketEditModal({ ticket, assignees, onClose, onSaved })
       return;
     }
 
+    const payload = { ...built.payload };
+    if (canEditRequesterFields) {
+      if (behalfOfUserId) payload.behalf_of_user_id = Number(behalfOfUserId);
+      if (submittedDate) {
+        const combined = combineDateWithOriginalTime(submittedDate, originalCreatedAt);
+        if (!combined) {
+          setError("Please enter a valid submitted date.");
+          return;
+        }
+        payload.created_at = combined;
+      }
+    }
+
     setSaving(true);
     try {
-      const res = await api.patch(`/tickets/${ticket.id}`, built.payload);
+      const res = await api.patch(`/tickets/${ticket.id}`, payload);
       onSaved?.(res.data);
       onClose?.();
     } catch (err) {
@@ -278,6 +324,41 @@ export default function TicketEditModal({ ticket, assignees, onClose, onSaved })
               ))}
             </select>
           </div>
+
+          {canEditRequesterFields ? (
+            <div className="grid gap-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-4 dark:border-white/10 dark:bg-white/[0.03] sm:grid-cols-2">
+              <div>
+                <label className={FORM_LABEL}>
+                  Requester{" "}
+                  <span className="font-normal text-slate-400">(IT staff only)</span>
+                </label>
+                <select
+                  className={FORM_FIELD}
+                  value={behalfOfUserId}
+                  onChange={(e) => setBehalfOfUserId(e.target.value)}
+                >
+                  {allUsers.map((u) => (
+                    <option key={u.id} value={String(u.id)}>
+                      {u.name}
+                      {u.email ? ` (${u.email})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={FORM_LABEL}>
+                  Submitted date{" "}
+                  <span className="font-normal text-slate-400">(IT staff only)</span>
+                </label>
+                <input
+                  type="date"
+                  className={FORM_FIELD}
+                  value={submittedDate}
+                  onChange={(e) => setSubmittedDate(e.target.value)}
+                />
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-4 dark:border-white/10">
             <button type="submit" disabled={saving} className="btn-primary min-h-[42px] px-6 disabled:opacity-60">

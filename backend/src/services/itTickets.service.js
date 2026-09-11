@@ -370,13 +370,46 @@ async function updateTicketByOwner(actor, ticketId, body) {
     attachmentsJson = normalizeAttachmentsJson(body);
   }
 
+  // Reassigning the requester ("submit on behalf of") and adjusting the
+  // submitted date are administrative actions — only IT/Admin may change
+  // them, never the ticket's own requester editing their still-open ticket.
+  const canEditRequesterFields = isIt || isAdmin;
+
+  let requesterId = row.user_id;
+  if (canEditRequesterFields && body?.behalf_of_user_id != null && String(body.behalf_of_user_id).trim() !== "") {
+    const newRequesterId = Number(body.behalf_of_user_id);
+    if (!Number.isFinite(newRequesterId) || newRequesterId < 1) {
+      const e = new Error("Invalid requester");
+      e.statusCode = 400;
+      throw e;
+    }
+    const requester = await db.prepare("SELECT id FROM users WHERE id = ?").get(newRequesterId);
+    if (!requester) {
+      const e = new Error("Requester user not found");
+      e.statusCode = 400;
+      throw e;
+    }
+    requesterId = requester.id;
+  }
+
+  let createdAt = row.created_at;
+  if (canEditRequesterFields && body?.created_at != null && String(body.created_at).trim() !== "") {
+    const parsed = new Date(body.created_at);
+    if (Number.isNaN(parsed.getTime())) {
+      const e = new Error("Invalid submitted date");
+      e.statusCode = 400;
+      throw e;
+    }
+    createdAt = parsed.toISOString();
+  }
+
   await db
     .prepare(
       `UPDATE it_tickets
-       SET title = ?, description = ?, priority = ?, assignee_id = ?, attachments = ?, updated_at = datetime('now')
+       SET title = ?, description = ?, priority = ?, assignee_id = ?, attachments = ?, user_id = ?, created_at = ?, updated_at = datetime('now')
        WHERE id = ?`
     )
-    .run(title, description, priority, assigneeId, attachmentsJson, id);
+    .run(title, description, priority, assigneeId, attachmentsJson, requesterId, createdAt, id);
 
   const updated = await getTicketById(id);
   try {

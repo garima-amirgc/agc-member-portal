@@ -308,6 +308,8 @@ export default function ItTicketsPage() {
       <TicketEditModal
         ticket={editingTicket}
         assignees={assignees}
+        allUsers={allUsers}
+        canEditRequesterFields={isIT || isAdmin}
         onClose={() => setEditingTicket(null)}
         onSaved={saveEditedTicket}
       />
