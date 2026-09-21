@@ -7,6 +7,10 @@ This document helps AI assistants (Claude, Cursor, etc.) work safely and effecti
 ## Quick start (every task)
 
 1. Read all rules in `.cursor/rules/` (7 files) if available in the workspace.
+   **Also read `PROJECT_NOTES.md` in the repo root** — it tracks in-progress
+   features, decisions, and open questions across chat sessions (conversation
+   memory does NOT carry over between sessions, so this file is the source of
+   truth for "what were we building").
 2. Run: `git status`, `git branch`, `git pull origin main`
 3. Review related files before editing — do not guess patterns.
 4. Make small, focused changes. **Do not commit unless the user asks.**

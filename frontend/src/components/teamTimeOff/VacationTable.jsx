@@ -109,7 +109,7 @@ export default function VacationTable({ employees, onSelectEmployee }) {
                       ) : null}
                       {!e.adp_linked ? (
                         <div className="text-xs text-slate-400">Not linked to ADP</div>
-                      ) : e.authorized === false ? (
+                      ) : e.balances_authorized === false ? (
                         <div className="text-xs text-amber-600 dark:text-amber-400">ADP access pending</div>
                       ) : null}
                     </td>

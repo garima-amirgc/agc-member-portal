@@ -410,6 +410,13 @@ function ColumnFilterHeader({ label, active, align = "left", children }) {
 // Checkbox multi-select — an empty `selected` set means "no filter" (every
 // value counts as checked); unchecking one materializes the rest as an
 // explicit selection instead of leaving the other boxes ambiguous.
+//
+// "Clear all" needs to represent the opposite extreme — nothing checked —
+// which can't be the empty Set (that means "everything"). This sentinel
+// value stands in for that state: it never matches a real option, so the
+// resulting filter matches zero rows, same as unchecking every box by hand.
+const CHECKBOX_FILTER_NONE = "__none_selected__";
+
 function CheckboxFilterContent({ options, selected, onChange, searchable = false }) {
   const [query, setQuery] = useState("");
   const allValues = options.map((o) => o.value);
@@ -421,6 +428,8 @@ function CheckboxFilterContent({ options, selected, onChange, searchable = false
     if (base.size === allValues.length) base = new Set();
     onChange(base);
   };
+  const allSelected = selected.size === 0;
+  const noneSelected = selected.size > 0 && allValues.every((v) => !selected.has(v));
   const visible = query.trim()
     ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
     : options;
@@ -436,15 +445,29 @@ function CheckboxFilterContent({ options, selected, onChange, searchable = false
           className="mb-2 w-full rounded border border-slate-200 px-2 py-1 text-xs font-normal outline-none focus:border-[#0B3EAF] dark:border-slate-700 dark:bg-[#141414] dark:focus:border-[#A7D344]"
         />
       ) : null}
-      {selected.size > 0 ? (
-        <button
-          type="button"
-          onClick={() => onChange(new Set())}
-          className="mb-1.5 text-[10px] font-semibold text-[#0B3EAF] hover:underline dark:text-[#A7D344]"
-        >
-          Select all
-        </button>
-      ) : null}
+      <div className="mb-1.5 flex items-center gap-2">
+        {!allSelected ? (
+          <button
+            type="button"
+            onClick={() => onChange(new Set())}
+            className="text-[10px] font-semibold text-[#0B3EAF] hover:underline dark:text-[#A7D344]"
+          >
+            Select all
+          </button>
+        ) : null}
+        {!allSelected && !noneSelected ? (
+          <span className="text-[10px] text-slate-300 dark:text-slate-600">|</span>
+        ) : null}
+        {!noneSelected ? (
+          <button
+            type="button"
+            onClick={() => onChange(new Set([CHECKBOX_FILTER_NONE]))}
+            className="text-[10px] font-semibold text-[#0B3EAF] hover:underline dark:text-[#A7D344]"
+          >
+            Clear all
+          </button>
+        ) : null}
+      </div>
       <div className="max-h-56 space-y-0.5 overflow-y-auto">
         {visible.length === 0 ? (
           <p className="px-1 py-2 text-xs italic text-slate-400">No matches.</p>
@@ -848,22 +871,23 @@ export default function ItTicketsMonitorTable({
           <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
           <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading tickets…</p>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="mx-5 my-12 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center dark:border-white/10 dark:bg-white/[0.03]">
-          <p className="text-base font-semibold text-slate-800 dark:text-white">
-            {counts.all === 0 ? "No tickets yet" : "Nothing in this filter"}
-          </p>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            {counts.all === 0
-              ? "Submit a request using the form below."
-              : "Try adjusting the filters above."}
-          </p>
-        </div>
       ) : (
         <>
           {/* ── Mobile card list (< md) ──────────────────────────────── */}
           <div className="md:hidden divide-y divide-slate-200/80 dark:divide-white/10">
-            {filtered.map((t, rowIdx) => {
+            {filtered.length === 0 ? (
+              <div className="mx-3 my-8 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center dark:border-white/10 dark:bg-white/[0.03]">
+                <p className="text-sm font-semibold text-slate-800 dark:text-white">
+                  {counts.all === 0 ? "No tickets yet" : "Nothing in this filter"}
+                </p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {counts.all === 0
+                    ? "Submit a request using the form below."
+                    : "Try adjusting the filters above."}
+                </p>
+              </div>
+            ) : (
+              filtered.map((t, rowIdx) => {
               const typeLabel = issueTypeFromTicketTitle(t.title);
               const issueName = titleWithoutTypePrefix(t.title);
               const attCount = parseTicketAttachments(t).length;
@@ -990,7 +1014,8 @@ export default function ItTicketsMonitorTable({
                   ) : null}
                 </Fragment>
               );
-            })}
+              })
+            )}
           </div>
 
           {/* ── Desktop / tablet table (md and above) ───────────────── */}
@@ -1056,7 +1081,21 @@ export default function ItTicketsMonitorTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
-                {filtered.map((t, rowIdx) => {
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={showActionsColumn ? 9 : 8} className="px-6 py-12 text-center">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-white">
+                        {counts.all === 0 ? "No tickets yet" : "Nothing in this filter"}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        {counts.all === 0
+                          ? "Submit a request using the form below."
+                          : "Try adjusting the filters above."}
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((t, rowIdx) => {
                   const typeLabel = issueTypeFromTicketTitle(t.title);
                   const issueName = titleWithoutTypePrefix(t.title);
                   const attCount = parseTicketAttachments(t).length;
@@ -1206,7 +1245,8 @@ export default function ItTicketsMonitorTable({
                       ) : null}
                     </Fragment>
                   );
-                })}
+                  })
+                )}
               </tbody>
             </table>
           </div>

@@ -61,6 +61,20 @@ function entriesOnDay(employees, iso) {
   return out;
 }
 
+/** How many distinct people have time off on this day — 2+ means an overlap. */
+function overlapCountOnDay(employees, iso) {
+  const ids = new Set();
+  for (const e of employees) {
+    for (const t of e.time_off || []) {
+      if (t.start_date && t.start_date <= iso && (t.end_date || t.start_date) >= iso) {
+        ids.add(e.id);
+        break;
+      }
+    }
+  }
+  return ids.size;
+}
+
 export default function TeamCalendar({ employees, syncWindow, initialCursor }) {
   const [mode, setMode] = useState("month");
   const [cursor, setCursor] = useState(initialCursor || todayIso());
@@ -146,6 +160,15 @@ export default function TeamCalendar({ employees, syncWindow, initialCursor }) {
         </div>
       ) : null}
 
+      {mode !== "list" ? (
+        <div className="flex items-center gap-1.5 border-b border-slate-100 px-4 py-1.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white">
+            !
+          </span>
+          Highlighted = 2 or more team members overlapping that day
+        </div>
+      ) : null}
+
       {mode === "month" ? (
         <div className="p-3">
           <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium uppercase text-slate-500 dark:text-slate-400">
@@ -159,14 +182,30 @@ export default function TeamCalendar({ employees, syncWindow, initialCursor }) {
             {monthDays.map((iso) => {
               const items = entriesOnDay(employees, iso);
               const inMonth = isSameMonth(iso, cursor);
+              const overlapCount = overlapCountOnDay(employees, iso);
+              const hasOverlap = overlapCount >= 2;
               return (
                 <div
                   key={iso}
                   className={`min-h-[5.5rem] rounded-lg border p-1.5 text-left align-top ${
-                    inMonth ? "border-slate-200 dark:border-slate-700" : "border-transparent opacity-40"
+                    hasOverlap
+                      ? "border-amber-400 bg-amber-50/60 dark:border-amber-500/50 dark:bg-amber-950/20"
+                      : inMonth
+                      ? "border-slate-200 dark:border-slate-700"
+                      : "border-transparent opacity-40"
                   } ${iso === today ? "ring-2 ring-[#0B3EAF] dark:ring-[#A7D344]" : ""}`}
                 >
-                  <div className="text-xs text-slate-500 dark:text-slate-400">{dayNum(iso)}</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{dayNum(iso)}</span>
+                    {hasOverlap ? (
+                      <span
+                        title={`${overlapCount} people overlap this day`}
+                        className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white"
+                      >
+                        !
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="mt-1 space-y-0.5">
                     {items.slice(0, 3).map(({ employee, entry }, i) => (
                       <div
@@ -194,16 +233,30 @@ export default function TeamCalendar({ employees, syncWindow, initialCursor }) {
             <thead>
               <tr>
                 <th className="p-2 text-left text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Employee</th>
-                {weekDays.map((iso) => (
-                  <th
-                    key={iso}
-                    className={`p-2 text-center text-xs font-medium uppercase text-slate-500 dark:text-slate-400 ${
-                      iso === today ? "text-[#0B3EAF] dark:text-[#A7D344]" : ""
-                    }`}
-                  >
-                    {dayLabel(iso)}
-                  </th>
-                ))}
+                {weekDays.map((iso) => {
+                  const overlapCount = overlapCountOnDay(employees, iso);
+                  const hasOverlap = overlapCount >= 2;
+                  return (
+                    <th
+                      key={iso}
+                      className={`p-2 text-center text-xs font-medium uppercase text-slate-500 dark:text-slate-400 ${
+                        iso === today ? "text-[#0B3EAF] dark:text-[#A7D344]" : ""
+                      } ${hasOverlap ? "bg-amber-50 dark:bg-amber-950/20" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {dayLabel(iso)}
+                        {hasOverlap ? (
+                          <span
+                            title={`${overlapCount} people overlap this day`}
+                            className="flex h-3 w-3 items-center justify-center rounded-full bg-amber-500 text-[7px] font-bold text-white"
+                          >
+                            !
+                          </span>
+                        ) : null}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>

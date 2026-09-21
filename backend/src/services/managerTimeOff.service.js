@@ -3,15 +3,24 @@
 /**
  * Team Time Off — manager-only board data
  * ─────────────────────────────────────────
- * The board itself reads from the local adp_time_off_balances /
- * adp_time_off_requests tables — kept fresh by adpTimeOffSync.service.js,
- * which pulls every linked employee's ADP data on its own schedule. This
- * means loading the board is a fast local DB read, never a live ADP call,
- * and one slow/unauthorized employee can't hold up the whole team.
+ * The board — and, as of 2026-09-15, the drawer's full-year history too —
+ * reads from the local adp_time_off_balances / adp_time_off_requests
+ * tables, kept fresh by adpTimeOffSync.service.js, which pulls every
+ * linked employee's ADP data on its own schedule. This means loading
+ * either one is a fast local DB read, never a live ADP call, and one
+ * slow/unauthorized employee can't hold up the whole team.
  *
- * Only the drawer's full-year history (getEmployeeYearHistory) still
- * calls ADP live — that's opened rarely, one employee at a time, so
- * there's no need to keep a full year cached for everyone.
+ * The drawer used to call ADP live (chunked across a full year — up to 9
+ * separate round-trips per open, since ADP caps a single request at 6
+ * weeks). That made opening a drawer slow, and worse, "authorized" was
+ * being re-checked live per employee per click even though ADP's scope
+ * grant is a single app-wide setting, not something that varies employee
+ * to employee — so it was redundant on top of being slow. Now it reads
+ * the same synced table the board already has in memory, and reuses the
+ * same authorized flag the board computes. Trade-off: history for a year
+ * (or part of a year) outside the sync window (see `sync_window` in the
+ * response) won't have data until that window is synced — same honest
+ * limit the board's calendar already has.
  *
  * Two honest limits, straight from ADP's documented behaviour (not a
  * portal limitation):
@@ -26,7 +35,7 @@
 const { db } = require("../config/db");
 const adpTimeOff = require("./adpTimeOff.service");
 const adpTimeOffSync = require("./adpTimeOffSync.service");
-const { normalizeRequest, isVacationPolicy } = require("./adpTimeOffNormalize");
+const { isVacationPolicy, isApprovedStatus } = require("./adpTimeOffNormalize");
 
 const EMPLOYEE_COLUMNS =
   "id, name, email, business_unit, department, designation, adp_job_title, adp_work_location, adp_associate_oid";
@@ -109,29 +118,6 @@ async function getTeamTimeOff(managerUserId) {
   const leaveTypes = new Set();
   const today = todayStr();
 
-  const results = employees.map((e) => {
-    if (!e.adp_associate_oid) return baseEmployee(e, { linked: false });
-
-    const balances = (balancesByUser.get(e.id) || []).map(rowToBalance);
-    const requests = (requestsByUser.get(e.id) || []).map(rowToRequest);
-
-    balances.forEach((b) => leaveTypes.add(b.policy_name || b.policy_code));
-    requests.forEach((r) => leaveTypes.add(r.policy_name || r.policy_code));
-
-    const nextUp = requests.find((r) => r.start_date && r.start_date >= today) || null;
-    const vacation = balances.find(isVacationPolicy) || null;
-
-    return {
-      ...baseEmployee(e, { linked: true }),
-      authorized: true,
-      balances,
-      vacation_balance: vacation,
-      time_off: requests,
-      next_time_off: nextUp,
-      is_away_today: requests.some((r) => isTodayWithin(r.start_date, r.end_date)),
-    };
-  });
-
   const syncStats = adpTimeOffSync.getLastSyncStats();
   // No sync has completed yet → don't claim authorization either way; once
   // one has, these reflect whether ADP actually let the sync read this
@@ -145,6 +131,53 @@ async function getTeamTimeOff(managerUserId) {
   const balancesAuthorized = syncStats ? syncStats.balancesUnauthorized === 0 : true;
   const requestsAuthorized = syncStats ? syncStats.requestsUnauthorized === 0 : true;
   const authorized = balancesAuthorized && requestsAuthorized;
+
+  const results = employees.map((e) => {
+    if (!e.adp_associate_oid) return baseEmployee(e, { linked: false });
+
+    const balances = (balancesByUser.get(e.id) || []).map(rowToBalance);
+    // Board is approved-only for now (see adpTimeOffNormalize.js's
+    // isApprovedStatus comment) — filters out anything ADP has tagged with
+    // a non-approved status, which today is a no-op since ADP only ever
+    // sends approved requests, but keeps the board honest if that changes
+    // before a "pending" section exists to show them properly.
+    const requests = (requestsByUser.get(e.id) || [])
+      .filter((r) => isApprovedStatus(r.status))
+      .map(rowToRequest);
+
+    balances.forEach((b) => leaveTypes.add(b.policy_name || b.policy_code));
+    requests.forEach((r) => leaveTypes.add(r.policy_name || r.policy_code));
+
+    const nextUp = requests.find((r) => r.start_date && r.start_date >= today) || null;
+    const vacation = balances.find(isVacationPolicy) || null;
+
+    return {
+      ...baseEmployee(e, { linked: true }),
+      // Was hardcoded `true` here regardless of the actual sync result, so
+      // the UI could never tell "ADP hasn't authorized this yet" apart
+      // from "authorized, but genuinely nothing on file" — both just
+      // showed as blank/"—" with no explanation. This is an app-wide ADP
+      // scope, not something that varies per employee, so every linked
+      // employee shares the same authorized state as the board overall.
+      //
+      // `authorized` is kept as the combined AND of both scopes for any
+      // caller that just wants "is everything fine", but balances and
+      // requests are independently-authorized ADP scopes (see the comment
+      // above `balancesAuthorized`/`requestsAuthorized`) — a UI section
+      // that only shows balances (the vacation table, the drawer's balance
+      // card) must gate on `balances_authorized`, not the combined flag,
+      // or it will wrongly claim balances are unavailable whenever only
+      // the requests scope is the one still pending on ADP's side.
+      authorized,
+      balances_authorized: balancesAuthorized,
+      requests_authorized: requestsAuthorized,
+      balances,
+      vacation_balance: vacation,
+      time_off: requests,
+      next_time_off: nextUp,
+      is_away_today: requests.some((r) => isTodayWithin(r.start_date, r.end_date)),
+    };
+  });
 
   return {
     adp_configured: true,
@@ -160,36 +193,40 @@ async function getTeamTimeOff(managerUserId) {
 }
 
 /**
- * One employee's time off across a full calendar year, for the drawer's
- * history view. This is the one path that still calls ADP live — ADP
- * caps a single requests call at 6 weeks, so this chunks the year and
- * merges the results. Only ever runs for someone who actually reports to
- * this manager.
+ * One employee's time off for a given calendar year, for the drawer's
+ * history view. Reads the same synced `adp_time_off_requests` table the
+ * board uses — see the file header for why this changed from a live,
+ * per-open ADP call. `sync_window` tells the caller how much of the
+ * requested year is actually covered by the last sync, so the UI can
+ * flag it if the year runs outside that range (same idea as the board's
+ * calendar "outside synced range" notice).
  */
 async function getEmployeeYearHistory(managerUserId, employeeId, year) {
   const employee = await assertDirectReport(managerUserId, employeeId);
   const y = Number(year) || new Date().getFullYear();
+  const syncedAt = adpTimeOffSync.getLastSyncedAt();
+  const window = adpTimeOffSync.syncWindow();
 
   if (!employee.adp_associate_oid || !adpTimeOff.isConfigured()) {
-    return { employee: publicEmployee(employee), authorized: true, entries: [] };
+    return { employee: publicEmployee(employee), authorized: true, entries: [], synced_at: syncedAt, sync_window: window };
   }
 
-  const chunks = yearChunks(y, adpTimeOff.MAX_WINDOW_DAYS);
-  const chunkResults = await Promise.all(
-    chunks.map(({ from, to }) => adpTimeOff.getTimeOffRequests(employee.adp_associate_oid, from, to))
-  );
+  const syncStats = adpTimeOffSync.getLastSyncStats();
+  const authorized = syncStats ? syncStats.requestsUnauthorized === 0 : true;
 
-  const authorized = chunkResults.every((c) => c.authorized);
-  const byId = new Map();
-  for (const c of chunkResults) {
-    for (const raw of c.requests || []) {
-      const norm = normalizeRequest(raw);
-      byId.set(norm.id, norm);
-    }
-  }
-  const entries = [...byId.values()].sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
+  const from = `${y}-01-01`;
+  const to = `${y}-12-31`;
+  const rows = await db
+    .prepare(
+      `SELECT * FROM adp_time_off_requests
+       WHERE user_id = ? AND start_date <= ? AND start_date >= ?
+       ORDER BY start_date ASC`
+    )
+    .all(employee.id, to, from);
+  // Same approved-only filter as the board — see isApprovedStatus's comment.
+  const entries = rows.filter((r) => isApprovedStatus(r.status)).map(rowToRequest);
 
-  return { employee: publicEmployee(employee), authorized, entries };
+  return { employee: publicEmployee(employee), authorized, entries, synced_at: syncedAt, sync_window: window };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -228,21 +265,6 @@ function groupBy(rows, key) {
   return map;
 }
 
-function yearChunks(year, maxDays) {
-  const chunks = [];
-  let cursor = new Date(Date.UTC(year, 0, 1));
-  const end = new Date(Date.UTC(year, 11, 31));
-  while (cursor <= end) {
-    const chunkEnd = new Date(cursor);
-    chunkEnd.setUTCDate(chunkEnd.getUTCDate() + maxDays - 1);
-    const clampedEnd = chunkEnd > end ? end : chunkEnd;
-    chunks.push({ from: cursor.toISOString().slice(0, 10), to: clampedEnd.toISOString().slice(0, 10) });
-    cursor = new Date(clampedEnd);
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return chunks;
-}
-
 function uniqueSorted(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
 }
@@ -252,6 +274,8 @@ function baseEmployee(e, { linked }) {
     ...publicEmployee(e),
     adp_linked: linked,
     authorized: true,
+    balances_authorized: true,
+    requests_authorized: true,
     balances: [],
     vacation_balance: null,
     time_off: [],

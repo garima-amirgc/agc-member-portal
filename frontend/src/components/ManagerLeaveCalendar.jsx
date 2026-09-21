@@ -45,9 +45,15 @@ export default function ManagerLeaveCalendar({ team }) {
   return (
     <div className="card">
       <h2 className="mb-1 text-lg font-semibold">Leave calendar</h2>
-      <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+      <p className="mb-1 text-sm text-slate-600 dark:text-slate-300">
         {title} — shows who is on leave each day (pending and approved). Rejected requests are hidden.
       </p>
+      <div className="mb-3 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+        <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white">
+          !
+        </span>
+        Highlighted = 2 or more team members overlapping that day
+      </div>
 
       <div className="overflow-x-auto">
         <div className="inline-block min-w-[280px]">
@@ -64,19 +70,32 @@ export default function ManagerLeaveCalendar({ team }) {
                 return <div key={`p-${i}`} className="min-h-[72px] rounded-lg bg-transparent" />;
               }
               const people = whoOnLeave(list, c.ymd);
+              const hasOverlap = people.length >= 2;
               const isToday = c.ymd === ymd(now.getFullYear(), now.getMonth(), now.getDate());
               return (
                 <div
                   key={c.ymd}
                   className={[
                     "flex min-h-[72px] flex-col rounded-lg border p-1 text-left text-[10px] leading-tight",
-                    people.length > 0
+                    hasOverlap
+                      ? "border-amber-400 bg-amber-50/60 dark:border-amber-500/50 dark:bg-amber-950/20"
+                      : people.length > 0
                       ? "border-brand-blue/40 bg-brand-blue-soft dark:border-brand-blue/40 dark:bg-white/10"
                       : "border-slate-100 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-800/30",
                     isToday ? "ring-2 ring-[#86BC25] ring-offset-1 dark:ring-offset-slate-900" : "",
                   ].join(" ")}
                 >
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">{c.day}</span>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{c.day}</span>
+                    {hasOverlap ? (
+                      <span
+                        title={`${people.length} people overlap this day`}
+                        className="flex h-3 w-3 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[7px] font-bold text-white"
+                      >
+                        !
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="mt-0.5 flex flex-col gap-0.5">
                     {people.map((p, j) => (
                       <span

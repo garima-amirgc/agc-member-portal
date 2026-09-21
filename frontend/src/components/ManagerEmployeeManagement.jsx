@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { leaveJson, managerInboxWithTeamJson } from "../services/leaveClient";
+import { managerInboxWithTeamJson } from "../services/leaveClient";
 import ProgressBar from "./ProgressBar";
 import { friendlyErrorMessage } from "../services/friendlyError";
-
-const leaveStatusClass = {
-  pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
-  approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
-  rejected: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200",
-};
 
 export default function ManagerEmployeeManagement({
   team: teamProp,
@@ -19,7 +13,6 @@ export default function ManagerEmployeeManagement({
   const [teamLocal, setTeamLocal] = useState([]);
   const [loadingLocal, setLoadingLocal] = useState(true);
   const [errorLocal, setErrorLocal] = useState("");
-  const [leaveActionErr, setLeaveActionErr] = useState("");
 
   const managed = teamProp !== undefined;
   const team = managed ? (Array.isArray(teamProp) ? teamProp : []) : teamLocal;
@@ -50,27 +43,7 @@ export default function ManagerEmployeeManagement({
     load();
   }, [managed, load]);
 
-  const updateLeaveStatus = async (requestId, status) => {
-    setLeaveActionErr("");
-    try {
-      await leaveJson(`/auth/manager-leave-requests/${requestId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
-      await load();
-    } catch (e) {
-      setLeaveActionErr(friendlyErrorMessage(e, "Could not update leave request"));
-    }
-  };
-
-  const summary = useMemo(() => {
-    const n = team.length;
-    const pendingLeave = team.reduce(
-      (acc, emp) => acc + (emp.leave_requests || []).filter((l) => l.status === "pending").length,
-      0
-    );
-    return { n, pendingLeave };
-  }, [team]);
+  const summary = useMemo(() => ({ n: team.length }), [team]);
 
   return (
     <section className="card border-stone-200/90 dark:border-stone-600">
@@ -78,7 +51,7 @@ export default function ManagerEmployeeManagement({
         <div>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Team learning details</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Direct reports, leave requests, and university course progress.
+            Direct reports and university course progress.
           </p>
         </div>
         <Link
@@ -91,11 +64,6 @@ export default function ManagerEmployeeManagement({
 
       {loading && <p className="text-sm text-slate-500">Loading team…</p>}
       {error && <div className="rounded bg-rose-100 p-2 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">{error}</div>}
-      {leaveActionErr && (
-        <div className="mb-2 rounded bg-rose-100 p-2 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
-          {leaveActionErr}
-        </div>
-      )}
 
       {!loading && !error && team.length === 0 && (
         <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -106,14 +74,12 @@ export default function ManagerEmployeeManagement({
       {!loading && summary.n > 0 && (
         <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
           {summary.n} team member{summary.n === 1 ? "" : "s"}
-          {summary.pendingLeave > 0 ? ` · ${summary.pendingLeave} pending leave request(s)` : ""}
         </p>
       )}
 
       <div className="space-y-4">
         {team.map((emp) => {
           const assigns = emp.assignments || [];
-          const leaves = emp.leave_requests || [];
           const summary = emp.training_summary;
           const avgProgress =
             summary?.avgProgress ??
@@ -160,51 +126,6 @@ export default function ManagerEmployeeManagement({
               </summary>
 
               <div className="space-y-4 border-t border-slate-200 px-4 pb-4 pt-3 dark:border-slate-600">
-                <div>
-                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Leave requests
-                  </h4>
-                  {leaves.length === 0 ? (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">None yet.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {leaves.map((lr) => (
-                        <li
-                          key={lr.id}
-                          className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900/40"
-                        >
-                          <div>
-                            <span className="font-medium">
-                              {lr.start_date} → {lr.end_date}
-                            </span>
-                            {lr.reason ? <p className="mt-0.5 text-slate-600 dark:text-slate-300">{lr.reason}</p> : null}
-                            <p className="mt-1 text-xs text-slate-500">
-                              {lr.created_at ? new Date(lr.created_at).toLocaleString() : ""}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${leaveStatusClass[lr.status] || ""}`}
-                            >
-                              {lr.status}
-                            </span>
-                            {lr.status === "pending" && (
-                              <div className="flex gap-1">
-                                <button type="button" className="btn-success" onClick={() => updateLeaveStatus(lr.id, "approved")}>
-                                  Approve
-                                </button>
-                                <button type="button" className="btn-outline" onClick={() => updateLeaveStatus(lr.id, "rejected")}>
-                                  Reject
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
                 <div>
                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     University courses

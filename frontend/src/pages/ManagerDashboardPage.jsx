@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import { managerTeamWithSelfJson } from "../services/leaveClient";
 import { useAuth } from "../context/AuthContext";
 import ManagerTeamGraph from "../components/ManagerTeamGraph";
 import ManagerTrainingNotifications from "../components/ManagerTrainingNotifications";
 import TeamTimeOffBoard from "../components/TeamTimeOffBoard";
+import TeamLeaveRequests from "../components/teamTimeOff/TeamLeaveRequests";
 
 export default function ManagerDashboardPage() {
   const { user } = useAuth();
@@ -12,22 +13,24 @@ export default function ManagerDashboardPage() {
   const [teamLoading, setTeamLoading] = useState(true);
   const [teamError, setTeamError] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      setTeamLoading(true);
-      setTeamError("");
-      try {
-        const { team, teamError } = await managerTeamWithSelfJson();
-        setTeam(team);
-        if (teamError) setTeamError(teamError);
-      } catch (e) {
-        setTeamError(e?.message || "Failed to load team");
-        setTeam([]);
-      } finally {
-        setTeamLoading(false);
-      }
-    })();
+  const loadTeam = useCallback(async () => {
+    setTeamLoading(true);
+    setTeamError("");
+    try {
+      const { team, teamError } = await managerTeamWithSelfJson();
+      setTeam(team);
+      if (teamError) setTeamError(teamError);
+    } catch (e) {
+      setTeamError(e?.message || "Failed to load team");
+      setTeam([]);
+    } finally {
+      setTeamLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadTeam();
+  }, [loadTeam]);
 
   return (
     <main className={PAGE_SHELL}>
@@ -39,7 +42,10 @@ export default function ManagerDashboardPage() {
       {teamError && <div className="rounded bg-rose-100 p-2 text-sm text-rose-700">{teamError}</div>}
       {!teamLoading && !teamError && <ManagerTeamGraph managerName={user?.name} team={team} />}
 
-      <TeamTimeOffBoard />
+      <div className="space-y-6">
+        <TeamTimeOffBoard />
+        <TeamLeaveRequests team={team} onDecided={loadTeam} loading={teamLoading} />
+      </div>
 
       <ManagerTrainingNotifications />
     </main>

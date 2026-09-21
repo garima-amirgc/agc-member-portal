@@ -1,86 +1,32 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import api from "../services/api";
 import { PAGE_SHELL } from "../constants/pageLayout";
-import ManagerEmployeeManagement from "../components/ManagerEmployeeManagement";
-import ManagerTrainingNotifications from "../components/ManagerTrainingNotifications";
 import ReportingHierarchyTree from "../components/ReportingHierarchyTree";
+import TeamTimeOffBoard from "../components/TeamTimeOffBoard";
 import { useAuth } from "../context/AuthContext";
-import { managerTeamWithSelfJson } from "../services/leaveClient";
 import { USER_ME_TEAM_HIERARCHY } from "../services/userMeClient";
 import { isSupervisor } from "../utils/supervisorAccess";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
+// 2026-09-21 — this page used to also show two training-tracking widgets
+// (ManagerEmployeeManagement's "Team learning details" card and
+// ManagerTrainingNotifications' "University learning updates" card) below
+// the vacation board. Garima asked for those to come out entirely, on top
+// of the leave-request cleanup done earlier the same day — see
+// PROJECT_NOTES.md ("Team page — ADP-only vacation data..."). This page's
+// state was trimmed down to just what ReportingHierarchyTree and
+// TeamTimeOffBoard actually need; the old `team`/`selfTraining` props this
+// page used to pass to ReportingHierarchyTree were dead code even before
+// this — that component only ever destructures `hierarchy` and
+// `currentUserId`.
 export default function TeamPage() {
   const { user } = useAuth();
   const [me, setMe] = useState(null);
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
-  const [team, setTeam] = useState([]);
-  const [teamLoading, setTeamLoading] = useState(false);
-  const [teamError, setTeamError] = useState("");
   const [error, setError] = useState("");
 
   const profile = me || user;
-  const mayLoadTeamProgress = isSupervisor(user) || isSupervisor(profile);
-
   const showSupervisorTools = isSupervisor(user) || isSupervisor(profile);
-  const hasDirectReportsInHierarchy = useMemo(() => {
-    const raw = profile?.reporting_hierarchy?.direct_reports;
-    return Array.isArray(raw) && raw.length > 0;
-  }, [profile]);
-  const showLearningSections = showSupervisorTools || hasDirectReportsInHierarchy;
-
-  const applyTeamPayload = useCallback((teamData, selfTraining) => {
-    setTeam(Array.isArray(teamData) ? teamData : []);
-    if (selfTraining) {
-      setMe((prev) => {
-        const base = prev || user;
-        if (!base) return prev;
-        return { ...base, training_summary: selfTraining };
-      });
-    }
-  }, [user]);
-
-  const reloadTeam = useCallback(async () => {
-    if (!mayLoadTeamProgress) {
-      setTeam([]);
-      setTeamError("");
-      setTeamLoading(false);
-      return;
-    }
-    setTeamLoading(true);
-    setTeamError("");
-    try {
-      const { team: teamData, self_training_summary, teamError } = await managerTeamWithSelfJson();
-      applyTeamPayload(teamData, self_training_summary);
-      if (teamError) setTeamError(teamError);
-    } catch (e) {
-      setTeamError(friendlyErrorMessage(e, "Failed to load team progress"));
-      setTeam([]);
-    } finally {
-      setTeamLoading(false);
-    }
-  }, [mayLoadTeamProgress, applyTeamPayload]);
-
-  const reloadHierarchy = useCallback(async () => {
-    setHierarchyLoading(true);
-    setError("");
-    try {
-      const res = await api.get("/users/me", USER_ME_TEAM_HIERARCHY);
-      setMe((prev) => ({
-        ...(prev || user || {}),
-        ...res.data,
-        training_summary: prev?.training_summary ?? res.data?.training_summary,
-      }));
-    } catch (e) {
-      setError(friendlyErrorMessage(e, "Failed to load team"));
-    } finally {
-      setHierarchyLoading(false);
-    }
-  }, [user]);
-
-  const reloadAll = useCallback(async () => {
-    await Promise.all([reloadHierarchy(), reloadTeam()]);
-  }, [reloadHierarchy, reloadTeam]);
 
   useEffect(() => {
     if (!user) return;
@@ -89,61 +35,23 @@ export default function TeamPage() {
 
     (async () => {
       setHierarchyLoading(true);
-      if (mayLoadTeamProgress) setTeamLoading(true);
       setError("");
-      setTeamError("");
-
-      const hierarchyPromise = api.get("/users/me", USER_ME_TEAM_HIERARCHY);
-      const teamPromise = mayLoadTeamProgress
-        ? managerTeamWithSelfJson()
-        : Promise.resolve({ team: [], self_training_summary: null, teamError: "" });
-
       try {
-        const [hierarchyRes, teamPayload] = await Promise.all([hierarchyPromise, teamPromise]);
+        const res = await api.get("/users/me", USER_ME_TEAM_HIERARCHY);
         if (cancelled) return;
-
-        const hierarchyData = hierarchyRes.data;
-        setMe({
-          ...(user || {}),
-          ...hierarchyData,
-          training_summary: teamPayload.self_training_summary ?? undefined,
-        });
-        setTeam(Array.isArray(teamPayload.team) ? teamPayload.team : []);
-        if (teamPayload.teamError) setTeamError(teamPayload.teamError);
+        setMe({ ...(user || {}), ...res.data });
       } catch (e) {
         if (cancelled) return;
         setError(friendlyErrorMessage(e, "Failed to load team"));
       } finally {
-        if (!cancelled) {
-          setHierarchyLoading(false);
-          setTeamLoading(false);
-        }
+        if (!cancelled) setHierarchyLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [user?.id, mayLoadTeamProgress]);
-
-  useEffect(() => {
-    const refresh = () => {
-      reloadAll();
-    };
-    window.addEventListener("agc-training-progress", refresh);
-    window.addEventListener("agc-training-complete", refresh);
-    return () => {
-      window.removeEventListener("agc-training-progress", refresh);
-      window.removeEventListener("agc-training-complete", refresh);
-    };
-  }, [reloadAll]);
-
-  const selfTraining = useMemo(
-    () => ({
-      training_summary: profile?.training_summary ?? { avgProgress: 0, total: 0, completed: 0, allComplete: false },
-    }),
-    [profile]
-  );
+  }, [user?.id]);
 
   if (!profile) {
     return (
@@ -152,8 +60,6 @@ export default function TeamPage() {
       </main>
     );
   }
-
-  const progressLoading = hierarchyLoading || teamLoading;
 
   return (
     <main className={PAGE_SHELL}>
@@ -165,29 +71,22 @@ export default function TeamPage() {
         <div className="mb-4 rounded bg-rose-100 p-3 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">{error}</div>
       ) : null}
 
-      {progressLoading ? (
-        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Loading team progress…</p>
+      {hierarchyLoading ? (
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Loading team…</p>
       ) : null}
 
-      <ReportingHierarchyTree
-        hierarchy={profile.reporting_hierarchy}
-        currentUserId={profile.id}
-        team={team}
-        selfTraining={selfTraining}
-      />
+      <ReportingHierarchyTree hierarchy={profile.reporting_hierarchy} currentUserId={profile.id} />
 
-      {showLearningSections ? (
-        <div className="space-y-6">
-          <ManagerEmployeeManagement
-            team={team}
-            loading={teamLoading}
-            error={teamError}
-            onReload={reloadTeam}
-          />
-          <ManagerTrainingNotifications />
+      {showSupervisorTools ? (
+        <div className="mt-6 space-y-6">
+          {/* Vacation/time-off data on this page is ADP-only now — the portal's
+              own pending-leave-request review UI (TeamLeaveRequests, and the
+              portal-native calendar it embedded) was removed so this section
+              shows exactly what ADP has on record, nothing built before the
+              ADP sync existed. See PROJECT_NOTES.md. */}
+          <TeamTimeOffBoard />
         </div>
       ) : null}
-
     </main>
   );
 }

@@ -21,12 +21,29 @@ function Stat({ label, value }) {
   );
 }
 
+function fmtDateTime(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+function fmtHours(n) {
+  if (n === null || n === undefined || n === "") return "—";
+  const v = Number(n);
+  return Number.isFinite(v) ? v.toFixed(1) : "—";
+}
+
 export default function AdminSystemStatusPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [topVisitors, setTopVisitors] = useState([]);
   const [topVisitorsLoading, setTopVisitorsLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
 
   const load = () => {
     setLoading(true);
@@ -41,6 +58,32 @@ export default function AdminSystemStatusPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const runSyncNow = () => {
+    setSyncing(true);
+    setSyncMessage("");
+    api
+      .post("/admin/sync-time-off")
+      .then((r) => {
+        const result = r.data?.result;
+        if (result?.skipped) {
+          setSyncMessage(
+            result.reason === "already running"
+              ? "A sync was already running in the background — showing its result once it finishes."
+              : "Nothing to sync — ADP isn't configured on this server."
+          );
+        } else if (result) {
+          setSyncMessage(
+            `Synced ${result.synced}/${result.total} employees` +
+              (result.failed ? `, ${result.failed} failed` : "") +
+              "."
+          );
+        }
+        load();
+      })
+      .catch((e) => setSyncMessage(friendlyErrorMessage(e, "Sync failed — check the server logs.")))
+      .finally(() => setSyncing(false));
+  };
 
   useEffect(() => {
     setTopVisitorsLoading(true);
@@ -89,6 +132,111 @@ export default function AdminSystemStatusPage() {
             </div>
           ) : (
             <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">No data.</div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold text-slate-900 dark:text-white">ADP time off sync</div>
+            <div className="flex items-center gap-3">
+              {data?.adp_time_off?.synced_at ? (
+                <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                  Last synced {fmtDateTime(data.adp_time_off.synced_at)}
+                </span>
+              ) : (
+                <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                  Time off hasn't synced from ADP yet — this runs automatically shortly after the server starts.
+                </span>
+              )}
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={runSyncNow}
+                disabled={syncing || !data?.adp_time_off?.configured}
+              >
+                {syncing ? "Syncing…" : "Sync now"}
+              </button>
+            </div>
+          </div>
+          {syncMessage ? <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{syncMessage}</p> : null}
+
+          {!loading && data && !data.adp_time_off?.configured ? (
+            <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+              ADP isn't configured on this server, so there's nothing to sync yet.
+            </div>
+          ) : !loading && data ? (
+            <>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Stat label="Employees linked to ADP" value={String(data.adp_time_off?.linked_employees ?? "—")} />
+                <Stat label="Balance rows synced" value={String(data.adp_time_off?.balance_rows ?? "—")} />
+                <Stat label="Request rows synced" value={String(data.adp_time_off?.request_rows ?? "—")} />
+                <Stat
+                  label="Last sync result"
+                  value={
+                    data.adp_time_off?.last_sync
+                      ? `${data.adp_time_off.last_sync.synced}/${data.adp_time_off.last_sync.total} synced`
+                      : "No sync yet"
+                  }
+                />
+              </div>
+
+              {data.adp_time_off?.last_sync ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <Stat label="Balances not authorized" value={String(data.adp_time_off.last_sync.balancesUnauthorized ?? 0)} />
+                  <Stat label="Requests not authorized" value={String(data.adp_time_off.last_sync.requestsUnauthorized ?? 0)} />
+                  <Stat label="Failed" value={String(data.adp_time_off.last_sync.failed ?? 0)} />
+                </div>
+              ) : null}
+
+              {data.adp_time_off?.sync_window ? (
+                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                  Synced window: {data.adp_time_off.sync_window.from} to {data.adp_time_off.sync_window.to}
+                </p>
+              ) : null}
+
+              <div className="mt-4">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Real balances from ADP (most recently synced, up to 10)
+                </div>
+                {(data.adp_time_off?.sample_balances || []).length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                    No balance rows have synced yet — either no employees have an ADP time-off policy on record,
+                    or a sync hasn't run yet.
+                  </p>
+                ) : (
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="min-w-full text-left text-sm">
+                      <thead>
+                        <tr className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          <th className="py-1 pr-4">Employee</th>
+                          <th className="py-1 pr-4">Policy</th>
+                          <th className="py-1 pr-4">Entitlement</th>
+                          <th className="py-1 pr-4">Carried over</th>
+                          <th className="py-1 pr-4">Used</th>
+                          <th className="py-1 pr-4">Scheduled</th>
+                          <th className="py-1 pr-4">Available</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.adp_time_off.sample_balances.map((row, idx) => (
+                          <tr key={idx} className="border-t border-slate-200/70 dark:border-slate-700">
+                            <td className="py-1.5 pr-4 font-medium text-slate-900 dark:text-white">{row.employee_name || "—"}</td>
+                            <td className="py-1.5 pr-4 text-slate-600 dark:text-slate-300">{row.policy_name || "—"}</td>
+                            <td className="py-1.5 pr-4 text-slate-600 dark:text-slate-300">{fmtHours(row.entitlement)}</td>
+                            <td className="py-1.5 pr-4 text-slate-600 dark:text-slate-300">{fmtHours(row.carried_over)}</td>
+                            <td className="py-1.5 pr-4 text-slate-600 dark:text-slate-300">{fmtHours(row.used)}</td>
+                            <td className="py-1.5 pr-4 text-slate-600 dark:text-slate-300">{fmtHours(row.scheduled)}</td>
+                            <td className="py-1.5 pr-4 text-slate-600 dark:text-slate-300">{fmtHours(row.available)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">Loading…</div>
           )}
         </div>
 

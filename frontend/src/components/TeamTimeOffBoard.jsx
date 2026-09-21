@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import SummaryCards from "./teamTimeOff/SummaryCards";
@@ -26,9 +26,14 @@ export default function TeamTimeOffBoard() {
   const [board, setBoard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
 
   const [filters, setFilters] = useState({ query: "", department: "", location: "", leaveType: "", year: CURRENT_YEAR });
   const [drawerEmployeeId, setDrawerEmployeeId] = useState(null);
+
+  const unmountedRef = useRef(false);
+  const pollTimeoutRef = useRef(null);
 
   const loadBoard = async () => {
     setLoading(true);
@@ -46,7 +51,67 @@ export default function TeamTimeOffBoard() {
 
   useEffect(() => {
     loadBoard();
+    return () => {
+      unmountedRef.current = true;
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+    };
   }, []);
+
+  // Checks back every 15s (up to ~10 min) for the sync this component
+  // itself kicked off to land, instead of blocking on one long request.
+  const pollForSync = (priorSyncedAt, attempt) => {
+    const MAX_ATTEMPTS = 40;
+    pollTimeoutRef.current = setTimeout(async () => {
+      if (unmountedRef.current) return;
+      try {
+        const { data } = await api.get("/manager-time-off");
+        if (unmountedRef.current) return;
+        if (data?.synced_at && data.synced_at !== priorSyncedAt) {
+          setBoard(data);
+          setSyncMessage("Synced just now.");
+          setSyncing(false);
+          return;
+        }
+      } catch {
+        // Transient errors while polling aren't worth surfacing — just keep trying.
+      }
+      if (attempt + 1 >= MAX_ATTEMPTS) {
+        setSyncMessage("Still syncing in the background — refresh in a bit to see the latest.");
+        setSyncing(false);
+        return;
+      }
+      pollForSync(priorSyncedAt, attempt + 1);
+    }, 15000);
+  };
+
+  // Pulls fresh data from ADP right now instead of waiting for the next
+  // scheduled sync (every couple hours) — handy right after ADP access
+  // (a new scope, a newly-linked employee, etc.) actually goes live.
+  //
+  // The backend kicks the sync off in the background and responds right
+  // away instead of making this request wait — one full sync round-trips
+  // ADP once per linked employee and has been observed to take minutes
+  // for a company this size, long enough to risk a platform request
+  // timeout in production. So this polls the board every 15s until
+  // `synced_at` moves past what it was before this sync started, rather
+  // than waiting on one long request.
+  const runSync = async () => {
+    setSyncing(true);
+    setSyncMessage("");
+    const priorSyncedAt = board?.synced_at || null;
+    try {
+      const { data } = await api.post("/manager-time-off/sync");
+      setSyncMessage(
+        data?.already_running
+          ? "A sync is already in progress — this can take a few minutes for a larger team."
+          : "Syncing in the background — this can take a few minutes for a larger team…"
+      );
+      pollForSync(priorSyncedAt, 0);
+    } catch (e) {
+      setSyncMessage(friendlyErrorMessage(e, "Sync failed — try again in a moment."));
+      setSyncing(false);
+    }
+  };
 
   const boardEmployees = board?.employees || [];
   const filteredEmployees = useMemo(
@@ -89,12 +154,23 @@ export default function TeamTimeOffBoard() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Team time off</h2>
-        <FilterBar
-          filters={filters}
-          options={{ departments: board.filters?.departments, locations: board.filters?.locations, leaveTypes: board.filters?.leave_types }}
-          onChange={setFilters}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterBar
+            filters={filters}
+            options={{ departments: board.filters?.departments, locations: board.filters?.locations, leaveTypes: board.filters?.leave_types }}
+            onChange={setFilters}
+          />
+          <button
+            type="button"
+            onClick={runSync}
+            disabled={syncing}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            {syncing ? "Syncing…" : "Sync now"}
+          </button>
+        </div>
       </div>
+      {syncMessage ? <p className="text-xs text-slate-500 dark:text-slate-400">{syncMessage}</p> : null}
 
       {!board.adp_configured ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">

@@ -2,61 +2,127 @@
 
 /**
  * Shared ADP time-off field mapping — used by both the background sync
- * (adpTimeOffSync.service.js) and the on-demand year-history lookup
- * (managerTimeOff.service.js's getEmployeeYearHistory). Kept in one place
- * so there's a single spot to adjust if AGC's real ADP payloads turn out
- * shaped differently than these public-docs-based guesses (same kind of
- * fallback chains as adp.service.js's worker-profile mapping, for the
- * same reason — ADP's exact nesting varies by account configuration).
+ * (adpTimeOffSync.service.js) and adpTimeOff.service.js's request parsing.
+ * Kept in one place so there's a single spot to adjust if ADP's payload
+ * shape ever changes.
+ *
+ * 2026-09-21 — rewritten against ADP's own real sample responses (see
+ * PROJECT_NOTES.md, "Real ADP payload shapes confirmed — 2026-09-21").
+ * Everything below reflects confirmed field paths, not guesses — the
+ * previous version of this file was written from ADP's general docs
+ * before any real request had ever synced, and several of its field
+ * paths (timeOffPolicyCode, typeCode, timeOffEntries...) don't exist in
+ * the account's actual payloads at all.
  */
 
-function normalizeBalanceGroup(group) {
-  const policyCode = group?.timeOffPolicyCode?.codeValue || group?.policyCode || group?.timeOffPolicyCode || null;
-  const policyName = group?.timeOffPolicyCode?.shortName || group?.timeOffPolicyCode?.longName || policyCode;
+// ─── Balances ───────────────────────────────────────────────────────────
 
-  const entries = group?.balances || group?.balanceDetails || [];
-  const pick = (needle) => {
-    const hit = (Array.isArray(entries) ? entries : []).find((b) =>
-      String(b?.typeCode?.codeValue || b?.typeCode || b?.balanceTypeCode || "")
-        .toLowerCase()
-        .includes(needle)
-    );
-    const qty = hit?.totalQuantity;
-    if (qty == null) return null;
-    return typeof qty === "object" ? Number(qty.quantityNumber ?? qty.quantityValue ?? qty.value ?? 0) : Number(qty);
+/**
+ * One policy's balance, straight from
+ * `paidTimeOffDetails.paidTimeOffBalances[].paidTimeOffPolicyBalances[]`:
+ *   { paidTimeOffPolicy: { code, labelName },
+ *     policyBalances: [ { balanceType: { code, labelName },
+ *                          totalQuantity: { valueNumber, unitTimeCode, labelName } | null } ] }
+ *
+ * balanceType.code values seen in practice: available, taken, scheduled,
+ * earned, carryover, transferred, futureEarned, unlimited (the last one —
+ * e.g. an "as required" unpaid-leave policy — has no totalQuantity at all,
+ * which is fine: it just won't match any of the codes below, so every
+ * numeric field comes back null and the UI shows "—" for it, same as any
+ * other policy with nothing to report).
+ *
+ * ADP's own balances API guide only documents earned/taken/scheduled/
+ * available — carryover/transferred/futureEarned appear in the real
+ * response but aren't in that guide's data dictionary. transferred and
+ * futureEarned aren't surfaced (no column for them yet); carryover is.
+ *
+ * "taken" and "scheduled" come back as NEGATIVE numbers in ADP's response
+ * (e.g. -25.0 for 25 days taken) — this file takes the absolute value so
+ * "Used"/"Scheduled" display as positive day counts, matching every other
+ * balance figure and how a manager would actually read them.
+ */
+function normalizeBalanceGroup(group) {
+  const policyCode = group?.paidTimeOffPolicy?.code || null;
+  const policyName = group?.paidTimeOffPolicy?.labelName || policyCode;
+
+  const entries = Array.isArray(group?.policyBalances) ? group.policyBalances : [];
+  const pick = (code) => {
+    const hit = entries.find((b) => String(b?.balanceType?.code || "").toLowerCase() === code);
+    const qty = hit?.totalQuantity?.valueNumber;
+    return qty == null ? null : Number(qty);
   };
+
+  const taken = pick("taken");
+  const scheduled = pick("scheduled");
 
   return {
     policy_code: policyCode,
     policy_name: policyName,
-    entitlement: pick("earn") ?? pick("adjust"),
-    carried_over: pick("carry"),
-    used: pick("taken") ?? pick("used"),
-    scheduled: pick("sched"),
-    available: pick("avail") ?? pick("remain"),
+    entitlement: pick("earned"),
+    carried_over: pick("carryover"),
+    used: taken == null ? null : Math.abs(taken),
+    scheduled: scheduled == null ? null : Math.abs(scheduled),
+    available: pick("available"),
   };
 }
 
-function normalizeRequest(req) {
-  const entries = req?.timeOffEntries || [{ datePeriod: req?.datePeriod, totalQuantity: req?.totalQuantity }];
-  const first = entries[0] || {};
-  const last = entries[entries.length - 1] || first;
+// ─── Requests ───────────────────────────────────────────────────────────
 
-  const policyCode =
-    req?.timeOffPolicyCode?.codeValue || req?.timeOffPolicyCode || first?.timeOffPolicyCode?.codeValue || null;
-  const policyName = req?.timeOffPolicyCode?.shortName || req?.timeOffPolicyCode?.longName || policyCode;
+/**
+ * Flatten ADP's deeply-nested time-off-requests response down to one raw
+ * `{ req, entry }` pair per individual day/period entry.
+ *
+ * Real shape: `paidTimeOffDetails.paidTimeOffRequests[]` (one per worker
+ * position) → `.paidTimeOffRequestEntries[]` (grouped by status) →
+ * `.requests[]` (individual requests) → `.paidTimeOffEntries[]` (the
+ * actual day-by-day entries).
+ *
+ * Critically: ONE ADP request (one requestID) can cover several
+ * non-contiguous days — e.g. a real sample request covered 16 separate
+ * dates spread across three weeks, not one continuous range. Our DB
+ * schema stores one row per synced item with a single start/end date, so
+ * syncing at the WHOLE-REQUEST level would force collapsing those 16
+ * dates into one 2026-09-04→2026-09-28 range — which would make the
+ * calendar wrongly show the employee on leave for every day in between,
+ * including days they're not actually off. Syncing at the ENTRY level
+ * instead (each entry already has its own unique `paidTimeOffID` and its
+ * own single date/period) keeps the calendar accurate for both simple
+ * single-day requests and multi-day/non-contiguous ones.
+ */
+function extractRequestItems(data) {
+  const positions = data?.paidTimeOffDetails?.paidTimeOffRequests || [];
+  const out = [];
+  for (const pos of positions) {
+    for (const group of pos?.paidTimeOffRequestEntries || []) {
+      for (const req of group?.requests || []) {
+        for (const entry of req?.paidTimeOffEntries || []) {
+          out.push({ req, entry });
+        }
+      }
+    }
+  }
+  return out;
+}
 
-  const qty = req?.totalQuantity;
-  const hours = qty == null ? null : typeof qty === "object" ? Number(qty.quantityNumber ?? qty.quantityValue ?? 0) : Number(qty);
+/** Turn one raw `{ req, entry }` pair (from extractRequestItems) into our row shape. */
+function normalizeRequest({ req, entry } = {}) {
+  const policyCode = entry?.paidTimeOffPolicy?.code || null;
+  const policyName = entry?.paidTimeOffPolicy?.labelName || policyCode;
+  const qty = entry?.totalQuantity?.valueNumber;
+  const start = entry?.timePeriod?.startDateTime || null;
 
   return {
-    id: req?.timeOffRequestID || req?.itemID?.idValue || `${policyCode}-${first?.datePeriod?.startDate}`,
+    id: entry?.paidTimeOffID || `${req?.requestID || "req"}-${start || "?"}`,
     policy_code: policyCode,
     policy_name: policyName,
-    status: req?.requestStatusCode?.codeValue || req?.requestStatusCode || "Approved",
-    start_date: first?.datePeriod?.startDate || req?.datePeriod?.startDate || null,
-    end_date: last?.datePeriod?.endDate || req?.datePeriod?.endDate || null,
-    hours,
+    // entryStatus is the specific day's status; requestStatus is the
+    // request's overall status — prefer the entry-level one, fall back to
+    // the request, then assume approved (ADP's documented default for
+    // this endpoint when nothing else is available).
+    status: entry?.entryStatus?.code || req?.requestStatus?.code || "approved",
+    start_date: start,
+    end_date: entry?.timePeriod?.endDateTime || start,
+    hours: qty == null ? null : Number(qty),
   };
 }
 
@@ -64,4 +130,44 @@ function isVacationPolicy(b) {
   return /vacation/i.test(b?.policy_name || "") || /^v$/i.test(b?.policy_code || "");
 }
 
-module.exports = { normalizeBalanceGroup, normalizeRequest, isVacationPolicy };
+/**
+ * The Manager Vacation Board is approved-only for now — see PROJECT_NOTES.md
+ * ("Approved-only board, built for later pending support — 2026-09-15").
+ * A denylist rather than an allowlist, on purpose: ADP's real sample data
+ * uses lowercase words ("approved"), but ADP's own PDF guide documents
+ * single-letter codes for this same field (A/P/D/I/C) — since the two
+ * disagree, both conventions are covered below instead of trusting one.
+ */
+const NOT_APPROVED_STATUSES = new Set([
+  "pending",
+  "requested",
+  "submitted",
+  "in progress",
+  "inprogress",
+  "cancelled",
+  "canceled",
+  "denied",
+  "rejected",
+  "withdrawn",
+  "revoked",
+  // ADP's PDF guide's single-letter codes for pending/denied/in-progress/
+  // cancelled (its "A" for approved is deliberately NOT here).
+  "p",
+  "d",
+  "i",
+  "c",
+]);
+
+function isApprovedStatus(status) {
+  const s = String(status || "").trim().toLowerCase();
+  if (!s) return true; // no status at all — treat like ADP's documented default (approved)
+  return !NOT_APPROVED_STATUSES.has(s);
+}
+
+module.exports = {
+  normalizeBalanceGroup,
+  extractRequestItems,
+  normalizeRequest,
+  isVacationPolicy,
+  isApprovedStatus,
+};

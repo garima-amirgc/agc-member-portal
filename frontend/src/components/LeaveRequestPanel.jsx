@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { leaveJson } from "../services/leaveClient";
+import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 
 const statusClass = {
@@ -16,13 +16,14 @@ export default function LeaveRequestPanel({ className = "", embedded = false }) 
   const [reason, setReason] = useState("");
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
 
   const load = async () => {
     setLoading(true);
     try {
-      const data = await leaveJson("/auth/my-leave-requests", { method: "GET" });
+      const { data } = await api.get("/leave-requests/me");
       setList(Array.isArray(data) ? data : []);
     } catch (e) {
       setErr(friendlyErrorMessage(e, "Failed to load requests"));
@@ -39,19 +40,19 @@ export default function LeaveRequestPanel({ className = "", embedded = false }) 
     e.preventDefault();
     setMsg("");
     setErr("");
+    setSubmitting(true);
     try {
-      await leaveJson("/auth/leave-request", {
-        method: "POST",
-        body: JSON.stringify({ start_date: startDate, end_date: endDate, reason }),
-      });
+      await api.post("/leave-requests", { start_date: startDate, end_date: endDate, reason });
       setMsg("Request sent to your manager.");
       setStartDate("");
       setEndDate("");
       setReason("");
-      await refreshMe();
-      load();
+      if (refreshMe) await refreshMe().catch(() => {});
+      await load();
     } catch (e) {
       setErr(friendlyErrorMessage(e, "Could not submit"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -108,8 +109,8 @@ export default function LeaveRequestPanel({ className = "", embedded = false }) 
           </div>
           {err && <div className="text-sm text-rose-600 dark:text-rose-400">{err}</div>}
           {msg && <div className="text-sm text-emerald-600 dark:text-emerald-400">{msg}</div>}
-          <button type="submit" className="btn-primary">
-            Send to manager
+          <button type="submit" className="btn-primary" disabled={submitting}>
+            {submitting ? "Sending…" : "Send to manager"}
           </button>
         </form>
       )}

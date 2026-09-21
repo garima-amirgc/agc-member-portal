@@ -40,10 +40,25 @@ router.get("/employees/:id/history", async (req, res) => {
 // instead of waiting for the background schedule. Any manager can trigger
 // it (it refreshes data for the whole company, not just their own team) —
 // mainly here for testing while ADP access is being set up.
+//
+// This does NOT wait for the sync to finish before responding — one
+// full sync round-trips ADP once per linked employee (a handful at a
+// time), which has been observed to take minutes for a company this
+// size and will only grow with headcount. Blocking the request that
+// long risks a platform timeout in production (Render et al. cap how
+// long a request can stay open) and just makes the button feel broken.
+// Instead this kicks the sync off in the background and returns
+// immediately; the frontend polls GET / and picks up the fresh data
+// once `synced_at` moves.
 router.post("/sync", async (req, res) => {
   try {
-    const out = await adpTimeOffSync.runFullTimeOffSync();
-    return res.json(out);
+    if (adpTimeOffSync.isSyncRunning()) {
+      return res.json({ started: false, already_running: true });
+    }
+    adpTimeOffSync.runFullTimeOffSync().catch((e) => {
+      console.error("[Manager Time Off] background sync error:", e.message || e);
+    });
+    return res.json({ started: true, already_running: false });
   } catch (e) {
     console.error("[Manager Time Off] POST /sync error:", e.message || e);
     return res.status(500).json({ message: e.message || "Server error" });
