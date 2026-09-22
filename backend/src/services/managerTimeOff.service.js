@@ -50,6 +50,43 @@ function isTodayWithin(startDate, endDate) {
   return startDate <= today && (endDate || startDate) >= today;
 }
 
+function addOneDay(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
+// "Next time off" used to just be the first approved request with
+// start_date >= today — which, for someone already on a multi-day leave
+// that started today (or earlier), shows today's own date as their "next"
+// time off. That reads wrong: they're not about to go, they're already
+// gone. Garima flagged this on 2026-09-22 with a real example — an
+// employee away today AND tomorrow showed "Next time off: <today>" instead
+// of tomorrow's date.
+//
+// `requests` is pre-sorted by start_date ascending (see the query in
+// getTeamTimeOff). For each request, in order:
+//   - fully in the past (end_date < today) → not relevant, skip it.
+//   - hasn't started yet (start_date > today) → that's genuinely next,
+//     return it unchanged (same as before).
+//   - otherwise it's the request keeping them away right now (start_date
+//     <= today <= end_date) — the next day they're actually off is
+//     tomorrow, as long as tomorrow still falls within this same request;
+//     if this request's last day off is today, there's nothing "next" left
+//     in it, so keep looking at the requests after it.
+function nextTimeOffFor(requests, today) {
+  for (const r of requests) {
+    if (!r.start_date) continue;
+    const end = r.end_date || r.start_date;
+    if (end < today) continue;
+    if (r.start_date > today) return r;
+    const tomorrow = addOneDay(today);
+    if (tomorrow <= end) return { ...r, start_date: tomorrow };
+  }
+  return null;
+}
+
 // ─── Security: only ever act on this manager's own direct reports ───────
 
 async function assertDirectReport(managerUserId, employeeId) {
@@ -148,7 +185,7 @@ async function getTeamTimeOff(managerUserId) {
     balances.forEach((b) => leaveTypes.add(b.policy_name || b.policy_code));
     requests.forEach((r) => leaveTypes.add(r.policy_name || r.policy_code));
 
-    const nextUp = requests.find((r) => r.start_date && r.start_date >= today) || null;
+    const nextUp = nextTimeOffFor(requests, today);
     const vacation = balances.find(isVacationPolicy) || null;
 
     return {

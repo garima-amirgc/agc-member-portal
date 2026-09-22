@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import api from "../../services/api";
 import { friendlyErrorMessage } from "../../services/friendlyError";
 import { badgeClassFor, dotClassFor, fmtDateRange, fmtDays } from "./timeOffShared";
@@ -66,10 +67,27 @@ export default function EmployeeDrawer({ employee, year, onClose }) {
   const balances = sortBalances(employee.balances);
   const totals = totalsFor(balances);
 
-  return (
+  // Rendered through a portal straight into <body> — same fix used for the
+  // IT Ticket board's column-filter popovers. This component's `fixed
+  // inset-0` used to be mounted deep inside the page's layout tree, and
+  // something in an ancestor there (almost certainly a CSS transform used
+  // for a page-transition wrapper) was quietly turning "fixed" into
+  // "relative to that ancestor" instead of the real viewport — so the
+  // drawer's top edge landed below the sticky top bar instead of covering
+  // it, letting a sliver of the top bar peek through above the panel
+  // (flagged by Garima 2026-09-22, screenshot showed the top-bar avatar
+  // poking out above the drawer). Portalling to `document.body` escapes
+  // that ancestor entirely, so `fixed inset-0` means the actual viewport
+  // again and the drawer now covers the top bar like any other modal.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-md flex-col overflow-y-auto bg-white p-5 shadow-xl dark:bg-slate-900">
+      {/* Extra top padding — this drawer is `fixed inset-0`, and the app's
+          sticky top bar (AppTopBar) renders above it and was covering the
+          employee's name/title at the top of the panel. Garima flagged this
+          2026-09-22; bumping just the top padding clears the top bar instead
+          of touching the stacking/z-index setup. */}
+      <div className="relative flex h-full w-full max-w-md flex-col overflow-y-auto bg-white p-5 pt-24 shadow-xl dark:bg-slate-900 sm:pt-28">
         <div className="flex items-start justify-between gap-2">
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">{employee.name}</h3>
@@ -184,6 +202,7 @@ export default function EmployeeDrawer({ employee, year, onClose }) {
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

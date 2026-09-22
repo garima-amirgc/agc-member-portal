@@ -647,6 +647,166 @@ Not changed on purpose: the Excel export doesn't reflect section groupings
 (just the same per-question columns as before) — can be added later if
 Garima wants section names in the export headers, but wasn't asked for.
 
+---
+
+## Team time off board — visual redesign — 2026-09-22
+
+Garima asked for the "Team time off" board (on `/team`, inside
+`TeamTimeOffBoard`) to look "beautiful and modern," pointing specifically at
+the IT Ticket board (`ItTicketsMonitorTable`) as the style reference. This
+was a pure Tailwind/JSX visual pass — no prop shapes, API calls, or data
+logic changed in any of the five files touched.
+
+**Design language borrowed from the IT Ticket board**: a full-bleed blue
+gradient hero header (`from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4]`) holding
+the section title plus its primary controls, colored stat tiles instead of
+plain white boxes, alternating-row tables with avatar-initial chips, rounded
+pill badges, and `card no-title-underline ... shadow-lg ring-1` as the
+container treatment throughout.
+
+**`frontend/src/components/TeamTimeOffBoard.jsx`** — the plain
+`<h2>Team time off</h2>` + inline filter/sync row was replaced with a
+gradient hero header card (same treatment as the IT Ticket board's header):
+title + subtitle on the left, `FilterBar` and a pill-shaped "Sync now"
+button (now with a spinning refresh icon while syncing) on the right. The
+ADP status banners and `SummaryCards` moved inside this same card's white
+body. `VacationTable` and `TeamCalendar` stayed as their own cards below,
+each restyled to match (see below). No behavior changed — same API calls,
+same polling-for-sync logic, same filter/summary computation.
+
+**`frontend/src/components/teamTimeOff/SummaryCards.jsx`** — the 5 stat
+tiles (Team size, Away today, Upcoming, Vacation used, Vacation remaining)
+each got a distinct pastel accent color (slate/rose/amber/sky/emerald) with
+a bolder number and a subtle hover lift, instead of five identical white
+boxes. Same props, same values.
+
+**`frontend/src/components/teamTimeOff/FilterBar.jsx`** — inputs restyled as
+glassy white-on-white fields (since this now sits on the blue gradient
+header rather than a plain background) and the search box got a small
+magnifying-glass icon. Same filters, same `onChange` contract.
+
+**`frontend/src/components/teamTimeOff/VacationTable.jsx`** — added a
+gradient-tinted header bar, alternating row backgrounds, an avatar-initial
+circle next to each employee's name (same visual pattern as the IT Ticket
+board's requester cell), and the usage progress bar now shifts color
+(blue → amber → rose) as usage climbs instead of always being blue. Same
+sort options, same columns, same `onSelectEmployee` behavior.
+
+**`frontend/src/components/teamTimeOff/TeamCalendar.jsx`** — month/week/list
+switcher restyled as a pill-shaped segmented control, prev/next became
+circular icon buttons (SVG chevrons instead of `‹ ›` text), the "today" cell
+gets a bold ring + filled day-number circle, and day cells/rows got the same
+alternating/hover treatment as the table. Same date math, same overlap
+detection, same three view modes.
+
+Not touched: `EmployeeDrawer.jsx` and `TeamLeaveRequests.jsx` — neither
+appeared in the screenshots Garima was reacting to (the drawer only opens on
+an employee click, and `TeamLeaveRequests` isn't even rendered on `/team`
+currently), so they were left as-is to keep this change scoped to what was
+asked.
+
+Verified via `tsc --allowJs --checkJs false --jsx react --noEmit` on all
+five edited files (clean). Committed to Garima's machine via the device
+bridge — no revert-bug retry needed this time, all five byte counts matched
+on first re-stage (2663, 2609, 8175, 15577, 11006 bytes).
+
+### Follow-up round — same day (2026-09-22)
+
+Garima reviewed the redesign live and reported two problems:
+
+1. **"Team time off" heading rendered dark, not white**, and the filter bar
+   + "Sync now" button were cramming into a lopsided two-row block with a
+   big empty gap next to the title. Root cause of the heading color:
+   `agc-brand.css`'s `.app-dashboard h2 { color: #0f172a; }` rule has higher
+   specificity than Tailwind's `text-white` utility class, so it silently
+   won regardless of what was on the `<h2>`. The IT Ticket board already
+   has the fix for this exact problem — a `.it-ticket-board-header h2`
+   override in the same CSS file — so `TeamTimeOffBoard.jsx`'s title
+   wrapper now reuses that same `it-ticket-board-header` class instead of
+   inventing a new one. Layout fix: the filter/sync row moved from
+   "squeezed to the right of the title on a wide `lg:flex-row`" to its own
+   full-width row below the title, always — wraps cleanly at any width now.
+
+2. **"Next time off" showed today's date for someone already on leave
+   today.** `managerTimeOff.service.js`'s `getTeamTimeOff` used to pick
+   `next_time_off` as the first approved request with `start_date >=
+   today` — for someone on a leave that started today or earlier, that's
+   the same request that's already keeping them away, so it displayed
+   today's date as their "next" time off, which reads wrong (they're not
+   about to leave, they already have). Real example Garima found: an
+   employee away today (Sep 22) and tomorrow (Sep 23) showed "Next time
+   off: Sep 22" instead of Sep 23. Fixed with a new `nextTimeOffFor()`
+   helper: it skips requests entirely in the past, returns a genuinely
+   future request unchanged, and for the request currently keeping someone
+   away, returns it with `start_date` bumped to tomorrow (as long as
+   tomorrow still falls inside that same request's range) — so the column
+   now shows the next day they're actually off, not the day they're
+   already on. If tomorrow falls outside the current request's range (i.e.
+   today was their last day off), it correctly falls through to look at
+   whatever comes after.
+
+3. **Calendar didn't show what *kind* of time off someone was on** — the
+   month view's day chips showed only the employee's first name (the leave
+   type was color-coded via `badgeClassFor` and only visible on hover, via
+   the `title` tooltip). Garima asked for it to say e.g. "Sick leave"
+   directly in the cell (her example: Jayaraj on sick leave on July 15
+   should say so on that day). `TeamCalendar.jsx`'s month-view chips are
+   now two lines — first name (bold) then the leave type (`policy_name` or
+   `policy_code`, smaller/muted) — still color-coded the same way. To keep
+   cells from overflowing with the extra line, dropped from showing 3
+   entries per day to 2 before collapsing into "+N more", and grew the
+   minimum cell height from `5.5rem` to `6.75rem`. Week view and the list
+   view already showed the leave type as text, so those were untouched.
+
+Verified the backend change with `node --check` and the calendar change
+with the same `tsc` syntax check as before (both clean). Hit the device
+sync's known revert-bug on this round's commit (`managerTimeOff.service.js`
+and `TeamCalendar.jsx` both landed as their pre-edit byte counts on first
+re-stage) — resolved with the usual single retry, confirmed matching after
+(14751 and 15825 bytes respectively).
+
+Garima confirmed the calendar change looks right (Jayaraj's Jul 15 entry now
+shows "Family Sick" under his name). She also flagged that opening the
+Employee Drawer (click an employee's name in the vacation table) cut off the
+top of the panel — the employee's name/title sat right under, and partly
+behind, the app's sticky top bar (`AppTopBar`, `sticky top-0 z-30`). The
+drawer itself is `fixed inset-0`, which should in principle stack above the
+top bar given its `z-50`, but in practice something in the layout traps it
+below the top bar visually. Rather than chase the stacking context, fixed
+it the way Garima asked — gave the drawer's content panel more top padding
+(`p-5` → `p-5 pt-24 sm:pt-28`) so its content clears the top bar regardless
+of the underlying z-index cause. `EmployeeDrawer.jsx` only — no other
+teamTimeOff files touched this round. Verified via the same `tsc` check
+(clean); hit the revert-bug once on commit, resolved by the usual retry,
+confirmed matching after (9976 bytes).
+
+**Follow-up, same round**: the padding fix made the drawer's own content
+readable, but Garima's next screenshot showed a thin sliver of the top bar
+(the logged-in user's avatar) still visibly peeking out ABOVE the drawer's
+white panel — meaning the drawer's `fixed inset-0` wasn't actually reaching
+the true top of the viewport at all, so no amount of internal padding
+could fix that specific sliver (padding only moves content within the
+panel, not the panel's own top edge). This confirmed the stacking-context
+theory from the first fix: something in the page layout the drawer mounts
+inside of (almost certainly a CSS `transform` on a page-transition wrapper
+in `AuthenticatedLayout`) turns `position: fixed` into "relative to that
+ancestor" instead of the real viewport, so the drawer's box was being
+capped below the top bar rather than covering it.
+
+Fixed properly this time by rendering `EmployeeDrawer` through
+`createPortal(..., document.body)` — the exact same escape hatch this
+codebase already uses for `ItTicketsMonitorTable`'s column-filter popovers,
+for the identical reason (a fixed/absolute-positioned overlay getting
+trapped by an ancestor's stacking context). Portalling straight into
+`<body>` means `fixed inset-0` is relative to the actual viewport again, so
+the drawer now genuinely covers the top bar like any other modal — the
+`pt-24`/`pt-28` padding from the first fix was left in place since it still
+reads well now that there's no top-bar sliver to begin with. Verified via
+the same `tsc` check (clean); hit the revert-bug once on commit, resolved
+by the usual retry, confirmed matching after (10938 bytes).
+
+---
+
 This Claude session has NO direct shell or git access to Garima's machine — all
 file edits go through a device-bridge (stage → edit locally → commit back), which
 writes files but does not touch git. Garima runs `git add` / `git commit` /
