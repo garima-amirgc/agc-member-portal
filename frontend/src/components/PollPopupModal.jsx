@@ -2,12 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 
-function normalizeQuestions(def) {
+// Sections are optional — a poll with no `sections` (or with questions that
+// don't reference one) just renders as the plain flat list it always has.
+function normalizeDefinition(def) {
   const d = def && typeof def === "object" ? def : {};
+  const secs = Array.isArray(d.sections) ? d.sections : [];
+  const sections = secs
+    .map((s) => ({ id: String(s?.id || "").trim(), title: String(s?.title || "").trim() }))
+    .filter((s) => s.id);
+  const sectionIds = new Set(sections.map((s) => s.id));
   const qs = Array.isArray(d.questions) ? d.questions : [];
-  return qs
+  const questions = qs
     .map((q) => ({
       id: String(q?.id || "").trim(),
+      section_id: sectionIds.has(String(q?.section_id || "")) ? String(q.section_id) : null,
       type: q?.type === "multiselect" || q?.type === "text" ? q.type : "radio",
       label: String(q?.label || "").trim(),
       required: q?.required === true,
@@ -18,6 +26,7 @@ function normalizeQuestions(def) {
         : [],
     }))
     .filter((q) => q.id && q.label);
+  return { sections, questions };
 }
 
 function ChevronIcon({ direction }) {
@@ -38,7 +47,17 @@ function ChevronIcon({ direction }) {
 }
 
 function PollSlide({ poll, answers, setAnswers, saving }) {
-  const questions = useMemo(() => normalizeQuestions(poll?.definition), [poll]);
+  const { sections, questions } = useMemo(() => normalizeDefinition(poll?.definition), [poll]);
+  const questionsBySection = useMemo(() => {
+    const m = new Map();
+    for (const q of questions) {
+      const key = q.section_id || "";
+      if (!m.has(key)) m.set(key, []);
+      m.get(key).push(q);
+    }
+    return m;
+  }, [questions]);
+  const unsectionedQuestions = questionsBySection.get("") || [];
   const bannerUrl = useMemo(() => resolvePublicMediaUrl(poll?.banner_image_url || ""), [poll?.banner_image_url]);
 
   const endAtLabel = useMemo(() => {
@@ -90,76 +109,104 @@ function PollSlide({ poll, answers, setAnswers, saving }) {
         ) : null}
       </div>
 
-      <div className="mt-4 space-y-4">
-        {questions.map((q) => (
-          <div
-            key={q.id}
-            className="rounded-portal border border-[#b6c9f5]/55 bg-white/65 p-3 shadow-sm backdrop-blur-sm dark:border-white/15 dark:bg-white/5"
-          >
-            <div className="text-sm font-semibold text-slate-900 dark:text-white">
-              {q.label} {q.required ? <span className="text-brand-red">*</span> : null}
+      <div className="mt-4 space-y-5">
+        {sections.map((section) => {
+          const sectionQuestions = questionsBySection.get(section.id) || [];
+          if (sectionQuestions.length === 0) return null;
+          return (
+            <div key={section.id} className="space-y-3">
+              <div className="text-xs font-bold uppercase tracking-wide text-[#0B3EAF] dark:text-[#A7D344]">
+                {section.title || "Section"}
+              </div>
+              <div className="space-y-3">{sectionQuestions.map((q) => renderQuestionCard(q, poll, answers, setAnswers, saving))}</div>
             </div>
-            {q.type === "text" ? (
-              <textarea
-                className="mt-2 w-full rounded border border-[#b6c9f5]/60 bg-white/90 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3EAF]/20 dark:border-white/15 dark:bg-slate-900/40"
-                rows={3}
-                value={typeof answers[q.id] === "string" ? answers[q.id] : ""}
-                onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
-                placeholder="Type your answer…"
-                disabled={saving}
-              />
-            ) : q.type === "multiselect" ? (
-              <div className="mt-2 space-y-2">
-                {q.options.map((o) => {
-                  const cur = Array.isArray(answers[q.id]) ? answers[q.id] : [];
-                  const checked = cur.includes(o.id);
-                  return (
-                    <label key={o.id} className="flex cursor-pointer items-start gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={checked}
-                        disabled={saving}
-                        onChange={() => {
-                          setAnswers((a) => {
-                            const prev = Array.isArray(a[q.id]) ? a[q.id] : [];
-                            const s = new Set(prev);
-                            if (s.has(o.id)) s.delete(o.id);
-                            else s.add(o.id);
-                            return { ...a, [q.id]: Array.from(s) };
-                          });
-                        }}
-                      />
-                      <span>{o.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="mt-2 space-y-2">
-                {q.options.map((o) => (
-                  <label key={o.id} className="flex cursor-pointer items-start gap-2 text-sm">
-                    <input
-                      type="radio"
-                      name={`poll_${poll.id}_${q.id}`}
-                      className="mt-1"
-                      checked={answers[q.id] === o.id}
-                      disabled={saving}
-                      onChange={() => setAnswers((a) => ({ ...a, [q.id]: o.id }))}
-                    />
-                    <span>{o.label}</span>
-                  </label>
-                ))}
-              </div>
-            )}
+          );
+        })}
+        {unsectionedQuestions.length > 0 ? (
+          <div className="space-y-3">
+            {unsectionedQuestions.map((q) => renderQuestionCard(q, poll, answers, setAnswers, saving))}
           </div>
-        ))}
+        ) : null}
       </div>
     </>
   );
 }
 
-export default function PollPopupModal({ polls = [], open, startIndex = 0, onDismiss, onClose, onSubmitted }) {
+function renderQuestionCard(q, poll, answers, setAnswers, saving) {
+  return (
+    <div
+      key={q.id}
+      className="rounded-portal border border-[#b6c9f5]/55 bg-white/65 p-3 shadow-sm backdrop-blur-sm dark:border-white/15 dark:bg-white/5"
+    >
+      <div className="text-sm font-semibold text-slate-900 dark:text-white">
+        {q.label} {q.required ? <span className="text-brand-red">*</span> : null}
+      </div>
+      {q.type === "text" ? (
+        <textarea
+          className="mt-2 w-full rounded border border-[#b6c9f5]/60 bg-white/90 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3EAF]/20 dark:border-white/15 dark:bg-slate-900/40"
+          rows={3}
+          value={typeof answers[q.id] === "string" ? answers[q.id] : ""}
+          onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+          placeholder="Type your answer…"
+          disabled={saving}
+        />
+      ) : q.type === "multiselect" ? (
+        <div className="mt-2 space-y-2">
+          {q.options.map((o) => {
+            const cur = Array.isArray(answers[q.id]) ? answers[q.id] : [];
+            const checked = cur.includes(o.id);
+            return (
+              <label key={o.id} className="flex cursor-pointer items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={checked}
+                  disabled={saving}
+                  onChange={() => {
+                    setAnswers((a) => {
+                      const prev = Array.isArray(a[q.id]) ? a[q.id] : [];
+                      const s = new Set(prev);
+                      if (s.has(o.id)) s.delete(o.id);
+                      else s.add(o.id);
+                      return { ...a, [q.id]: Array.from(s) };
+                    });
+                  }}
+                />
+                <span>{o.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-2 space-y-2">
+          {q.options.map((o) => (
+            <label key={o.id} className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name={`poll_${poll.id}_${q.id}`}
+                className="mt-1"
+                checked={answers[q.id] === o.id}
+                disabled={saving}
+                onChange={() => setAnswers((a) => ({ ...a, [q.id]: o.id }))}
+              />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function PollPopupModal({
+  polls = [],
+  open,
+  startIndex = 0,
+  onDismiss,
+  onClose,
+  onSubmitted,
+  previewMode = false,
+}) {
   const list = useMemo(() => (Array.isArray(polls) ? polls.filter(Boolean) : []), [polls]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answersByPollId, setAnswersByPollId] = useState({});
@@ -168,7 +215,7 @@ export default function PollPopupModal({ polls = [], open, startIndex = 0, onDis
   const poll = list[currentIndex] || null;
   const hasMultiple = list.length > 1;
   const answers = answersByPollId[poll?.id] || {};
-  const questions = useMemo(() => normalizeQuestions(poll?.definition), [poll]);
+  const questions = useMemo(() => normalizeDefinition(poll?.definition).questions, [poll]);
 
   const setAnswers = useCallback(
     (updater) => {
@@ -350,15 +397,29 @@ export default function PollPopupModal({ polls = [], open, startIndex = 0, onDis
             </div>
           ) : null}
 
+          {previewMode ? (
+            <div className="mb-3 rounded-portal border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-200">
+              Preview — this is exactly what people will see. Nothing entered here is saved or submitted.
+            </div>
+          ) : null}
+
           <PollSlide poll={poll} answers={answers} setAnswers={setAnswers} saving={saving} />
 
           <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <button type="button" className="btn-secondary" onClick={handleLater} disabled={saving}>
-              Later
-            </button>
-            <button type="button" className="btn-primary" onClick={submit} disabled={saving}>
-              {saving ? "Submitting…" : "Submit"}
-            </button>
+            {previewMode ? (
+              <button type="button" className="btn-primary" onClick={() => onClose?.(poll.id)}>
+                Close preview
+              </button>
+            ) : (
+              <>
+                <button type="button" className="btn-secondary" onClick={handleLater} disabled={saving}>
+                  Later
+                </button>
+                <button type="button" className="btn-primary" onClick={submit} disabled={saving}>
+                  {saving ? "Submitting…" : "Submit"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

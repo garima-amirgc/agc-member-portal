@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import PageHeader from "../components/PageHeader";
+import PollPopupModal from "../components/PollPopupModal";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import { resolvePublicMediaUrl } from "../utils/mediaUrl";
 
-function emptyQuestion() {
+function emptyQuestion(sectionId = null) {
   return {
     id: `q_${Math.random().toString(16).slice(2, 10)}`,
+    section_id: sectionId || null,
     type: "radio",
     label: "",
     required: true,
@@ -19,14 +21,35 @@ function emptyQuestion() {
   };
 }
 
+function emptySection() {
+  return {
+    id: `sec_${Math.random().toString(16).slice(2, 10)}`,
+    title: "",
+  };
+}
+
+// Sections are optional: a poll with no sections behaves exactly like before
+// (one flat list of questions). When sections exist, each question can
+// optionally belong to one via `section_id` — questions with no matching
+// section_id just render in the plain, ungrouped "Questions" list.
 function normalizeDefinition(def) {
   const d = def && typeof def === "object" ? def : {};
+  const secs = Array.isArray(d.sections) ? d.sections : [];
+  const sections = secs
+    .map((s) => ({
+      id: String(s?.id || "").trim() || `sec_${Math.random().toString(16).slice(2, 10)}`,
+      title: String(s?.title || ""),
+    }))
+    .filter((s) => s.id);
+  const sectionIds = new Set(sections.map((s) => s.id));
   const qs = Array.isArray(d.questions) ? d.questions : [];
   return {
     schema_version: 1,
+    sections,
     questions: qs
       .map((q) => ({
         id: String(q?.id || "").trim() || `q_${Math.random().toString(16).slice(2, 10)}`,
+        section_id: sectionIds.has(String(q?.section_id || "")) ? String(q.section_id) : null,
         type: q?.type === "multiselect" || q?.type === "text" ? q.type : "radio",
         label: String(q?.label || ""),
         required: q?.required !== false,
@@ -72,6 +95,7 @@ export default function AdminPollsPage() {
   const [bannerFile, setBannerFile] = useState(null);
   const [pendingReset, setPendingReset] = useState(null);
   const [resetting, setResetting] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -97,7 +121,7 @@ export default function AdminPollsPage() {
       banner_image_url: "",
       is_anonymous: false,
       limit_one_response: true,
-      definition: { schema_version: 1, questions: [emptyQuestion()] },
+      definition: { schema_version: 1, sections: [], questions: [emptyQuestion()] },
     });
     setBannerFile(null);
   };
@@ -285,6 +309,182 @@ export default function AdminPollsPage() {
     }
   };
 
+  const def = editing ? normalizeDefinition(editing.definition) : { schema_version: 1, sections: [], questions: [] };
+  const questionIndexById = new Map(def.questions.map((qq, i) => [qq.id, i]));
+  const unsectionedQuestions = def.questions.filter((q) => !q.section_id);
+  // Once every question is grouped into a section, the plain "Questions" card
+  // has nothing to show — hide it instead of leaving an empty card around.
+  // It comes back automatically if a question is ever left ungrouped again.
+  const showQuestionsCard = def.sections.length === 0 || unsectionedQuestions.length > 0;
+
+  const previewPoll = editing
+    ? {
+        id: "preview",
+        title: editing.title || "Feedback",
+        description: editing.description || "",
+        definition: def,
+        start_at: null,
+        end_at: fromLocalDatetimeInputValue(editing.end_at),
+        banner_image_url: editing.banner_image_url || "",
+        limit_one_response: true,
+        has_previous_response: false,
+      }
+    : null;
+
+  const renderQuestionCard = (q) => (
+    <div key={q.id} className="rounded-portal border border-slate-200 p-3 dark:border-slate-700 dark:bg-slate-900/20">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-900 dark:text-white">
+          Q{(questionIndexById.get(q.id) ?? 0) + 1}
+        </div>
+        <button
+          type="button"
+          className="btn-danger"
+          onClick={() => {
+            const next = normalizeDefinition(editing.definition);
+            next.questions = next.questions.filter((x) => x.id !== q.id);
+            setEditing({ ...editing, definition: next });
+          }}
+        >
+          Remove
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="sm:col-span-2">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+            Label
+          </div>
+          <input
+            className="w-full rounded border p-2 dark:bg-slate-700"
+            value={q.label}
+            onChange={(e) => {
+              const next = normalizeDefinition(editing.definition);
+              next.questions = next.questions.map((x) => (x.id === q.id ? { ...x, label: e.target.value } : x));
+              setEditing({ ...editing, definition: next });
+            }}
+          />
+        </div>
+        <div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+            Type
+          </div>
+          <select
+            className="w-full rounded border p-2 dark:bg-slate-700"
+            value={q.type}
+            onChange={(e) => {
+              const t = e.target.value;
+              const next = normalizeDefinition(editing.definition);
+              next.questions = next.questions.map((x) =>
+                x.id === q.id
+                  ? {
+                      ...x,
+                      type: t === "multiselect" || t === "text" ? t : "radio",
+                      options:
+                        t === "text"
+                          ? []
+                          : Array.isArray(x.options) && x.options.length >= 2
+                            ? x.options
+                            : [
+                                { id: "opt_1", label: "Option 1" },
+                                { id: "opt_2", label: "Option 2" },
+                              ],
+                    }
+                  : x
+              );
+              setEditing({ ...editing, definition: next });
+            }}
+          >
+            <option value="radio">Radio (single choice)</option>
+            <option value="multiselect">Multi-select</option>
+            <option value="text">Text</option>
+          </select>
+        </div>
+      </div>
+
+      <label className="mt-2 flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={q.required !== false}
+          onChange={(e) => {
+            const next = normalizeDefinition(editing.definition);
+            next.questions = next.questions.map((x) => (x.id === q.id ? { ...x, required: e.target.checked } : x));
+            setEditing({ ...editing, definition: next });
+          }}
+        />
+        Required
+      </label>
+
+      {q.type === "radio" || q.type === "multiselect" ? (
+        <div className="mt-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+              Options
+            </div>
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => {
+                const next = normalizeDefinition(editing.definition);
+                next.questions = next.questions.map((x) =>
+                  x.id === q.id
+                    ? {
+                        ...x,
+                        options: [
+                          ...(Array.isArray(x.options) ? x.options : []),
+                          { id: `opt_${Date.now()}`, label: "New option" },
+                        ],
+                      }
+                    : x
+                );
+                setEditing({ ...editing, definition: next });
+              }}
+            >
+              Add option
+            </button>
+          </div>
+          <div className="mt-2 space-y-2">
+            {(q.options || []).map((o) => (
+              <div key={o.id} className="flex items-center gap-2">
+                <input
+                  className="w-full rounded border p-2 text-sm dark:bg-slate-700"
+                  value={o.label}
+                  onChange={(e) => {
+                    const next = normalizeDefinition(editing.definition);
+                    next.questions = next.questions.map((x) =>
+                      x.id === q.id
+                        ? {
+                            ...x,
+                            options: (x.options || []).map((oo) =>
+                              oo.id === o.id ? { ...oo, label: e.target.value } : oo
+                            ),
+                          }
+                        : x
+                    );
+                    setEditing({ ...editing, definition: next });
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={() => {
+                    const next = normalizeDefinition(editing.definition);
+                    next.questions = next.questions.map((x) =>
+                      x.id === q.id ? { ...x, options: (x.options || []).filter((oo) => oo.id !== o.id) } : x
+                    );
+                    setEditing({ ...editing, definition: next });
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
     <main className={PAGE_SHELL}>
       <PageHeader title="Feedback & polls" />
@@ -380,6 +580,9 @@ export default function AdminPollsPage() {
                     Export Excel
                   </button>
                 ) : null}
+                <button type="button" className="btn-outline" onClick={() => setShowPreview(true)}>
+                  Preview
+                </button>
                 <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>
                   Close
                 </button>
@@ -531,178 +734,143 @@ export default function AdminPollsPage() {
               </div>
 
               <div className="rounded-portal border border-slate-200 p-3 dark:border-slate-700">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-semibold text-slate-900 dark:text-white">Questions</div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900 dark:text-white">Sections (optional)</div>
+                    <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                      Give a section a name, then add questions under it. Skip this entirely and the poll works
+                      exactly like before — one plain list of questions.
+                    </div>
+                  </div>
                   <button
                     type="button"
                     className="btn-outline"
                     onClick={() => {
                       const next = normalizeDefinition(editing.definition);
-                      next.questions.push(emptyQuestion());
+                      next.sections = [...next.sections, emptySection()];
                       setEditing({ ...editing, definition: next });
                     }}
                   >
-                    Add question
+                    Add section
                   </button>
                 </div>
 
-                <div className="mt-3 space-y-3">
-                  {normalizeDefinition(editing.definition).questions.map((q, idx) => (
-                    <div key={q.id} className="rounded-portal border border-slate-200 p-3 dark:border-slate-700">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-900 dark:text-white">Q{idx + 1}</div>
-                        <button
-                          type="button"
-                          className="btn-danger"
-                          onClick={() => {
-                            const next = normalizeDefinition(editing.definition);
-                            next.questions = next.questions.filter((x) => x.id !== q.id);
-                            setEditing({ ...editing, definition: next });
-                          }}
+                {def.sections.length > 0 ? (
+                  <div className="mt-3 space-y-4">
+                    {def.sections.map((section) => {
+                      const sectionQuestions = def.questions.filter((q) => q.section_id === section.id);
+                      return (
+                        <div
+                          key={section.id}
+                          className="rounded-portal border border-slate-300 bg-slate-50/60 p-3 dark:border-slate-600 dark:bg-slate-800/30"
                         >
-                          Remove
-                        </button>
-                      </div>
-
-                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                        <div className="sm:col-span-2">
-                          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
-                            Label
-                          </div>
-                          <input
-                            className="w-full rounded border p-2 dark:bg-slate-700"
-                            value={q.label}
-                            onChange={(e) => {
-                              const next = normalizeDefinition(editing.definition);
-                              next.questions = next.questions.map((x) => (x.id === q.id ? { ...x, label: e.target.value } : x));
-                              setEditing({ ...editing, definition: next });
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
-                            Type
-                          </div>
-                          <select
-                            className="w-full rounded border p-2 dark:bg-slate-700"
-                            value={q.type}
-                            onChange={(e) => {
-                              const t = e.target.value;
-                              const next = normalizeDefinition(editing.definition);
-                              next.questions = next.questions.map((x) =>
-                                x.id === q.id
-                                  ? {
-                                      ...x,
-                                      type: t === "multiselect" || t === "text" ? t : "radio",
-                                      options:
-                                        t === "text"
-                                          ? []
-                                          : Array.isArray(x.options) && x.options.length >= 2
-                                            ? x.options
-                                            : [
-                                                { id: "opt_1", label: "Option 1" },
-                                                { id: "opt_2", label: "Option 2" },
-                                              ],
-                                    }
-                                  : x
-                              );
-                              setEditing({ ...editing, definition: next });
-                            }}
-                          >
-                            <option value="radio">Radio (single choice)</option>
-                            <option value="multiselect">Multi-select</option>
-                            <option value="text">Text</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <label className="mt-2 flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={q.required !== false}
-                          onChange={(e) => {
-                            const next = normalizeDefinition(editing.definition);
-                            next.questions = next.questions.map((x) => (x.id === q.id ? { ...x, required: e.target.checked } : x));
-                            setEditing({ ...editing, definition: next });
-                          }}
-                        />
-                        Required
-                      </label>
-
-                      {q.type === "radio" || q.type === "multiselect" ? (
-                        <div className="mt-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
-                              Options
-                            </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              className="min-w-0 flex-1 rounded border p-2 text-sm font-semibold dark:bg-slate-700"
+                              value={section.title}
+                              placeholder="Section name"
+                              onChange={(e) => {
+                                const nx = normalizeDefinition(editing.definition);
+                                nx.sections = nx.sections.map((s) =>
+                                  s.id === section.id ? { ...s, title: e.target.value } : s
+                                );
+                                setEditing({ ...editing, definition: nx });
+                              }}
+                            />
                             <button
                               type="button"
                               className="btn-outline"
                               onClick={() => {
-                                const next = normalizeDefinition(editing.definition);
-                                next.questions = next.questions.map((x) =>
-                                  x.id === q.id
-                                    ? {
-                                        ...x,
-                                        options: [
-                                          ...(Array.isArray(x.options) ? x.options : []),
-                                          { id: `opt_${Date.now()}`, label: "New option" },
-                                        ],
-                                      }
-                                    : x
-                                );
-                                setEditing({ ...editing, definition: next });
+                                const nx = normalizeDefinition(editing.definition);
+                                nx.questions = [...nx.questions, emptyQuestion(section.id)];
+                                setEditing({ ...editing, definition: nx });
                               }}
                             >
-                              Add option
+                              Add question
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-danger"
+                              onClick={() => {
+                                const nx = normalizeDefinition(editing.definition);
+                                nx.sections = nx.sections.filter((s) => s.id !== section.id);
+                                nx.questions = nx.questions.map((q) =>
+                                  q.section_id === section.id ? { ...q, section_id: null } : q
+                                );
+                                setEditing({ ...editing, definition: nx });
+                              }}
+                              title="Removes the section only — its questions move to the plain Questions list below"
+                            >
+                              Remove section
                             </button>
                           </div>
-                          <div className="mt-2 space-y-2">
-                            {(q.options || []).map((o) => (
-                              <div key={o.id} className="flex items-center gap-2">
-                                <input
-                                  className="w-full rounded border p-2 text-sm dark:bg-slate-700"
-                                  value={o.label}
-                                  onChange={(e) => {
-                                    const next = normalizeDefinition(editing.definition);
-                                    next.questions = next.questions.map((x) =>
-                                      x.id === q.id
-                                        ? {
-                                            ...x,
-                                            options: (x.options || []).map((oo) =>
-                                              oo.id === o.id ? { ...oo, label: e.target.value } : oo
-                                            ),
-                                          }
-                                        : x
-                                    );
-                                    setEditing({ ...editing, definition: next });
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  className="btn-danger"
-                                  onClick={() => {
-                                    const next = normalizeDefinition(editing.definition);
-                                    next.questions = next.questions.map((x) =>
-                                      x.id === q.id ? { ...x, options: (x.options || []).filter((oo) => oo.id !== o.id) } : x
-                                    );
-                                    setEditing({ ...editing, definition: next });
-                                  }}
-                                >
-                                  Remove
-                                </button>
+                          <div className="mt-3 space-y-3">
+                            {sectionQuestions.length === 0 ? (
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                                No questions in this section yet.
                               </div>
-                            ))}
+                            ) : (
+                              sectionQuestions.map((q) => renderQuestionCard(q))
+                            )}
                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+
+              {showQuestionsCard ? (
+                <div className="rounded-portal border border-slate-200 p-3 dark:border-slate-700">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white">Questions</div>
+                      {def.sections.length > 0 ? (
+                        <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                          Not in any section — shown to people before/without any section grouping.
                         </div>
                       ) : null}
                     </div>
-                  ))}
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => {
+                        const next = normalizeDefinition(editing.definition);
+                        next.questions = [...next.questions, emptyQuestion(null)];
+                        setEditing({ ...editing, definition: next });
+                      }}
+                    >
+                      Add question
+                    </button>
+                  </div>
+
+                  <div className="mt-3 space-y-3">
+                    {unsectionedQuestions.map((q) => renderQuestionCard(q))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <button
+                  type="button"
+                  className="self-start text-xs font-semibold text-brand-blue underline decoration-dotted underline-offset-2 hover:no-underline dark:text-blue-300"
+                  onClick={() => {
+                    const next = normalizeDefinition(editing.definition);
+                    next.questions = [...next.questions, emptyQuestion(null)];
+                    setEditing({ ...editing, definition: next });
+                  }}
+                >
+                  + Add a question outside any section
+                </button>
+              )}
             </div>
           </div>
         ) : null}
+
+        <PollPopupModal
+          polls={previewPoll ? [previewPoll] : []}
+          open={showPreview && Boolean(previewPoll)}
+          onClose={() => setShowPreview(false)}
+          previewMode
+        />
 
         {pendingReset ? (
           <div

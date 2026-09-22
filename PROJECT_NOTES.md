@@ -416,6 +416,57 @@ URI for.**
   `ManagerLeaveCalendar.jsx` (the portal request calendar) has the same
   treatment — see "ManagerLeaveCalendar overlap highlighting" above.
 
+### Production crash — "TypeError: t.toFixed is not a function" on /team — fixed 2026-09-22
+
+A team member hit a hard crash ("Something broke") just loading `/team` in
+production — never happened locally. Root cause: `entitlement`,
+`carried_over`, `used`, `scheduled`, `available` on `adp_time_off_balances`
+(and `hours` on `adp_time_off_requests`) are Postgres `NUMERIC` columns, and
+the `pg` driver returns `NUMERIC` as a **string** by default (it won't
+silently risk precision loss converting to a JS float). SQLite locally
+(via better-sqlite3) returns real numbers for the same columns, so this
+never showed up in local dev — only in production, and only once real
+balance data actually started landing in these columns (before that they
+were `NULL` and never hit the broken code path).
+
+`frontend/src/components/teamTimeOff/timeOffShared.js`'s `fmtDays()` called
+`n.toFixed(1)` straight on the value — fine for a real number, but a string
+has no `.toFixed`, hence the crash. It's called directly from
+`SummaryCards.jsx` on every `/team` page load (not just inside the drawer),
+which is why it broke the whole page immediately rather than only on a
+specific employee.
+
+There was a second, quieter bug from the same root cause: both
+`buildSummary()` in `backend/src/services/managerTimeOff.service.js` and the
+duplicate summary calc in `TeamTimeOffBoard.jsx` add up each employee's
+`used`/`available` with plain `+`. With string inputs, `+` does string
+*concatenation*, not addition (`"5" + "3"` → `"53"`, not `8`) — so the
+"Vacation used"/"Vacation remaining" team totals would have been silently
+wrong for any team with more than one employee's balance on file, even
+before the crash was possible.
+
+Fixed at the actual source instead of patching every place that reads a
+balance: `backend/src/config/database/postgres.js` now calls
+`types.setTypeParser(1700, ...)` (1700 = Postgres's OID for `numeric`) right
+after requiring `pg`, so every `NUMERIC` column comes back as a real JS
+number everywhere in the app, matching what SQLite already does locally.
+That one change fixes `rowToBalance`/`rowToRequest` and `buildSummary` in
+`managerTimeOff.service.js`, the admin System Status page's sample-balances
+table, and any other current or future code that reads one of these
+columns — no per-call-site coercion needed. `fmtDays()` was also hardened
+(coerces a numeric string, returns "—" instead of throwing on anything else
+not a finite number) as a second line of defense, in case some other value
+that isn't a real number ever reaches it again.
+
+**This also answers the still-open "why is Jayaraj's vacation summary all
+dashes" question from earlier** — `AdminSystemStatusPage.jsx`'s `fmtHours()`
+already did its own `Number(n)` coercion correctly, so it was never affected
+by this bug; if its sample-balances table showed real numbers for someone
+while the Team page showed dashes for the same person, that was a genuine
+"no data synced yet for that policy" situation, not this bug. Worth
+re-checking now that the type fix is in, since real balances that previously
+would have crashed the page may not have been visible to confirm before.
+
 ---
 
 ## Team page — ADP-only vacation data, portal leave-request UI removed — 2026-09-21
@@ -502,7 +553,58 @@ elsewhere (e.g. a dashboard page) before assuming they're fully dead code.
 
 ---
 
-## Git / push workflow reminder
+## Feedback & Polls — optional question sections — 2026-09-21
+
+Garima asked for the admin "Feedback & polls" editor (`/admin/polls`) to
+optionally group questions under named sections — give a section a name,
+add questions under it — while keeping it fully optional: a poll with no
+sections still works exactly as it did before (one flat list of questions).
+
+**Data model**: `polls.poll_json` was already an opaque JSON blob with no
+DB-level schema (`{schema_version: 1, questions: [...]}`), so no migration
+was needed. Added two things to that same blob, both optional:
+- `definition.sections`: `[{id, title}]` — empty array when unused.
+- `definition.questions[].section_id`: nullable, references a `sections[].id`.
+  `null`/missing (or an id that doesn't match any section) means the question
+  is ungrouped, same as before.
+
+Existing polls with no `sections` key at all normalize to `sections: []` and
+every question normalizes to `section_id: null` — they render identically to
+before the change.
+
+**Backend — no changes needed.** `backend/src/routes/adminPolls.routes.js`
+(`normalizeExportQuestions`, used for both save-time validation shape and the
+Excel export) and `backend/src/routes/polls.routes.js` (`/active`, `/:id/submit`)
+both only ever read `definition.questions` as a flat array and store/pass
+`answers` as a flat object keyed by question id — a `sections` array or a
+question's `section_id` field is just extra JSON they don't look at, so
+nothing there needed to change. The Excel export is therefore also unaffected
+— it doesn't show section groupings, just the same flat question columns as
+before.
+
+**Frontend changes**:
+- `frontend/src/pages/AdminPollsPage.jsx` — `normalizeDefinition` now also
+  normalizes `sections`; added `emptySection()`. New "Sections (optional)"
+  card above "Questions": "Add section" creates a named group; each section
+  has its own "Add question" (creates a question with that `section_id`) and
+  a "Remove section" that un-groups its questions (moves them back to
+  `section_id: null`) rather than deleting them. The "Questions" card below
+  now only lists ungrouped questions, with a note explaining that when no
+  sections exist yet. The shared per-question editor (label/type/required/
+  options) was extracted into `renderQuestionCard()` so it's identical
+  whether a question lives in a section or not — no behavior change to
+  editing a single question.
+- `frontend/src/components/PollPopupModal.jsx` — `normalizeQuestions` became
+  `normalizeDefinition`, returning `{sections, questions}`. `PollSlide` now
+  groups questions by `section_id`, rendering each section's questions under
+  a bold section-title header (in poll order), followed by any ungrouped
+  questions with no header — matching the admin editor's layout. Submission
+  validation (`submit()` in the outer component) still just walks the flat
+  `questions` array for required-field checks, unaffected by grouping.
+
+Not changed on purpose: the Excel export doesn't reflect section groupings
+(just the same per-question columns as before) — can be added later if
+Garima wants section names in the export headers, but wasn't asked for.
 
 This Claude session has NO direct shell or git access to Garima's machine — all
 file edits go through a device-bridge (stage → edit locally → commit back), which

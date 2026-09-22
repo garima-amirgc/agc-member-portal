@@ -58,8 +58,16 @@ export function dotClassFor(label) {
 }
 
 export function fmtDays(n) {
-  if (n == null || Number.isNaN(n)) return "—";
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  // Accepts a real number or a numeric string — the production crash this
+  // guarded against was a Postgres NUMERIC column coming back as a string
+  // ("5.5" instead of 5.5), which made `n.toFixed(1)` throw and crash the
+  // whole Team page. The root cause is now fixed at the DB layer (see
+  // postgres.js's NUMERIC type parser), but this stays defensive so any
+  // other stray non-number here degrades to "—" instead of crashing again.
+  if (n == null || n === "") return "—";
+  const num = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(num)) return "—";
+  return Number.isInteger(num) ? String(num) : num.toFixed(1);
 }
 
 export function fmtDate(iso) {

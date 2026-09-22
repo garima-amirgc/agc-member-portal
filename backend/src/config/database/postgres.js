@@ -1,5 +1,20 @@
-const { Pool } = require("pg");
+const { Pool, types } = require("pg");
 const { rewriteSqliteToPostgres, appendReturningIdIfInsert } = require("./sqlDialect");
+
+// `pg` returns NUMERIC/DECIMAL columns as strings by default, to avoid
+// silently losing precision on values too big for a JS float. Every NUMERIC
+// column this app actually reads today (ADP time-off balances/hours,
+// equipment purchase cost) is well inside safe float range and every place
+// that reads one already assumes a plain JS number (this bit us in
+// production: `adp_time_off_balances` columns came back as strings, and
+// `fmtDays()`'s `n.toFixed(1)` crashed the whole Team page — see
+// PROJECT_NOTES.md, "Vacation / Time-Off" section, for the 2026-09-22 fix).
+// SQLite (local dev, via better-sqlite3) already returns real numbers for
+// these columns, so this just makes Postgres match — one fix here instead
+// of coercing in every service/route that reads a balance or hours value.
+// OID 1700 = numeric/decimal. Must run before any query executes, so it's
+// set at module load, right after requiring `pg`.
+types.setTypeParser(1700, (v) => (v == null ? null : parseFloat(v)));
 
 let pool = null;
 
