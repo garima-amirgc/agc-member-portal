@@ -467,6 +467,47 @@ while the Team page showed dashes for the same person, that was a genuine
 re-checking now that the type fix is in, since real balances that previously
 would have crashed the page may not have been visible to confirm before.
 
+### Org chart spacing/overlap — fixed 2026-09-22
+
+Reported from Adam Aziz's Team page (he's Director of Operations, so his
+chart shows the full company — the widest, deepest case this component
+renders): first-level cards (his 7 direct reports) were touching edge to
+edge with no gap, and one branch two levels down (Melissa Rivera → Fred
+Facciolo / Sheba Sunil / Joel Holder) visually overlapped.
+
+Cause: `ReportingHierarchyTree.jsx`'s direct-report columns use `gap-0` on
+the row so `BranchConnector`'s horizontal bar segments join into one
+continuous line across siblings — but that same `gap-0`, combined with each
+`OrgNode` card filling its column with zero padding (`cardW="w-full"`, no
+horizontal padding), meant nothing ever separated one card's edge from the
+next. Barely noticeable at the top level (wider `w-24` columns, shorter
+titles), but at the second level (`w-20` columns, `size="sm"`, and titles
+like "Senior Shipping Supervisor") a card's content had nowhere to go but
+into its neighbor's space.
+
+Fix: kept `gap-0` on the connector rows (still needed for the bars to join),
+but wrapped each `OrgNode` in its own `px-2` (top level) / `px-1.5` (second
+level) padded div — the connector stays flush, only the visible card gets
+breathing room. Also widened the columns slightly (top level `w-24` → `w-28`,
+second level `w-20` → `w-24`) to give longer titles more room before
+wrapping. This is a layout-only fix — no data or connector-positioning logic
+changed.
+
+### "Away today: 0" while someone's name is highlighted on the calendar — not a bug, checked 2026-09-22
+
+Reported alongside the org chart issue: Melissa Rivera showed as highlighted
+across Sep 8–18 on the team calendar, but the "Away today" stat card read 0.
+Checked `isTodayWithin()` in `managerTimeOff.service.js` (`startDate <= today
+<= endDate`, using server UTC date) — it's correct. Melissa's approved time
+off ran Sep 8–18; the screenshot's calendar was on Sep 22 (today, outlined on
+the calendar itself) — four days *after* her time off ended. "Away today: 0"
+is the right answer for that date; the highlighted range on the calendar is
+just showing a past approved absence within the visible month, not a
+currently-active one. No code change made. Worth keeping in mind for support
+questions like this: the calendar shows the whole month at a glance, so a
+highlighted range earlier in the month can look "current" if you don't check
+which cell is actually outlined as today.
+
 ---
 
 ## Team page — ADP-only vacation data, portal leave-request UI removed — 2026-09-21

@@ -167,24 +167,37 @@ function DirectReportCol({ person, position }) {
   const adpPlaced = person.manager_source === "adp";
 
   return (
-    <div className="flex flex-col items-center w-24">
+    <div className="flex flex-col items-center w-28">
       <BranchConnector position={position} />
-      <OrgNode node={person} variant="report" size="md" showAdp={adpPlaced} cardW="w-full" />
+      {/* The connector above stays flush (no gap) so its bar segments join
+          across columns — the padding here is what actually keeps the name
+          cards themselves from touching their neighbors. */}
+      <div className="w-full px-2">
+        <OrgNode node={person} variant="report" size="md" showAdp={adpPlaced} cardW="w-full" />
+      </div>
 
       {/* Second-level reports */}
       {subs.length > 0 && (
         <div className="flex flex-col items-center w-full">
           <VLine h="h-6" />
           {subs.length === 1 ? (
-            <OrgNode node={subs[0]} variant="default" size="sm" showAdp={subs[0].manager_source === "adp"} cardW="w-full" />
+            <div className="w-full px-2">
+              <OrgNode node={subs[0]} variant="default" size="sm" showAdp={subs[0].manager_source === "adp"} cardW="w-full" />
+            </div>
           ) : (
             <div className="flex gap-0">
               {subs.map((s, si) => (
-                <div key={s.id} className="w-20">
+                <div key={s.id} className="w-24">
                   <BranchConnector
                     position={si === 0 ? "first" : si === subs.length - 1 ? "last" : "middle"}
                   />
-                  <OrgNode node={s} variant="default" size="sm" showAdp={s.manager_source === "adp"} cardW="w-full" />
+                  {/* Same trick one level down — this is what was missing
+                      before: with zero padding AND zero gap, a slightly
+                      long name/title (e.g. "Senior Shipping Supervisor")
+                      had nowhere to go but into the next card's space. */}
+                  <div className="w-full px-1.5">
+                    <OrgNode node={s} variant="default" size="sm" showAdp={s.manager_source === "adp"} cardW="w-full" />
+                  </div>
                 </div>
               ))}
             </div>
