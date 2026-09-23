@@ -98,6 +98,8 @@ async function start() {
   adpSync.startSync(); // start background ADP → DB sync
   const adpTimeOffSync = require("./services/adpTimeOffSync.service");
   adpTimeOffSync.startSync(); // start background ADP time off → DB sync
+  const adpTimeOffEvents = require("./services/adpTimeOffEvents.service");
+  adpTimeOffEvents.startPolling(); // start background ADP event-notification polling (pending/approved/cancelled)
   const { authRequired } = require("./middleware/auth");
   const leaveSvc = require("./services/leaveRequests.service");
   const managerTeamSvc = require("./services/managerTeam.service");

@@ -247,6 +247,28 @@ async function adpGet(apiPath) {
 }
 
 /**
+ * DELETE — used to acknowledge/remove a message from ADP's event
+ * notification queue after we've processed it (see
+ * adpTimeOffEvents.service.js). Shares the same OAuth token cache, mTLS
+ * agent, and rate-limit queue as adpGet.
+ */
+async function adpDelete(apiPath) {
+  return requestWithRetry(async () => {
+    const token = await getAccessToken();
+    const agent = makeAgent();
+    const url = new URL(apiPath, process.env.ADP_API_BASE || DEFAULT_API_BASE);
+    return httpsRequest(url, {
+      method: "DELETE",
+      agent,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+  });
+}
+
+/**
  * Fetch all workers from ADP, paginating through results (default page is 50).
  * Results are cached for WORKERS_TTL_MS to avoid hammering the API on every
  * profile page load.
@@ -447,4 +469,7 @@ module.exports = {
   // Low-level GET, reused by adpTimeOff.service.js so the time-off calls
   // share the same OAuth token cache and mTLS agent as the worker calls.
   adpGet,
+  // Low-level DELETE, used by adpTimeOffEvents.service.js to acknowledge
+  // event-notification-queue messages after processing.
+  adpDelete,
 };

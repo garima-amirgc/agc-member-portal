@@ -3,6 +3,7 @@ import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import SummaryCards from "./teamTimeOff/SummaryCards";
 import FilterBar from "./teamTimeOff/FilterBar";
+import NewRequestsPanel from "./teamTimeOff/NewRequestsPanel";
 import VacationTable from "./teamTimeOff/VacationTable";
 import TeamCalendar from "./teamTimeOff/TeamCalendar";
 import EmployeeDrawer from "./teamTimeOff/EmployeeDrawer";
@@ -241,6 +242,8 @@ export default function TeamTimeOffBoard() {
           <SummaryCards summary={summary} />
         </div>
       </div>
+
+      <NewRequestsPanel />
 
       <VacationTable employees={filteredEmployees} onSelectEmployee={setDrawerEmployeeId} />
 

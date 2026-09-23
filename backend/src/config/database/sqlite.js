@@ -199,6 +199,28 @@ const SCHEMA = `
     UNIQUE(manager_id, employee_id)
   );
 
+  -- One row per ADP time-off event notification (pending/approved/cancelled)
+  -- a manager hasn't dismissed yet — see adpTimeOffEvents.service.js. Drives
+  -- the "Team" sidebar badge and the "New time off requests" panel on the
+  -- Team time off board. adp_event_id is globally unique so re-polling ADP
+  -- (or a delete-from-queue failure leaving a message to be re-fetched)
+  -- can never insert the same event twice.
+  CREATE TABLE IF NOT EXISTS manager_timeoff_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    manager_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    adp_event_id TEXT NOT NULL UNIQUE,
+    event_kind TEXT NOT NULL DEFAULT 'pending' CHECK(event_kind IN ('pending','approved','cancelled','other')),
+    policy_name TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    dismissed_at TEXT,
+    FOREIGN KEY(manager_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(employee_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS employee_notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -1309,6 +1331,7 @@ async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_company_content_items_section ON company_content_items (section);
       CREATE INDEX IF NOT EXISTS idx_manager_notifications_manager_id ON manager_notifications (manager_id);
       CREATE INDEX IF NOT EXISTS idx_manager_all_training_alerts_manager_id ON manager_all_training_alerts (manager_id);
+      CREATE INDEX IF NOT EXISTS idx_manager_timeoff_notifications_manager_id ON manager_timeoff_notifications (manager_id);
       CREATE INDEX IF NOT EXISTS idx_resource_documents_business_unit_category ON resource_documents (business_unit, category);
     `);
   } catch (e) {

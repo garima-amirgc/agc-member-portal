@@ -65,4 +65,35 @@ router.post("/sync", async (req, res) => {
   }
 });
 
+// GET /manager-time-off/notifications — active (not-dismissed) time-off
+// event notifications for this manager's team — pending/approved/cancelled
+// requests as ADP reports them, not just the approved-only data the board
+// above reads. Drives the Team sidebar badge and the board's "New time off
+// requests" panel. See adpTimeOffEvents.service.js for where these rows
+// come from.
+router.get("/notifications", async (req, res) => {
+  try {
+    const out = await managerTimeOffSvc.getTimeOffNotifications(req.user.id);
+    return res.json({ notifications: out });
+  } catch (e) {
+    console.error("[Manager Time Off] GET /notifications error:", e.message || e);
+    return res.status(500).json({ message: e.message || "Server error" });
+  }
+});
+
+// POST /manager-time-off/notifications/:id/dismiss — this is just clearing
+// the notification from the portal, same as IT Tickets/training alerts.
+// It never touches ADP — the underlying request is still whatever it is in
+// ADP regardless of whether the manager dismisses this FYI.
+router.post("/notifications/:id/dismiss", async (req, res) => {
+  try {
+    const out = await managerTimeOffSvc.dismissTimeOffNotification(req.user.id, Number(req.params.id));
+    return res.json(out);
+  } catch (e) {
+    const code = e.statusCode || 500;
+    if (code >= 500) console.error("[Manager Time Off] POST /notifications/:id/dismiss error:", e.message || e);
+    return res.status(code).json({ message: e.message || "Server error" });
+  }
+});
+
 module.exports = router;

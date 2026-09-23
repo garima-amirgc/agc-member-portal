@@ -266,6 +266,47 @@ async function getEmployeeYearHistory(managerUserId, employeeId, year) {
   return { employee: publicEmployee(employee), authorized, entries, synced_at: syncedAt, sync_window: window };
 }
 
+// ─── Event notifications (pending/approved/cancelled — see
+// adpTimeOffEvents.service.js) ────────────────────────────────────────────
+
+/**
+ * Active (not-yet-dismissed) time-off event notifications for this manager
+ * — drives the Team sidebar badge and the "New time off requests" panel on
+ * the board. Newest first, same convention as notification.service.js's
+ * other manager lists.
+ */
+async function getTimeOffNotifications(managerUserId) {
+  const rows = await db
+    .prepare(
+      `SELECT n.id, n.employee_id, n.event_kind, n.policy_name, n.start_date, n.end_date, n.created_at,
+              u.name AS employee_name
+       FROM manager_timeoff_notifications n
+       JOIN users u ON u.id = n.employee_id
+       WHERE n.manager_id = ? AND n.status = 'active'
+       ORDER BY n.created_at DESC`
+    )
+    .all(managerUserId);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/** Only ever lets a manager dismiss their own notification. */
+async function dismissTimeOffNotification(managerUserId, notificationId) {
+  const row = await db
+    .prepare("SELECT id FROM manager_timeoff_notifications WHERE id = ? AND manager_id = ?")
+    .get(notificationId, managerUserId);
+  if (!row) {
+    const e = new Error("Notification not found.");
+    e.statusCode = 404;
+    throw e;
+  }
+  await db
+    .prepare(
+      "UPDATE manager_timeoff_notifications SET status = 'dismissed', dismissed_at = ? WHERE id = ?"
+    )
+    .run(new Date().toISOString(), notificationId);
+  return { dismissed: true };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 function rowToBalance(row) {
@@ -355,4 +396,9 @@ function buildSummary(employees) {
   return { team_size: employees.length, away_today: awayToday, upcoming, vacation_used_ytd: vacUsed, vacation_remaining: vacRemaining };
 }
 
-module.exports = { getTeamTimeOff, getEmployeeYearHistory };
+module.exports = {
+  getTeamTimeOff,
+  getEmployeeYearHistory,
+  getTimeOffNotifications,
+  dismissTimeOffNotification,
+};

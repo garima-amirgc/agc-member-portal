@@ -807,6 +807,96 @@ by the usual retry, confirmed matching after (10938 bytes).
 
 ---
 
+## Manager time-off notifications (ADP event queue) — 2026-09-23
+
+Garima asked for something the approved-only ADP sync above can't provide:
+a manager notification — badge on the "Team" nav item (same pattern as IT
+Tickets/NPD) + a list on the board + an email — the moment an employee
+**requests** (not just gets approved for) time off. Her own words: "when
+someone applies for the vacation then manager should get notication in the
+board and show up like i shared so they know that they have received
+something in the baord and when they visit the teams page they can see it
+and later it's upto them what they do on ADP." This is explicitly an FYI
+surface, not an approval workflow — the actual request is still handled in
+ADP.
+
+**Why the existing sync couldn't do this**: `adpTimeOffSync.service.js`
+reads the Time Off Requests API, which ADP only ever returns *approved*
+requests through — confirmed, documented behavior (see that file's header).
+There's no way to see a pending request via that endpoint at any polling
+interval. The only way to see a request the moment it's submitted is ADP's
+separate **Event Notification Queue**.
+
+**Timeline with ADP support**: their reply first pointed at pages 28-30 of
+the Time Off Request API Guide, which turned out not to document this at
+all — the actual queue endpoint is mentioned once, in passing, in Chapter
+10, tied to two unrelated bug IDs. A follow-up email (quoting that exact
+gap) got a real answer: the six event-type scopes were already enabled, but
+the notification *queue itself* hadn't been separately provisioned on ADP's
+side — confirmed by a probe script (`backend/src/scripts/probeEventNotifications.js`,
+safe to delete once this is verified against a real event) returning 400
+"Unable to find queue with instance id...". ADP enabled the queue
+2026-09-23; the same probe script then returned `SUCCESS` with an empty
+body (queue enabled, nothing in it yet — no team member had a pending
+request at that moment). **Garima cannot generate a test event herself**,
+so this was built against ADP's documented FIFO model and their general
+event-notification response shape, not a real time-off event payload — see
+the "needs live-data verification" note below.
+
+**How it works**:
+- `backend/src/services/adpTimeOffEvents.service.js` — polls
+  `GET /core/v1/event-notification-messages` (default every
+  `ADP_TIMEOFF_EVENTS_POLL_MINUTES`, default 15 min — comfortably under
+  ADP's documented "at least a maximum of one hour" recommendation), drains
+  the queue FIFO-style (retrieve → process → `DELETE` the message, repeat
+  until empty or a 200-per-poll safety cap), and for each event: resolves
+  the employee by `originator.associateOID` → `users.adp_associate_oid`,
+  classifies it as pending/approved/cancelled/other from
+  `eventNameCode.codeValue`, inserts a row into `manager_timeoff_notifications`
+  (deduped on `adp_event_id`, so a message that comes back after a failed
+  delete can't double-insert or double-email), and emails the employee's
+  manager. A message is deleted from ADP's queue even if local
+  processing fails (e.g. no local user match) — per ADP support, a stuck
+  message can block delivery of everything behind it in the queue, which
+  is worse than losing one notification.
+- New table `manager_timeoff_notifications` (added to both `sqlite.js` and
+  `postgres.js` — the latter needs the change in *both* `PG_SCHEMA` and the
+  separate runtime-migrations array, per this codebase's existing dual-DB
+  pattern): manager_id, employee_id, adp_event_id (unique), event_kind,
+  policy_name, start_date, end_date, status (active/dismissed), timestamps.
+- New `adpDelete()` in `adp.service.js` — same OAuth/mTLS/rate-limit
+  machinery as `adpGet()`, just `DELETE`, used to acknowledge queue
+  messages.
+- New `sendManagerTimeOffRequestEmail()` in `email.service.js` — plain FYI
+  email, explicitly says the request is handled in ADP, not the portal.
+- New routes on `manager-time-off.routes.js`: `GET /notifications` (active,
+  newest first) and `POST /notifications/:id/dismiss` (portal-only —
+  never touches ADP; ownership-checked so a manager can only dismiss their
+  own team's notifications).
+- Frontend: `useMyTimeOffNotificationCount.js` (same poll/custom-event
+  pattern as `useMyOpenTicketCount`/`useMyNpdActionCount`, gated on
+  `isSupervisor(user)`) drives a red badge on the "Team" sidebar item
+  (`AppSidebar.jsx`). `teamTimeOff/NewRequestsPanel.jsx` renders the actual
+  list (amber FYI card, dismiss button per row) inside `TeamTimeOffBoard.jsx`,
+  above `VacationTable`. Dismissing fires `agc-timeoff-notifications-changed`
+  so the badge updates immediately, same as the IT Ticket pattern.
+- `adpTimeOffEvents.startPolling()` wired into `server.js` next to the
+  other two ADP background jobs (staggered 60s after boot).
+
+**Needs live-data verification — do this before calling it done**: the
+event shape (`eventID`, `eventNameCode.codeValue`, `originator.associateOID`,
+pending/approved/cancelled classification) is assembled from ADP's general
+documentation, not a real time-off event — we've only ever seen an empty
+queue in practice. `adpTimeOffEvents.service.js` logs the full raw JSON of
+every event it sees (`[ADP Time Off Events] raw event: ...`) specifically
+so this can be corrected quickly from Render logs once Garima has a team
+member submit a real ADP request after this deploys. If the manager email/
+notification doesn't show up for a real test request, check that log line
+first — the field names in `classifyEventKind()`/`associateOidFromEvent()`
+in that file are the most likely thing to need adjusting.
+
+---
+
 This Claude session has NO direct shell or git access to Garima's machine — all
 file edits go through a device-bridge (stage → edit locally → commit back), which
 writes files but does not touch git. Garima runs `git add` / `git commit` /

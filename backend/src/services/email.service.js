@@ -846,6 +846,69 @@ async function sendCustomerInquiryToManagement({ to, inquiry }) {
   return sendMail({ to, subject: `[Management Review] Customer Inquiry #${inquiry.id} — ${inquiry.subject}`, html });
 }
 
+const TIMEOFF_EVENT_KIND_LABEL = {
+  pending: "requested",
+  approved: "had a request approved",
+  cancelled: "cancelled a request",
+  other: "has a time-off update",
+};
+
+/**
+ * Sent to a manager when one of their direct reports' time-off requests
+ * shows up in ADP's event notification queue (pending/approved/cancelled —
+ * see adpTimeOffEvents.service.js). This is an FYI, not an approval action:
+ * the request itself is still handled in ADP, this just lets the manager
+ * know something happened without them having to keep checking ADP.
+ */
+async function sendManagerTimeOffRequestEmail({
+  managerEmail,
+  managerName,
+  employeeName,
+  eventKind,
+  policyName,
+  startDate,
+  endDate,
+}) {
+  if (!managerEmail) return { skipped: true };
+
+  const action = TIMEOFF_EVENT_KIND_LABEL[eventKind] || TIMEOFF_EVENT_KIND_LABEL.other;
+  const dateRange = startDate ? (endDate && endDate !== startDate ? `${startDate} – ${endDate}` : startDate) : null;
+  const subject = `Time off: ${employeeName} ${action}`;
+
+  const text = [
+    `Hello${managerName ? ` ${managerName}` : ""},`,
+    "",
+    `${employeeName} ${action}${policyName ? ` (${policyName})` : ""}${dateRange ? `, ${dateRange}` : ""}.`,
+    "",
+    "This is an FYI — the request itself is handled in ADP, not in this portal.",
+    "You can see it on the Team time off board once it's synced.",
+    "",
+    `This message was sent by ${APP_MAIL_BRAND}.`,
+  ].join("\n");
+
+  const bodyHtml = `
+  <p>Hello${managerName ? ` ${escapeHtml(managerName)}` : ""},</p>
+  <p><strong>${escapeHtml(employeeName)}</strong> ${escapeHtml(action)}${policyName ? ` (${escapeHtml(policyName)})` : ""}${
+    dateRange ? `, ${escapeHtml(dateRange)}` : ""
+  }.</p>
+  <p style="margin: 16px 0; padding: 12px 16px; background: #f7f9fa; border-left: 4px solid #0B3EAF;">
+    This is an FYI — the request itself is handled in ADP, not in this portal. You can see it on the Team time off board once it's synced.
+  </p>
+  <p style="font-size: 12px; color: #6a6f73;">${escapeHtml(new Date().toLocaleString())}</p>
+  <hr style="border: none; border-top: 1px solid #d1d7dc; margin: 24px 0;" />
+  <p style="font-size: 12px; color: #6a6f73;">${APP_MAIL_BRAND} — automated notification</p>`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="font-family: Segoe UI, Arial, sans-serif; line-height: 1.5; color: #1c1d1f;">
+  ${bodyHtml}
+</body>
+</html>`;
+
+  return sendMail({ to: managerEmail, subject, text, html });
+}
+
 module.exports = {
   EMAIL_TEMPLATE_VERSION,
   isEmailConfigured,
@@ -865,4 +928,5 @@ module.exports = {
   sendHelpReportEmail,
   sendCustomerInquiryToFsqa,
   sendCustomerInquiryToManagement,
+  sendManagerTimeOffRequestEmail,
 };
