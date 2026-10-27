@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -430,6 +431,95 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger = fals
             }`}
           >
             {busy ? "Working…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// Shown after a dry-run import pass, before anything is actually written —
+// lets the person confirm the counts look right (how many new rows, how
+// many existing rows would change) before committing. Same portal pattern
+// as ConfirmDialog above, just with a richer body.
+function ImportPreviewModal({ preview, busy, onConfirm, onCancel }) {
+  const details = Array.isArray(preview?.details) ? preview.details : [];
+  const shown = details.slice(0, 12);
+  const extra = details.length - shown.length;
+  const totalChanges = (preview?.inserted || 0) + (preview?.updated || 0);
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
+      <div
+        className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-base font-semibold text-slate-900 dark:text-white">Review import</h3>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          Nothing has been saved yet — this is a preview of what will happen if you continue.
+        </p>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="rounded-md bg-emerald-50 p-2 text-center dark:bg-emerald-950/30">
+            <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{preview?.inserted ?? 0}</div>
+            <div className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">new</div>
+          </div>
+          <div className="rounded-md bg-amber-50 p-2 text-center dark:bg-amber-950/30">
+            <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{preview?.updated ?? 0}</div>
+            <div className="text-[11px] text-amber-700/80 dark:text-amber-300/80">updated</div>
+          </div>
+          <div className="rounded-md bg-slate-100 p-2 text-center dark:bg-white/10">
+            <div className="text-lg font-bold text-slate-600 dark:text-slate-300">{preview?.unchanged ?? 0}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">unchanged</div>
+          </div>
+          <div className="rounded-md bg-slate-100 p-2 text-center dark:bg-white/10">
+            <div className="text-lg font-bold text-slate-600 dark:text-slate-300">{preview?.skippedBlank ?? 0}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">blank rows</div>
+          </div>
+        </div>
+
+        {shown.length ? (
+          <div className="mt-3 max-h-48 overflow-y-auto rounded-md border border-slate-200 dark:border-slate-700">
+            {shown.map((d, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between gap-2 border-b border-slate-100 px-2.5 py-1.5 text-xs last:border-b-0 dark:border-slate-800"
+              >
+                <span className="truncate text-slate-700 dark:text-slate-200">{d.title}</span>
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 font-semibold ${
+                    d.action.includes("insert")
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                  }`}
+                >
+                  {d.action}
+                </span>
+              </div>
+            ))}
+            {extra > 0 ? (
+              <div className="px-2.5 py-1.5 text-center text-[11px] text-slate-400">and {extra} more…</div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {totalChanges === 0 ? (
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+            Nothing in this file is different from what's already here.
+          </p>
+        ) : null}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <GhostButton onClick={onCancel} disabled={busy}>
+            Cancel
+          </GhostButton>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy || totalChanges === 0}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#0B3EAF] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a3399] disabled:opacity-50"
+          >
+            {busy ? "Importing…" : "Confirm import"}
           </button>
         </div>
       </div>
@@ -1178,6 +1268,17 @@ function MasterCalendarView({ canEdit, isAdmin, deepLinkEventId }) {
   // reports it plainly, success or not.
   const [notifyBanner, setNotifyBanner] = useState(null); // { tone: "ok" | "warn", text } | null
 
+  // Export/Import to Excel — offline continuity if the server is down: a
+  // viewer can always pull a copy shaped like the source sheet; an editor
+  // can bring an edited copy back in. importFile holds the File between the
+  // dry-run preview and the actual commit, so the person isn't asked to
+  // re-pick it.
+  const [exporting, setExporting] = useState(false);
+  const importInputRef = useRef(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState(null);
+
   // Resolves a "?calEvent=<id>" link from a notification email: once that
   // event has loaded, expand it, widen the date filter if it would
   // otherwise be hidden, and scroll it into view. deepLinkHandledRef makes
@@ -1253,6 +1354,109 @@ function MasterCalendarView({ canEdit, isAdmin, deepLinkEventId }) {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get("/cfo/slt/v2/calendar/export", { responseType: "blob" });
+      const blob = res.data;
+      const ct = String(res.headers["content-type"] || "");
+      if (ct.includes("application/json")) {
+        const text = await blob.text();
+        let msg = "Could not export the calendar.";
+        try {
+          msg = JSON.parse(text)?.message || msg;
+        } catch {
+          // ignore — keep the default message
+        }
+        window.alert(msg);
+        return;
+      }
+      let filename = `AGC_SLT_Master_Calendar_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const cd = res.headers["content-disposition"];
+      const m = cd ? /filename="([^"]+)"/i.exec(cd) : null;
+      if (m && m[1]) filename = m[1];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // With responseType: "blob", a non-2xx response's JSON error body
+      // also arrives as a Blob (axios doesn't parse it for us), so the
+      // real server message ("Export is not available on this server.",
+      // a grant-check 403, etc.) has to be read out of it by hand — same
+      // fallback AdminPollsPage.jsx's exportSubmissionsExcel uses — or
+      // every failure here would just say the generic default text below.
+      let msg = friendlyErrorMessage(e, "Could not export the calendar.");
+      if (axios.isAxiosError(e) && e.response?.data instanceof Blob) {
+        try {
+          const text = await e.response.data.text();
+          const j = JSON.parse(text);
+          if (j?.message) msg = j.message;
+        } catch {
+          // ignore — keep the default message
+        }
+      }
+      window.alert(msg);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const runImport = async (file, dryRun) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await api.post(`/cfo/slt/v2/calendar/import?dryRun=${dryRun ? "true" : "false"}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  };
+
+  const handleImportFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so picking the same filename again still fires onChange
+    if (!file) return;
+    setImportBusy(true);
+    try {
+      const preview = await runImport(file, true);
+      setImportFile(file);
+      setImportPreview(preview);
+    } catch (err) {
+      window.alert(friendlyErrorMessage(err, "Could not read that file."));
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!importFile) return;
+    setImportBusy(true);
+    try {
+      const result = await runImport(importFile, false);
+      setImportPreview(null);
+      setImportFile(null);
+      setNotifyBanner({
+        tone: "ok",
+        text: `Import complete — ${result.inserted} added, ${result.updated} updated, ${result.unchanged} already up to date${
+          result.skippedBlank ? `, ${result.skippedBlank} blank rows skipped` : ""
+        }.`,
+      });
+      await load();
+    } catch (err) {
+      window.alert(friendlyErrorMessage(err, "Could not import that file."));
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const cancelImport = () => {
+    setImportPreview(null);
+    setImportFile(null);
+  };
+
   // Distinct, sorted option lists for the Owner/Lead and Created-by
   // dropdowns, drawn from every loaded event (not just the ones already
   // passing the date filter) so switching the date range never silently
@@ -1317,6 +1521,35 @@ function MasterCalendarView({ canEdit, isAdmin, deepLinkEventId }) {
               <div className="flex flex-wrap items-center gap-2">
                 <StatPill label="shown" value={eventsInRange.length} accent="bg-white/15 ring-1 ring-white/20" />
                 <StatPill label="total" value={events.length} accent="bg-[#A7D344] text-[#0a0a0a]" />
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  disabled={exporting}
+                  title="Download this calendar as an Excel file — handy if the portal goes down and the team needs to keep working from a spreadsheet."
+                  className="rounded-full border border-white/40 bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 disabled:opacity-60"
+                >
+                  {exporting ? "Exporting…" : "Export to Excel"}
+                </button>
+                {canEdit ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => importInputRef.current?.click()}
+                      disabled={importBusy}
+                      title="Upload an edited copy of the exported spreadsheet to bring those changes back into the portal."
+                      className="rounded-full border border-white/40 bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 disabled:opacity-60"
+                    >
+                      {importBusy ? "Reading…" : "Import from Excel"}
+                    </button>
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept=".xlsx"
+                      className="hidden"
+                      onChange={handleImportFileSelected}
+                    />
+                  </>
+                ) : null}
                 {canEdit ? (
                   <button
                     type="button"
@@ -1395,6 +1628,10 @@ function MasterCalendarView({ canEdit, isAdmin, deepLinkEventId }) {
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
         />
+      ) : null}
+
+      {importPreview ? (
+        <ImportPreviewModal preview={importPreview} busy={importBusy} onConfirm={confirmImport} onCancel={cancelImport} />
       ) : null}
     </div>
   );

@@ -1,22 +1,29 @@
 #!/usr/bin/env node
 /**
- * One-time (re-runnable) loader for the Master Calendar sheet into the
- * live slt_calendar table — the real workbook data, not test rows.
+ * Re-runnable loader/syncer for the Master Calendar sheet into the live
+ * slt_calendar table — the real workbook data, not test rows.
  *
  * Reads only the "Master Calendar" sheet (same column mapping as
  * sltCalendar.service.js / the Master Calendar view in SltTrackerV2.jsx)
- * and inserts each event. This is a calendar-only sibling of
+ * and UPSERTS each event. This is a calendar-only sibling of
  * scripts/importSltWorkbooks.js's importCalendar() — same parsing logic,
  * but doesn't touch the Action Tracker workbook or its tables at all, so
  * it can run on its own.
  *
- * Idempotent: each row's immutable key is derived from its title + raw
- * event date (same scheme as importSltWorkbooks.js), so re-running this
- * after someone has already added/edited rows through the app won't
- * duplicate anything — existing rows (matched by key) are left alone.
+ * Idempotent, and now a real sync (changed from insert-only per explicit
+ * request — "update the portal with this... nothing should be missed"):
+ * each row's immutable key is derived from its title + raw event date
+ * (same scheme as importSltWorkbooks.js). A row whose key isn't in the DB
+ * yet is INSERTED; a row whose key already exists gets its fields (month,
+ * category, executives, owner/lead, action required, prep dates, materials,
+ * notes) UPDATED to match the sheet — so re-running after the sheet changes
+ * actually picks up those edits, not just brand-new rows. This only ever
+ * touches rows whose title+date match something in the sheet — any event
+ * added or edited directly in the portal, with no matching title+date here,
+ * is left completely alone.
  *
  * Usage (from the backend/ directory):
- *   node scripts/importMasterCalendarData.js            # imports
+ *   node scripts/importMasterCalendarData.js            # imports/updates
  *   node scripts/importMasterCalendarData.js --dry-run   # preview only, no writes
  *   node scripts/importMasterCalendarData.js --file=path/to/other.xlsx
  *
@@ -132,7 +139,8 @@ async function main() {
 
   const hm = headerMap(ws, 2);
   let inserted = 0;
-  let skippedExisting = 0;
+  let updated = 0;
+  let unchanged = 0;
   let skippedBlank = 0;
 
   let row = 3;
@@ -167,18 +175,12 @@ async function main() {
       .digest("hex")
       .slice(0, 16);
 
-    const existing = await db.prepare("SELECT id FROM slt_calendar WHERE immutable_key = ?").get(immutableKey);
-    if (existing) {
-      skippedExisting += 1;
-      row += 1;
-      continue;
-    }
-
     const prepDeadlineIso = dateToIso(values["Prep Deadline"]) || textOrNull(values["Prep Deadline"]);
 
-    const fields = {
-      event_id: `EVT-${immutableKey.slice(0, 8).toUpperCase()}`,
-      immutable_key: immutableKey,
+    // event_id/immutable_key are identity, not content — left out of the
+    // update-comparison/SET list below so an existing row keeps its own
+    // event_id instead of ever being rewritten.
+    const contentFields = {
       month_raw: textOrNull(values["Month"]),
       // Store a clean ISO date for a real date, or the typed text for a
       // range — never String(aDateObject), which produces a full
@@ -198,19 +200,45 @@ async function main() {
       notes: textOrNull(values["Notes"]),
     };
 
-    if (!args.dryRun) {
-      const cols = Object.keys(fields);
-      const placeholders = cols.map(() => "?").join(", ");
-      await db.prepare(`INSERT INTO slt_calendar (${cols.join(", ")}) VALUES (${placeholders})`).run(...cols.map((c) => fields[c]));
+    const existing = await db.prepare("SELECT * FROM slt_calendar WHERE immutable_key = ?").get(immutableKey);
+
+    if (!existing) {
+      const fields = { event_id: `EVT-${immutableKey.slice(0, 8).toUpperCase()}`, immutable_key: immutableKey, ...contentFields };
+      if (!args.dryRun) {
+        const cols = Object.keys(fields);
+        const placeholders = cols.map(() => "?").join(", ");
+        await db.prepare(`INSERT INTO slt_calendar (${cols.join(", ")}) VALUES (${placeholders})`).run(...cols.map((c) => fields[c]));
+      }
+      inserted += 1;
+      console.log(`  ${args.dryRun ? "[dry-run] would insert" : "inserted"}: ${title} (${values["Event Date"]})`);
+      row += 1;
+      continue;
     }
-    inserted += 1;
-    console.log(`  ${args.dryRun ? "[dry-run] would insert" : "inserted"}: ${title} (${values["Event Date"]})`);
+
+    const changedCols = Object.keys(contentFields).filter((c) => String(existing[c] ?? "") !== String(contentFields[c] ?? ""));
+    if (changedCols.length === 0) {
+      unchanged += 1;
+      row += 1;
+      continue;
+    }
+
+    if (!args.dryRun) {
+      const setClause = changedCols.map((c) => `${c} = ?`).join(", ");
+      await db
+        .prepare(`UPDATE slt_calendar SET ${setClause}, updated_at = datetime('now') WHERE id = ?`)
+        .run(...changedCols.map((c) => contentFields[c]), existing.id);
+    }
+    updated += 1;
+    console.log(
+      `  ${args.dryRun ? "[dry-run] would update" : "updated"}: ${title} (${values["Event Date"]}) — ${changedCols.join(", ")}`
+    );
     row += 1;
   }
 
   console.log("\n=== Summary ===");
   console.log(`  ${args.dryRun ? "would insert" : "inserted"}: ${inserted}`);
-  console.log(`  already present (skipped): ${skippedExisting}`);
+  console.log(`  ${args.dryRun ? "would update" : "updated"}: ${updated}`);
+  console.log(`  already up to date (unchanged): ${unchanged}`);
   console.log(`  blank rows (skipped): ${skippedBlank}`);
 }
 

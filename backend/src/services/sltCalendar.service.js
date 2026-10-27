@@ -179,14 +179,57 @@ async function getCalendarEventById(id) {
   return mapCalendarEvent(row);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Outlook/Microsoft 365 caps how many SMTP connections the sending mailbox
+// may have open at once. Firing every recipient's send at the same time
+// (the old Promise.allSettled behavior below) opened one connection per
+// recipient simultaneously and routinely tripped that cap — only the
+// first handful got through before the rest came back "432 4.3.2
+// Concurrent connections limit exceeded." Sending one at a time, with a
+// short pause between each and a few retries specifically for that error,
+// keeps every send within the limit instead of racing the others for it.
+const EMAIL_SEND_GAP_MS = 400;
+const MAX_THROTTLE_RETRIES = 4;
+
+function isConcurrentConnectionsError(err) {
+  const msg = String(err?.message || err || "");
+  return /432/.test(msg) && /concurrent connections/i.test(msg);
+}
+
+async function sendCalendarNotificationWithRetry(payload) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await email.sendCalendarEventCreatedEmail(payload);
+    } catch (err) {
+      if (isConcurrentConnectionsError(err) && attempt < MAX_THROTTLE_RETRIES) {
+        const backoff = 1500 * (attempt + 1);
+        console.warn(
+          `[SLT_CALENDAR] Outlook throttled the send to ${payload.to} — retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_THROTTLE_RETRIES})`
+        );
+        await sleep(backoff);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 // Emails everyone with Master Calendar access (CALENDAR_ACCESS_GRANTS)
 // about a newly created event, except the person who just created it —
 // they obviously already know. Sent as one email per recipient (not a
-// single multi-address "to") so each person is addressed by name; a
-// failed send to one recipient doesn't stop the others
-// (Promise.allSettled). The caller wraps this whole call in try/catch so
-// a notification failure (bad SMTP config, a DB hiccup, etc.) never
-// blocks event creation itself from succeeding.
+// single multi-address "to") so each person is addressed by name, and
+// sent ONE AT A TIME (not concurrently — see EMAIL_SEND_GAP_MS/
+// sendCalendarNotificationWithRetry above) so a large SLT distribution
+// list never trips Outlook's concurrent-connection throttle. A failed
+// send to one recipient (after retries) doesn't stop the others — each
+// result is recorded individually in the same shape Promise.allSettled
+// would have produced, so the summary/logging below didn't need to
+// change. The caller wraps this whole call in try/catch so a notification
+// failure (bad SMTP config, a DB hiccup, etc.) never blocks event creation
+// itself from succeeding.
 async function notifyCalendarAccessUsersOfNewEvent(creatorUser, eventRow) {
   const rows = await db
     .prepare("SELECT id, name, email, role, admin_grants FROM users WHERE email IS NOT NULL AND TRIM(email) <> ''")
@@ -231,24 +274,32 @@ async function notifyCalendarAccessUsersOfNewEvent(creatorUser, eventRow) {
       ? `${eventRow.start_date} – ${eventRow.end_date}`
       : eventRow.start_date || eventRow.event_date;
 
-  const results = await Promise.allSettled(
-    recipients.map((r) =>
-      email
-        .sendCalendarEventCreatedEmail({
-          to: r.email,
-          recipientName: r.name,
-          creatorName: creatorUser?.name || eventRow.created_by_name,
-          eventTitle: eventRow.event_title,
-          eventDateLabel,
-          category: eventRow.category,
-          executives: eventRow.executives,
-          ownerLead: eventRow.owner_lead,
-          executiveActionRequired: eventRow.executive_action_required,
-          eventId: eventRow.id,
-        })
-        .then((out) => ({ email: r.email, out }))
-    )
-  );
+  // Same { status, value: { email, out } } / { status, reason } shape
+  // Promise.allSettled would have produced, built sequentially instead —
+  // see the comment above sendCalendarNotificationWithRetry for why.
+  const results = [];
+  for (let i = 0; i < recipients.length; i += 1) {
+    const r = recipients[i];
+    try {
+      const out = await sendCalendarNotificationWithRetry({
+        to: r.email,
+        recipientName: r.name,
+        creatorName: creatorUser?.name || eventRow.created_by_name,
+        eventTitle: eventRow.event_title,
+        eventDateLabel,
+        category: eventRow.category,
+        executives: eventRow.executives,
+        ownerLead: eventRow.owner_lead,
+        executiveActionRequired: eventRow.executive_action_required,
+        eventId: eventRow.id,
+      });
+      results.push({ status: "fulfilled", value: { email: r.email, out } });
+    } catch (err) {
+      results.push({ status: "rejected", reason: err });
+    }
+    // No gap needed after the very last send.
+    if (i < recipients.length - 1) await sleep(EMAIL_SEND_GAP_MS);
+  }
 
   let failedCount = 0;
   const failureReasons = []; // surfaced all the way up to the create-event API response — see createCalendarEvent
@@ -439,10 +490,281 @@ async function deleteCalendarEvent(userId, id) {
   return { ok: true, id: eventId };
 }
 
+// ── Export / Import (offline continuity) ────────────────────────────────
+// If the server/portal is down, the team needs to be able to keep working
+// from a spreadsheet, then bring those changes back in once it's back up.
+// Export produces a workbook shaped like the source "Master Calendar"
+// sheet (same column names/order scripts/importMasterCalendarData.js
+// already expects), plus one extra leading "Record ID" column holding each
+// row's event_id. That column is what makes the round trip safe: matching
+// on it (not on re-hashing the title+date, which is sensitive to exactly
+// how Excel/ExcelJS represent a date cell) means re-importing an exported
+// file updates the SAME rows it came from, instead of creating duplicates.
+// A row added fresh in the offline copy simply has no Record ID yet, which
+// importCalendarFromBuffer() below treats as "insert new."
+const EXPORT_HEADERS = [
+  "Record ID",
+  "Month",
+  "Event Date",
+  "Event / Deadline",
+  "Category",
+  "Executive(s)",
+  "Owner / Lead",
+  "Executive Action Required",
+  "Prep Start Date",
+  "Prep Deadline",
+  "Materials Needed",
+  "Notes",
+  "Days Until Event",
+  "Prep Days Left",
+];
+
+function requireExcelJs() {
+  try {
+    return require("exceljs");
+  } catch (e) {
+    const err = new Error("Excel export/import is not available on this server.");
+    err.statusCode = 500;
+    throw err;
+  }
+}
+
+// Mirrors scripts/importMasterCalendarData.js's isoDate-at-noon-UTC choice
+// so a plain ISO date never visually shifts a day when Excel renders it
+// under a US-West-of-UTC timezone.
+function isoToExcelDate(iso) {
+  return iso ? new Date(`${iso}T12:00:00Z`) : null;
+}
+
+async function exportCalendarWorkbookBuffer() {
+  const ExcelJS = requireExcelJs();
+  const events = await listCalendar({ archived: false });
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "AGC University LMS";
+  const sheet = workbook.addWorksheet("Master Calendar");
+
+  // Row 1 is a plain instructional note — the header row the
+  // import/import-from-UI logic actually reads is row 2, same as the
+  // source workbook's own layout, so this row is free to use.
+  sheet.addRow([
+    `Master Calendar — exported ${todayIso()}. Keep "Record ID" as-is on rows you're editing; leave it blank only on a brand-new row you're adding here.`,
+  ]);
+  sheet.addRow(EXPORT_HEADERS);
+  sheet.getRow(2).font = { bold: true };
+
+  for (const ev of events) {
+    const eventDateCell = ev.is_text_date_range ? ev.event_date : isoToExcelDate(ev.start_date) || ev.event_date || null;
+    sheet.addRow([
+      ev.event_id,
+      ev.month,
+      eventDateCell,
+      ev.event_title,
+      ev.category,
+      ev.executives,
+      ev.owner_lead,
+      ev.executive_action_required,
+      isoToExcelDate(ev.prep_start_date),
+      isoToExcelDate(ev.prep_deadline),
+      ev.materials_needed,
+      ev.notes,
+      ev.days_until_event,
+      ev.prep_days_left,
+    ]);
+  }
+
+  sheet.getColumn(3).numFmt = "mm/dd/yyyy";
+  sheet.getColumn(9).numFmt = "mm/dd/yyyy";
+  sheet.getColumn(10).numFmt = "mm/dd/yyyy";
+  EXPORT_HEADERS.forEach((h, i) => {
+    sheet.getColumn(i + 1).width = Math.min(42, Math.max(12, String(h).length + 4));
+  });
+  sheet.getColumn(1).width = 18;
+
+  return workbook.xlsx.writeBuffer();
+}
+
+function isBlankCell(v) {
+  return v == null || String(v).trim() === "";
+}
+
+function textOrNullCell(v) {
+  return isBlankCell(v) ? null : String(v).trim();
+}
+
+function dateCellToIso(v) {
+  return v instanceof Date && !Number.isNaN(v.getTime()) ? v.toISOString().slice(0, 10) : null;
+}
+
+function cellDisplayValue(cell) {
+  if (!cell) return null;
+  const v = cell.value;
+  if (v == null) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === "object") {
+    if (v.error) return `#${v.error}#`;
+    if (v.result !== undefined) return v.result;
+    if (Array.isArray(v.richText)) return v.richText.map((t) => t.text).join("");
+    if (v.text !== undefined) return v.text;
+    return null;
+  }
+  return v;
+}
+
+function headerMapFor(worksheet, headerRow) {
+  const map = {};
+  const row = worksheet.getRow(headerRow);
+  row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+    const v = cell.value;
+    if (v != null && String(v).trim() !== "") map[String(v).trim()] = colNumber;
+  });
+  return map;
+}
+
+function readRowValues(worksheet, rowNum, headerMapObj) {
+  const row = worksheet.getRow(rowNum);
+  const values = {};
+  for (const [header, col] of Object.entries(headerMapObj)) {
+    values[header] = cellDisplayValue(row.getCell(col));
+  }
+  return values;
+}
+
+// Same date-cell handling as scripts/importMasterCalendarData.js: a real
+// Excel date → a single-day start/end; free text matching "Oct 17-21,
+// 2026" → a parsed range; anything else is kept as typed, with no
+// computable start/end (so it still sorts/displays, just without a "Days
+// Until Event" figure).
+function parseCalendarDateCell(eventDateRaw) {
+  if (eventDateRaw instanceof Date && !Number.isNaN(eventDateRaw.getTime())) {
+    const iso = eventDateRaw.toISOString().slice(0, 10);
+    return { startDate: iso, endDate: iso, isTextDateRange: 0 };
+  }
+  if (!isBlankCell(eventDateRaw)) {
+    const range = parseTextDateRange(eventDateRaw);
+    if (range) return { startDate: range.start, endDate: range.end, isTextDateRange: 1 };
+    return { startDate: null, endDate: null, isTextDateRange: 1 };
+  }
+  return { startDate: null, endDate: null, isTextDateRange: 0 };
+}
+
+const IMPORT_HEADER_ROW = 2;
+const IMPORT_FIRST_DATA_ROW = 3;
+const MAX_IMPORT_DETAILS = 300;
+
+// Parses an uploaded .xlsx buffer (exported by exportCalendarWorkbookBuffer
+// above, or the original source workbook scripts/importMasterCalendarData.js
+// reads) and upserts it into slt_calendar. Matches existing rows by the
+// "Record ID" column (= event_id) when present; a row with no Record ID is
+// always treated as new. dryRun:true computes and returns the same counts
+// without writing anything, so the UI can show a preview before committing.
+async function importCalendarFromBuffer(userId, buffer, { dryRun = false } = {}) {
+  const ExcelJS = requireExcelJs();
+
+  const wb = new ExcelJS.Workbook();
+  try {
+    await wb.xlsx.load(buffer);
+  } catch (e) {
+    throw badRequest("Could not read that file. Make sure it's a .xlsx workbook exported from (or shaped like) the Master Calendar.");
+  }
+
+  const ws = wb.getWorksheet("Master Calendar");
+  if (!ws) throw badRequest('That workbook has no "Master Calendar" sheet.');
+
+  const hm = headerMapFor(ws, IMPORT_HEADER_ROW);
+  if (!hm["Event / Deadline"] || !hm["Event Date"]) {
+    throw badRequest('That sheet is missing the expected "Event Date" / "Event / Deadline" columns.');
+  }
+
+  let inserted = 0;
+  let updated = 0;
+  let unchanged = 0;
+  let skippedBlank = 0;
+  const details = [];
+
+  let row = IMPORT_FIRST_DATA_ROW;
+  while (row <= ws.rowCount) {
+    const values = readRowValues(ws, row, hm);
+    const title = textOrNullCell(values["Event / Deadline"]);
+    if (!title) {
+      skippedBlank += 1;
+      row += 1;
+      continue;
+    }
+
+    const eventDateRaw = values["Event Date"];
+    const { startDate, endDate, isTextDateRange } = parseCalendarDateCell(eventDateRaw);
+
+    const contentFields = {
+      month_raw: textOrNullCell(values["Month"]),
+      event_date_raw: eventDateRaw instanceof Date ? dateCellToIso(eventDateRaw) : textOrNullCell(eventDateRaw),
+      is_text_date_range: isTextDateRange,
+      start_date: startDate,
+      end_date: endDate,
+      event_title: title,
+      category: textOrNullCell(values["Category"]),
+      executives: textOrNullCell(values["Executive(s)"]),
+      owner_lead: textOrNullCell(values["Owner / Lead"]),
+      executive_action_required: textOrNullCell(values["Executive Action Required"]),
+      prep_start_date: dateCellToIso(values["Prep Start Date"]) || textOrNullCell(values["Prep Start Date"]),
+      prep_deadline: dateCellToIso(values["Prep Deadline"]) || textOrNullCell(values["Prep Deadline"]),
+      materials_needed: textOrNullCell(values["Materials Needed"]),
+      notes: textOrNullCell(values["Notes"]),
+    };
+
+    const recordId = textOrNullCell(values["Record ID"]);
+    const existing = recordId ? await db.prepare("SELECT * FROM slt_calendar WHERE event_id = ?").get(recordId) : null;
+
+    if (!existing) {
+      const eventId = `EVT-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
+      const immutableKey = crypto.randomBytes(8).toString("hex");
+      const fields = { event_id: eventId, immutable_key: immutableKey, ...contentFields };
+      if (!dryRun) {
+        const cols = Object.keys(fields);
+        const placeholders = cols.map(() => "?").join(", ");
+        const result = await db
+          .prepare(`INSERT INTO slt_calendar (${cols.join(", ")}, created_by) VALUES (${placeholders}, ?)`)
+          .run(...cols.map((c) => fields[c]), userId);
+        void audit.logAudit({ entityType: "calendar", entityId: result.lastInsertRowid, action: "create", userId });
+      }
+      inserted += 1;
+      if (details.length < MAX_IMPORT_DETAILS) {
+        details.push({ title, event_date: String(values["Event Date"] ?? ""), action: dryRun ? "would insert" : "inserted" });
+      }
+      row += 1;
+      continue;
+    }
+
+    const changedCols = Object.keys(contentFields).filter((c) => String(existing[c] ?? "") !== String(contentFields[c] ?? ""));
+    if (changedCols.length === 0) {
+      unchanged += 1;
+      row += 1;
+      continue;
+    }
+
+    if (!dryRun) {
+      const setClause = changedCols.map((c) => `${c} = ?`).join(", ");
+      await db
+        .prepare(`UPDATE slt_calendar SET ${setClause}, updated_at = datetime('now') WHERE id = ?`)
+        .run(...changedCols.map((c) => contentFields[c]), existing.id);
+      void audit.logAudit({ entityType: "calendar", entityId: existing.id, action: "update", userId });
+    }
+    updated += 1;
+    if (details.length < MAX_IMPORT_DETAILS) {
+      details.push({ title, event_date: String(values["Event Date"] ?? ""), action: dryRun ? "would update" : "updated", changed: changedCols });
+    }
+    row += 1;
+  }
+
+  return { dryRun: !!dryRun, inserted, updated, unchanged, skippedBlank, details };
+}
+
 module.exports = {
   listCalendar,
   getCalendarEventById,
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
+  exportCalendarWorkbookBuffer,
+  importCalendarFromBuffer,
 };

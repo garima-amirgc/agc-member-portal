@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 const { authRequired } = require("../middleware/auth");
 const { requireAdminGrantAny } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS, hasAnyAdminGrant } = require("../config/adminGrants");
@@ -223,6 +224,22 @@ function sltErrorHandler(res, e) {
   res.status(code).json({ message: e?.message || "Server error" });
 }
 
+// In-memory only — the uploaded workbook is parsed and discarded, never
+// written to disk (unlike upload.routes.js's instances, which save
+// documents/images the portal needs to keep).
+const calendarImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const name = String(file.originalname || "").toLowerCase();
+    if (name.endsWith(".xlsx") || file.mimetype === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only .xlsx files are supported."));
+    }
+  },
+});
+
 function canEditCalendarEvent(user, event) {
   if (hasAnyAdminGrant(user, SLT_EDIT_GRANTS)) return true;
   if (event?.created_by == null) return false;
@@ -239,6 +256,49 @@ router.get("/slt/v2/calendar", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (
     sltErrorHandler(res, e);
   }
 });
+
+// Registered BEFORE the "/:id" route below so Express doesn't try to parse
+// "export" as an id. Offline-continuity export — see
+// sltCalendar.service.js's exportCalendarWorkbookBuffer() for the format
+// and why it includes a "Record ID" column.
+router.get("/slt/v2/calendar/export", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
+  try {
+    const buf = await sltCalendar.exportCalendarWorkbookBuffer();
+    const filename = `AGC_SLT_Master_Calendar_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(Buffer.from(buf));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+// Offline-continuity import: upload a workbook shaped like the export
+// above (or the original source sheet) and upsert it into slt_calendar.
+// ?dryRun=true previews counts without writing, so the UI can show a
+// summary before the user commits.
+router.post(
+  "/slt/v2/calendar/import",
+  requireAdminGrantAny(...SLT_EDIT_GRANTS),
+  (req, res, next) => {
+    calendarImportUpload.single("file")(req, res, (err) => {
+      if (err) return res.status(400).json({ message: err.message || "Could not read the uploaded file." });
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      if (!req.file || !req.file.buffer || !req.file.buffer.length) {
+        return res.status(400).json({ message: "No file uploaded." });
+      }
+      const dryRun = req.query.dryRun === "true" || req.query.dryRun === "1";
+      const result = await sltCalendar.importCalendarFromBuffer(req.user.id, req.file.buffer, { dryRun });
+      res.json(result);
+    } catch (e) {
+      sltErrorHandler(res, e);
+    }
+  }
+);
 
 router.get("/slt/v2/calendar/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
   try {
