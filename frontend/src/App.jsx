@@ -204,7 +204,15 @@ export default function App() {
         <Route
           path="cfo"
           element={
-            <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.CFO}>
+            <ProtectedRoute
+              adminGrants={[
+                ADMIN_GRANT_KEYS.CFO,
+                ADMIN_GRANT_KEYS.INCIDENT_REPORT_VIEW,
+                ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT,
+                ADMIN_GRANT_KEYS.SLT_VIEW,
+                ADMIN_GRANT_KEYS.SLT_EDIT,
+              ]}
+            >
               <CfoReportsPage />
             </ProtectedRoute>
           }

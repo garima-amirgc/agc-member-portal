@@ -795,6 +795,16 @@ async function initDb() {
     rawDb.exec("ALTER TABLE users ADD COLUMN new_hire_marked_at TEXT");
   } catch {
   }
+  // Master Calendar delegated-edit access (SLT Tracker v2): a JSON array of
+  // other users' ids whose Master Calendar events this user may edit/delete
+  // even without the full slt_edit/cfo grant — assigned by a full admin from
+  // the Manage Users screen. See adminGrants.js's
+  // parseCalendarEditDelegatesColumn/sanitizeCalendarEditDelegatesPayload and
+  // sltCalendar.service.js's authorization check.
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN calendar_edit_delegates TEXT");
+  } catch {
+  }
 
   try {
     rawDb.exec(`
@@ -1156,6 +1166,387 @@ async function initDb() {
     rawDb.exec("UPDATE users SET department = 'Production' WHERE department IS NULL OR TRIM(department) = ''");
   } catch {
   }
+
+  // Native, in-portal CFO Incident Reports — replaces editing the SharePoint
+  // Excel workbook by hand. Submitting requires the incident_report_edit (or
+  // cfo) admin grant; viewing requires incident_report_view, incident_report_edit,
+  // or cfo. See cfoIncidents.service.js. The older SharePoint-Excel incident
+  // data (cfoReports.service.js) is kept as read-only history alongside this.
+  rawDb.exec(`
+    CREATE TABLE IF NOT EXISTS cfo_incidents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      facility TEXT NOT NULL CHECK(facility IN ('AQM','SCF','ASP')),
+      department TEXT,
+      incident_date TEXT NOT NULL,
+      severity TEXT NOT NULL DEFAULT 'L1' CHECK(severity IN ('L1','L2','L3','L4')),
+      status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','closed')),
+      description TEXT NOT NULL,
+      financial_impact TEXT,
+      root_cause TEXT,
+      corrective_action TEXT,
+      preventive_action TEXT,
+      reported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      closed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      closed_at TEXT,
+      attachments TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_cfo_incidents_facility ON cfo_incidents (facility);
+    CREATE INDEX IF NOT EXISTS idx_cfo_incidents_status ON cfo_incidents (status);
+  `);
+
+  // Added after the table already existed on deployed databases — the
+  // CREATE TABLE IF NOT EXISTS above only takes effect on a brand-new
+  // install, same as the it_tickets.attachments column below.
+  try {
+    rawDb.exec("ALTER TABLE cfo_incidents ADD COLUMN attachments TEXT");
+  } catch {
+  }
+
+  // Native, in-portal SLT Report — replaces the two SharePoint Excel
+  // workbooks (Action Tracker, Calendar) the SLT Tracker tab used to read
+  // from. Three tables, one per record type the tab shows (action items,
+  // calendar events, decisions); see sltItems.service.js for the per-person
+  // "performance" roster computed from these at read time. Viewing requires
+  // slt_view, slt_edit, or cfo; adding/updating/deleting requires slt_edit
+  // or cfo.
+  rawDb.exec(`
+    CREATE TABLE IF NOT EXISTS slt_action_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item TEXT NOT NULL,
+      owner TEXT NOT NULL,
+      due_date TEXT,
+      status TEXT NOT NULL DEFAULT 'NOT STARTED' CHECK(status IN ('NOT STARTED','ASSIGNED','IN PROGRESS','COMPLETED')),
+      priority TEXT,
+      category TEXT,
+      next_action TEXT,
+      notes TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_action_items_owner ON slt_action_items (owner);
+    CREATE INDEX IF NOT EXISTS idx_slt_action_items_status ON slt_action_items (status);
+
+    CREATE TABLE IF NOT EXISTS slt_calendar_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      event_date TEXT NOT NULL,
+      owner TEXT NOT NULL,
+      category TEXT,
+      prep_deadline TEXT,
+      notes TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_calendar_events_date ON slt_calendar_events (event_date);
+
+    CREATE TABLE IF NOT EXISTS slt_decisions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      decision TEXT NOT NULL,
+      assigned_to TEXT NOT NULL,
+      deadline TEXT,
+      status TEXT NOT NULL DEFAULT 'Not Started' CHECK(status IN ('Not Started','In Progress','Pending','Deferred','Completed')),
+      workstream TEXT,
+      decision_type TEXT,
+      recommendation TEXT,
+      source TEXT,
+      notes TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_decisions_assigned_to ON slt_decisions (assigned_to);
+  `);
+
+  // SLT Tracker v2 — full rebuild per the Oct 2026 AGC SLT brief, replacing
+  // the three simple tables above (slt_action_items / slt_calendar_events /
+  // slt_decisions, left in place unused rather than dropped) with a schema
+  // that preserves every field from both source workbooks: Action Register,
+  // Decision Queue, Decision Register, 90-Day Commitments, and the
+  // Executive Calendar. See PROJECT_NOTES.md and the "SLT Tracker —
+  // Workbook Inventory & Reconciliation" doc for the full field mapping and
+  // the data-quality issues found in the source files (broken formulas,
+  // text date ranges, prep-after-event dates, etc.) that the importer in
+  // scripts/importSltWorkbooks.js flags rather than silently fixing.
+  //
+  // slt_import_batches / slt_import_raw_rows: an immutable record of every
+  // Excel import — raw per-row JSON (plus formula text where present) is
+  // kept separately from the normalized tables below, so re-running the
+  // importer is auditable and idempotent (matched by immutable_key).
+  //
+  // slt_audit_log: one generic table for every status/ownership/deadline/
+  // decision/extension/archival change across all five areas — who changed
+  // what, when, old value, new value.
+  //
+  // slt_links: generic many-to-many relationships between any two SLT
+  // records (action<->decision, action<->calendar event, etc.) instead of
+  // a bespoke join table per pair.
+  rawDb.exec(`
+    CREATE TABLE IF NOT EXISTS slt_import_batches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_label TEXT NOT NULL,
+      original_filename TEXT NOT NULL,
+      checksum_sha256 TEXT NOT NULL,
+      imported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      imported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      mode TEXT NOT NULL DEFAULT 'commit' CHECK(mode IN ('dry_run','commit')),
+      summary_json TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS slt_import_raw_rows (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      batch_id INTEGER NOT NULL REFERENCES slt_import_batches(id) ON DELETE CASCADE,
+      sheet_name TEXT NOT NULL,
+      source_row INTEGER NOT NULL,
+      raw_json TEXT NOT NULL,
+      formula_json TEXT,
+      entity_type TEXT,
+      entity_id INTEGER,
+      disposition TEXT NOT NULL DEFAULT 'pending_review'
+        CHECK(disposition IN ('inserted','updated','unchanged','history_only','pending_review','skipped_template')),
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_import_raw_rows_batch ON slt_import_raw_rows (batch_id);
+
+    CREATE TABLE IF NOT EXISTS slt_audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      field_name TEXT,
+      old_value TEXT,
+      new_value TEXT,
+      changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      changed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_audit_log_entity ON slt_audit_log (entity_type, entity_id);
+
+    CREATE TABLE IF NOT EXISTS slt_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_type TEXT NOT NULL CHECK(from_type IN ('action','decision_queue','decision_register','commitment','calendar')),
+      from_id INTEGER NOT NULL,
+      to_type TEXT NOT NULL CHECK(to_type IN ('action','decision_queue','decision_register','commitment','calendar')),
+      to_id INTEGER NOT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(from_type, from_id, to_type, to_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS slt_actions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      legacy_item_id TEXT,
+      item TEXT NOT NULL,
+      category TEXT,
+      owner TEXT NOT NULL,
+      next_action TEXT,
+      due_date TEXT,
+      status TEXT NOT NULL DEFAULT 'Assigned',
+      priority TEXT,
+      flag TEXT,
+      risk_impact TEXT,
+      strategic_objective TEXT,
+      escalation_required TEXT,
+      financial_impact TEXT,
+      asp_readiness_stream TEXT,
+      blocker_waiting_on TEXT,
+      notes TEXT,
+      date_added TEXT,
+      last_updated TEXT,
+      immutable_key TEXT UNIQUE,
+      active_record TEXT,
+      archived INTEGER NOT NULL DEFAULT 0,
+      attachments TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_actions_owner ON slt_actions (owner);
+    CREATE INDEX IF NOT EXISTS idx_slt_actions_status ON slt_actions (status);
+    CREATE INDEX IF NOT EXISTS idx_slt_actions_archived ON slt_actions (archived);
+
+    CREATE TABLE IF NOT EXISTS slt_action_status_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action_id INTEGER NOT NULL REFERENCES slt_actions(id) ON DELETE CASCADE,
+      old_status TEXT,
+      new_status TEXT NOT NULL,
+      old_due_date TEXT,
+      new_due_date TEXT,
+      changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      changed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_action_status_history_action ON slt_action_status_history (action_id);
+
+    CREATE TABLE IF NOT EXISTS slt_decision_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      legacy_decision_id TEXT,
+      decision_required TEXT NOT NULL,
+      workstream TEXT,
+      assigned_to TEXT,
+      decision_deadline TEXT,
+      recommendation TEXT,
+      status TEXT,
+      decision_type TEXT,
+      ceo_cfo_attention TEXT,
+      financial_impact TEXT,
+      risk_impact TEXT,
+      strategic_objective TEXT,
+      decision_date TEXT,
+      further_action_required TEXT,
+      context_input_required TEXT,
+      owned_by TEXT,
+      requested_by TEXT,
+      date_raised TEXT,
+      delay_impact_risk TEXT,
+      blocker_waiting_on TEXT,
+      notes TEXT,
+      queue_immutable_key TEXT UNIQUE,
+      active_record TEXT,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_decision_queue_assigned_to ON slt_decision_queue (assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_slt_decision_queue_archived ON slt_decision_queue (archived);
+
+    CREATE TABLE IF NOT EXISTS slt_decision_register (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      legacy_decision_log_id TEXT,
+      legacy_decision_id TEXT,
+      source_decision_id TEXT,
+      parent_decision_id INTEGER REFERENCES slt_decision_queue(id) ON DELETE SET NULL,
+      link_status TEXT NOT NULL DEFAULT 'historical_no_parent'
+        CHECK(link_status IN ('linked','unresolved','historical_no_parent')),
+      decision_required TEXT NOT NULL,
+      decision_summary TEXT,
+      workstream TEXT,
+      assigned_to TEXT,
+      decision_deadline TEXT,
+      recommendation TEXT,
+      status TEXT,
+      decision_type TEXT,
+      ceo_cfo_attention TEXT,
+      financial_impact TEXT,
+      risk_impact TEXT,
+      strategic_objective TEXT,
+      decision_date TEXT,
+      decision_maker TEXT,
+      further_action_required TEXT,
+      context_input_required TEXT,
+      owned_by TEXT,
+      requested_by TEXT,
+      requester TEXT,
+      date_raised TEXT,
+      logged_date TEXT,
+      delay_impact_risk TEXT,
+      blocker_waiting_on TEXT,
+      next_action TEXT,
+      original_issue TEXT,
+      rationale TEXT,
+      follow_up_status TEXT,
+      due_date TEXT,
+      notes TEXT,
+      queue_immutable_key TEXT,
+      decision_log_immutable_key TEXT UNIQUE,
+      queue_source_key TEXT,
+      consistency_check TEXT,
+      id_origin TEXT,
+      id_check TEXT,
+      active_record TEXT,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_decision_register_parent ON slt_decision_register (parent_decision_id);
+    CREATE INDEX IF NOT EXISTS idx_slt_decision_register_follow_up ON slt_decision_register (follow_up_status);
+    CREATE INDEX IF NOT EXISTS idx_slt_decision_register_archived ON slt_decision_register (archived);
+
+    CREATE TABLE IF NOT EXISTS slt_commitments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      legacy_id TEXT,
+      commitment_deliverable TEXT NOT NULL,
+      success_measure TEXT,
+      owner TEXT NOT NULL,
+      rag_status TEXT,
+      status1_raw TEXT,
+      date_record_entered TEXT,
+      date_assigned TEXT,
+      original_due TEXT,
+      checkin_30_due TEXT,
+      checkin_30_notes TEXT,
+      checkin_60_due TEXT,
+      checkin_60_notes TEXT,
+      checkin_90_notes TEXT,
+      extension_approved_by TEXT,
+      ext_approval_date TEXT,
+      revised_due TEXT,
+      delivered_on TEXT,
+      current_due TEXT,
+      status2 TEXT NOT NULL DEFAULT 'Open',
+      report_cue_raw TEXT,
+      change_risk_next_step TEXT,
+      extension_flagged INTEGER NOT NULL DEFAULT 0,
+      immutable_key TEXT UNIQUE,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_commitments_owner ON slt_commitments (owner);
+    CREATE INDEX IF NOT EXISTS idx_slt_commitments_archived ON slt_commitments (archived);
+
+    CREATE TABLE IF NOT EXISTS slt_commitment_checkins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      commitment_id INTEGER NOT NULL REFERENCES slt_commitments(id) ON DELETE CASCADE,
+      checkin_type TEXT NOT NULL CHECK(checkin_type IN ('30','60','90')),
+      due_date TEXT,
+      completed_at TEXT,
+      notes TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_commitment_checkins_commitment ON slt_commitment_checkins (commitment_id);
+
+    CREATE TABLE IF NOT EXISTS slt_calendar (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id TEXT UNIQUE,
+      month_raw TEXT,
+      event_date_raw TEXT,
+      is_text_date_range INTEGER NOT NULL DEFAULT 0,
+      start_date TEXT,
+      end_date TEXT,
+      start_time TEXT,
+      end_time TEXT,
+      event_title TEXT NOT NULL,
+      category TEXT,
+      executives TEXT,
+      owner_lead TEXT,
+      executive_action_required TEXT,
+      prep_start_date TEXT,
+      prep_deadline TEXT,
+      materials_needed TEXT,
+      notes TEXT,
+      status TEXT,
+      risk TEXT,
+      last_reviewed_date TEXT,
+      digital_calendar_eligible INTEGER NOT NULL DEFAULT 0,
+      calendar_entry_title TEXT,
+      deferred_return_date TEXT,
+      prep_after_event_flag INTEGER NOT NULL DEFAULT 0,
+      immutable_key TEXT UNIQUE,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_calendar_start_date ON slt_calendar (start_date);
+    CREATE INDEX IF NOT EXISTS idx_slt_calendar_archived ON slt_calendar (archived);
+  `);
 
   try {
     rawDb.exec("ALTER TABLE courses ADD COLUMN resource_category TEXT");
@@ -1649,6 +2040,43 @@ async function initDb() {
   // stays in the database.
   try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN deleted_at TEXT"); } catch {}
   try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN deleted_by INTEGER"); } catch {}
+
+  // Gate 1 launch scorecard — economics + qualitative scoring captured at
+  // step 1 ("Create New Product Request") so Management Approval (step 2)
+  // has an objective weighted score/priority to act on instead of a bare
+  // yes/no. All additive/nullable: requests created before this column
+  // migration just show as "not yet scored" until edited. volume_score,
+  // revenue_score, gp_dollar_score, gp_percent_score, weighted_score and
+  // priority_tier are never trusted from the client — npdScoring.js
+  // recomputes them server-side on every create/update.
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN annual_volume_kg REAL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN annual_revenue REAL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN annual_gp_dollars REAL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN gp_percent REAL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN strategic_fit_score INTEGER"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN customer_market_value_score INTEGER"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN complexity_score INTEGER"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN speed_to_market_score INTEGER"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN volume_score INTEGER"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN revenue_score INTEGER"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN gp_dollar_score INTEGER"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN gp_percent_score INTEGER"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN weighted_score REAL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN priority_tier TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN capex_required REAL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN customer_commitment TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN key_strategic_rationale TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN key_risks_comments TEXT"); } catch {}
+  // Channel and Start Date — two more Launch Scorecard workbook columns
+  // (confirmed against the real sheet data on 2026-10-21), added alongside
+  // Plant/Target Launch Date in the unified Gate 1 form. Additive/nullable,
+  // same pattern as above.
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN channel TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN start_date TEXT"); } catch {}
+  // "SLT Decision" — the workbook's own "Decision" column (free text in the
+  // sheet, no dropdown there either; real values seen: SLT Approved, Hold,
+  // Hold need more details). Additive/nullable, same pattern as above.
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN decision TEXT"); } catch {}
 
   // Configurable named approvers per approval type (e.g. management_approval
   // = Adam/Tony/Tom today) so admins can change who approves without a code

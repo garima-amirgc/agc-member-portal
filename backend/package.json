@@ -13,7 +13,9 @@
     "migrate:uploads": "node scripts/migrate-local-uploads-to-spaces.js",
     "test:smtp": "node scripts/test-smtp.js",
     "test:invite": "node scripts/test-invite-email.js",
-    "sync:celebration-dates": "node scripts/sync-profile-celebration-dates.js"
+    "sync:celebration-dates": "node scripts/sync-profile-celebration-dates.js",
+    "import:slt": "node scripts/importSltWorkbooks.js",
+    "import:slt:dry-run": "node scripts/importSltWorkbooks.js --dry-run"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1026.0",

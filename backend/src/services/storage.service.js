@@ -17,6 +17,8 @@ const getPublicPollBannerUrl = (filename) => `/uploads/polls/${filename}`;
 
 const getPublicTicketAttachmentUrl = (filename) => `/uploads/tickets/${filename}`;
 
+const getPublicIncidentAttachmentUrl = (filename) => `/uploads/incidents/${filename}`;
+
 const resolveStoragePath = (filename) => path.join(uploadBase, filename);
 
 function resolveLocalUploadFileUrl(storedUrl) {
@@ -38,6 +40,7 @@ module.exports = {
   getPublicUpcomingImageUrl,
   getPublicPollBannerUrl,
   getPublicTicketAttachmentUrl,
+  getPublicIncidentAttachmentUrl,
   resolveStoragePath,
   resolveLocalUploadFileUrl,
   uploadBase,

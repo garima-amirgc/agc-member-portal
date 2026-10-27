@@ -9,6 +9,25 @@ function grantList(user) {
   return Array.isArray(user?.admin_grants) ? user.admin_grants : [];
 }
 
+// Mirrors backend/src/config/adminGrants.js GRANT_IMPLIED_BY — keep these in
+// sync. CFO continues to imply full (view + edit) Incident Report and SLT
+// Report access since it covered both before those grants existed; edit
+// access always implies view access.
+const GRANT_IMPLIED_BY = {
+  [ADMIN_GRANT_KEYS.UPCOMING_EVENTS]: [ADMIN_GRANT_KEYS.UPCOMING],
+  [ADMIN_GRANT_KEYS.INCIDENT_REPORT_VIEW]: [ADMIN_GRANT_KEYS.CFO, ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT],
+  [ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT]: [ADMIN_GRANT_KEYS.CFO],
+  [ADMIN_GRANT_KEYS.SLT_VIEW]: [ADMIN_GRANT_KEYS.CFO, ADMIN_GRANT_KEYS.SLT_EDIT],
+  [ADMIN_GRANT_KEYS.SLT_EDIT]: [ADMIN_GRANT_KEYS.CFO],
+};
+
+function grantSatisfies(grants, grantKey) {
+  if (grants.includes(grantKey)) return true;
+  const impliedBy = GRANT_IMPLIED_BY[grantKey];
+  if (impliedBy && impliedBy.some((k) => grants.includes(k))) return true;
+  return false;
+}
+
 export function isAdministrator(user) {
   return roleIsAdministrator(user?.role);
 }
@@ -34,21 +53,10 @@ export function hasAdminGrant(user, grantKey) {
   if (isAdminRole) {
     const g = user.admin_grants;
     if (g == null || (Array.isArray(g) && g.length === 0)) return true;
-    if (grants.includes(grantKey)) return true;
-    if (
-      grantKey === ADMIN_GRANT_KEYS.UPCOMING_EVENTS &&
-      grants.includes(ADMIN_GRANT_KEYS.UPCOMING)
-    ) {
-      return true;
-    }
-    return false;
+    return grantSatisfies(grants, grantKey);
   }
 
-  if (grants.includes(grantKey)) return true;
-  if (grantKey === ADMIN_GRANT_KEYS.UPCOMING_EVENTS && grants.includes(ADMIN_GRANT_KEYS.UPCOMING)) {
-    return true;
-  }
-  return false;
+  return grantSatisfies(grants, grantKey);
 }
 
 export function hasAnyAdminGrant(user, grantKeys) {

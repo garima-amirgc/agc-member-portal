@@ -11,6 +11,7 @@ const {
   getPublicUpcomingImageUrl,
   getPublicPollBannerUrl,
   getPublicTicketAttachmentUrl,
+  getPublicIncidentAttachmentUrl,
 } = require("../services/storage.service");
 const {
   isUploadStorageEnabled,
@@ -21,6 +22,7 @@ const {
   uploadUpcomingImageFromDisk,
   uploadPollBannerImageFromDisk,
   uploadTicketAttachmentFromDisk,
+  uploadIncidentAttachmentFromDisk,
   uploadNpdAttachmentFromDisk,
   createPresignedVideoUpload,
   createPresignedDocumentUpload,
@@ -86,6 +88,31 @@ const ticketAttachmentUpload = multer({
       ".webp",
     ]);
     if (!allowed.has(ext)) return cb(new Error("INVALID_TICKET_ATTACHMENT_EXT"));
+    return cb(null, true);
+  },
+});
+
+const incidentAttachmentUpload = multer({
+  storage,
+  limits: { fileSize: (Number(process.env.INCIDENT_UPLOAD_MAX_MB) || 15) * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowed = new Set([
+      ".pdf",
+      ".doc",
+      ".docx",
+      ".ppt",
+      ".pptx",
+      ".xls",
+      ".xlsx",
+      ".txt",
+      ".jpg",
+      ".jpeg",
+      ".png",
+      ".gif",
+      ".webp",
+    ]);
+    if (!allowed.has(ext)) return cb(new Error("INVALID_INCIDENT_ATTACHMENT_EXT"));
     return cb(null, true);
   },
 });
@@ -365,6 +392,66 @@ router.post(
   handleTicketAttachmentUpload
 );
 
+// Incident Report attachments (document or photo) — restricted to whoever
+// can add/edit incidents (cfo or incident_report_edit), not just any
+// authenticated user, since incident reports are a sensitive CFO area.
+router.post(
+  "/incident-attachment",
+  authRequired,
+  requireAdminGrantAny(ADMIN_GRANT_KEYS.CFO, ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT),
+  incidentAttachmentUpload.single("file"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded." });
+    }
+
+    const localPath = req.file.path;
+    const filename = req.file.filename;
+    const original_name = String(req.file.originalname || filename).slice(0, 240);
+
+    try {
+      if (isUploadStorageEnabled()) {
+        const { url: fileUrl, provider } = await uploadIncidentAttachmentFromDisk(localPath, filename);
+        removeTempFile(localPath);
+        return res.json({
+          filename,
+          original_name,
+          file_url: fileUrl,
+          storageProvider: provider,
+        });
+      }
+
+      if (requiresDigitalOceanSpacesForUploads()) {
+        return rejectMissingUploadStorage(res, localPath);
+      }
+
+      const incidentsDir = path.join(uploadDir, "incidents");
+      if (!fs.existsSync(incidentsDir)) fs.mkdirSync(incidentsDir, { recursive: true });
+      const dest = path.join(incidentsDir, filename);
+      try {
+        fs.renameSync(localPath, dest);
+      } catch {
+        fs.copyFileSync(localPath, dest);
+        try {
+          fs.unlinkSync(localPath);
+        } catch {
+        }
+      }
+      return res.json({
+        filename,
+        original_name,
+        file_url: getPublicIncidentAttachmentUrl(filename),
+        storageProvider: "local",
+      });
+    } catch (err) {
+      console.error("Incident attachment upload failed:", err);
+      removeTempFile(localPath);
+      const raw = err.message || String(err) || "Upload failed";
+      return res.status(502).json({ message: `Storage upload failed: ${raw}` });
+    }
+  }
+);
+
 // NPD attachments require cloud storage (Spaces/R2) — no local-disk fallback,
 // since this restricted-access module is meant to be a step toward moving
 // its files into SharePoint, not into another local-only folder.
@@ -538,13 +625,16 @@ router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
       const ticketMax = Number(process.env.IT_TICKET_UPLOAD_MAX_MB) || 15;
+      const incidentMax = Number(process.env.INCIDENT_UPLOAD_MAX_MB) || 15;
       const npdMax = Number(process.env.NPD_UPLOAD_MAX_MB) || 25;
       const u = String(req.originalUrl || req.url || "");
       const maxMb = /ticket-attachment/i.test(u)
         ? ticketMax
-        : /npd-attachment/i.test(u)
-          ? npdMax
-          : Number(process.env.UPLOAD_MAX_MB) || 500;
+        : /incident-attachment/i.test(u)
+          ? incidentMax
+          : /npd-attachment/i.test(u)
+            ? npdMax
+            : Number(process.env.UPLOAD_MAX_MB) || 500;
       return res.status(413).json({ message: `File too large (max ${maxMb} MB).` });
     }
     return res.status(400).json({ message: err.message || "Upload failed." });
@@ -561,6 +651,12 @@ router.use((err, req, res, next) => {
     return res.status(400).json({ message: "Only image files are allowed (jpg, png, gif, webp)." });
   }
   if (err.message === "INVALID_TICKET_ATTACHMENT_EXT") {
+    return res.status(400).json({
+      message:
+        "Allowed: PDF, Word, Excel, PowerPoint, plain text, or images (jpg, png, gif, webp).",
+    });
+  }
+  if (err.message === "INVALID_INCIDENT_ATTACHMENT_EXT") {
     return res.status(400).json({
       message:
         "Allowed: PDF, Word, Excel, PowerPoint, plain text, or images (jpg, png, gif, webp).",

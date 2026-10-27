@@ -100,11 +100,19 @@ export function usePortalNavItems(user) {
       });
     }
 
-    if (hasAdminGrant(user, ADMIN_GRANT_KEYS.CFO)) {
+    if (
+      hasAnyAdminGrant(user, [
+        ADMIN_GRANT_KEYS.CFO,
+        ADMIN_GRANT_KEYS.INCIDENT_REPORT_VIEW,
+        ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT,
+        ADMIN_GRANT_KEYS.SLT_VIEW,
+        ADMIN_GRANT_KEYS.SLT_EDIT,
+      ])
+    ) {
       main.push({
         to: "/cfo",
         icon: IconDocument,
-        label: "CFO",
+        label: "SLT and Incident Tracker",
       });
     }
 

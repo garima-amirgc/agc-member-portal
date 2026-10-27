@@ -317,10 +317,25 @@ function ErrorBanner({ message }) {
   );
 }
 
-function NoteBanner({ children }) {
+// Collapsed by default — click the header to open it. Keeps the screen from
+// being wall-to-wall explanatory text while still surfacing every caveat for
+// whoever wants to read it.
+function NoteBanner({ children, label = "Note" }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="mb-3 rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-      {children}
+    <div className="mb-3 overflow-hidden rounded border border-amber-200 bg-amber-50 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left font-semibold"
+        aria-expanded={open}
+      >
+        <span>ⓘ {label}</span>
+        <span className={`shrink-0 transition ${open ? "rotate-180" : ""}`} aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open ? <div className="border-t border-amber-200/70 px-2.5 py-2 dark:border-amber-900/50">{children}</div> : null}
     </div>
   );
 }

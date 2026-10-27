@@ -1,5 +1,6 @@
 const { db } = require("../config/db");
 const { ADMIN_GRANT_KEYS, hasAdminGrant } = require("../config/adminGrants");
+const npdScoring = require("./npdScoring");
 
 // ─── New Product Development workflow engine ───────────────────────────────
 // All state transitions live here so the rules are enforced once, on the
@@ -530,6 +531,66 @@ async function activateNextStep({ requestId, fromStepNumber, user }) {
   await notifyStepAssignees({ requestId, stepId: nextStep.id, stepDef: nextDef });
 }
 
+// Gate 1 launch scorecard — pulled out of createRequest/submitStep into one
+// place since both need to parse the same raw fields and recompute the same
+// server-side scores. Never trusts a score, weighted_score or priority_tier
+// value the caller might send — those four are always recomputed here from
+// the raw economics + manual scores, exactly like the source workbook's own
+// formulas (see npdScoring.js).
+function buildScorecardFields(source) {
+  const annual_volume_kg = npdScoring.toFiniteNumber(source?.annual_volume_kg);
+  const annual_revenue = npdScoring.toFiniteNumber(source?.annual_revenue);
+  const annual_gp_dollars = npdScoring.toFiniteNumber(source?.annual_gp_dollars);
+  // Accept GP% either as a decimal fraction (0.11) or as a plain percentage
+  // (11) — people naturally type percentages as whole numbers, and only a
+  // fraction would ever legitimately exceed 1 in the "already a fraction"
+  // sense, so anything >1 is treated as a percentage and divided down.
+  let gp_percent = npdScoring.toFiniteNumber(source?.gp_percent);
+  if (gp_percent !== null && gp_percent > 1) gp_percent = gp_percent / 100;
+  const strategic_fit_score = npdScoring.toManualScore(source?.strategic_fit_score);
+  const customer_market_value_score = npdScoring.toManualScore(source?.customer_market_value_score);
+  const complexity_score = npdScoring.toManualScore(source?.complexity_score);
+  const speed_to_market_score = npdScoring.toManualScore(source?.speed_to_market_score);
+  const capex_required = npdScoring.toFiniteNumber(source?.capex_required);
+  const customer_commitment = source?.customer_commitment ? String(source.customer_commitment).trim() : null;
+  const key_strategic_rationale = source?.key_strategic_rationale ? String(source.key_strategic_rationale).trim() : null;
+  const key_risks_comments = source?.key_risks_comments ? String(source.key_risks_comments).trim() : null;
+  const decision = source?.decision ? String(source.decision).trim() : null;
+
+  const computed = npdScoring.computeScorecard({
+    annualVolumeKg: annual_volume_kg,
+    annualRevenue: annual_revenue,
+    annualGpDollars: annual_gp_dollars,
+    gpPercent: gp_percent,
+    strategicFitScore: strategic_fit_score,
+    customerMarketValueScore: customer_market_value_score,
+    complexityScore: complexity_score,
+    speedToMarketScore: speed_to_market_score,
+  });
+
+  return {
+    annual_volume_kg,
+    annual_revenue,
+    annual_gp_dollars,
+    gp_percent,
+    strategic_fit_score,
+    customer_market_value_score,
+    complexity_score,
+    speed_to_market_score,
+    volume_score: computed.volumeScore,
+    revenue_score: computed.revenueScore,
+    gp_dollar_score: computed.gpDollarScore,
+    gp_percent_score: computed.gpPercentScore,
+    weighted_score: computed.weightedScore,
+    priority_tier: computed.priorityTier,
+    capex_required,
+    customer_commitment,
+    key_strategic_rationale,
+    key_risks_comments,
+    decision,
+  };
+}
+
 async function createRequest({ user, body }) {
   const fields = {
     customer_name: String(body?.customer_name || "").trim(),
@@ -537,6 +598,8 @@ async function createRequest({ user, body }) {
     product_name: String(body?.product_name || "").trim(),
     product_description: body?.product_description ? String(body.product_description).trim() : null,
     plant: body?.plant ? String(body.plant).trim() : null,
+    channel: body?.channel ? String(body.channel).trim() : null,
+    start_date: body?.start_date || null,
     requested_launch_date: body?.requested_launch_date || null,
     estimated_volume: body?.estimated_volume ? String(body.estimated_volume).trim() : null,
     packaging_requirement: body?.packaging_requirement ? String(body.packaging_requirement).trim() : null,
@@ -547,6 +610,8 @@ async function createRequest({ user, body }) {
   if (!fields.customer_name) throw httpError(400, "Customer name is required.");
   if (!fields.product_name) throw httpError(400, "Product name is required.");
 
+  const scorecard = buildScorecardFields(body);
+
   const requestNumber = await generateRequestNumber();
   const now = new Date().toISOString();
 
@@ -554,9 +619,13 @@ async function createRequest({ user, body }) {
     .prepare(
       `INSERT INTO npd_requests
         (request_number, customer_name, customer_number, product_name, product_description, sales_rep_id, plant,
-         requested_launch_date, estimated_volume, packaging_requirement, request_type, customer_contact,
-         general_comments, status, current_step, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', 1, ?, ?, ?)`
+         channel, start_date, requested_launch_date, estimated_volume, packaging_requirement, request_type, customer_contact,
+         general_comments, annual_volume_kg, annual_revenue, annual_gp_dollars, gp_percent,
+         strategic_fit_score, customer_market_value_score, complexity_score, speed_to_market_score,
+         volume_score, revenue_score, gp_dollar_score, gp_percent_score, weighted_score, priority_tier,
+         capex_required, customer_commitment, key_strategic_rationale, key_risks_comments, decision,
+         status, current_step, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', 1, ?, ?, ?)`
     )
     .run(
       requestNumber,
@@ -566,12 +635,33 @@ async function createRequest({ user, body }) {
       fields.product_description,
       user.id,
       fields.plant,
+      fields.channel,
+      fields.start_date,
       fields.requested_launch_date,
       fields.estimated_volume,
       fields.packaging_requirement,
       fields.request_type,
       fields.customer_contact,
       fields.general_comments,
+      scorecard.annual_volume_kg,
+      scorecard.annual_revenue,
+      scorecard.annual_gp_dollars,
+      scorecard.gp_percent,
+      scorecard.strategic_fit_score,
+      scorecard.customer_market_value_score,
+      scorecard.complexity_score,
+      scorecard.speed_to_market_score,
+      scorecard.volume_score,
+      scorecard.revenue_score,
+      scorecard.gp_dollar_score,
+      scorecard.gp_percent_score,
+      scorecard.weighted_score,
+      scorecard.priority_tier,
+      scorecard.capex_required,
+      scorecard.customer_commitment,
+      scorecard.key_strategic_rationale,
+      scorecard.key_risks_comments,
+      scorecard.decision,
       user.id,
       now,
       now
@@ -592,7 +682,7 @@ async function createRequest({ user, body }) {
         def.name,
         Array.isArray(def.department) ? def.department.join(",") : def.department || null,
         isFirst ? "completed" : "locked",
-        isFirst ? JSON.stringify(fields) : null,
+        isFirst ? JSON.stringify({ ...fields, ...scorecard }) : null,
         isFirst ? now : null,
         isFirst ? now : null,
         isFirst ? now : null
@@ -651,6 +741,8 @@ async function submitStep({ requestId, stepNumber, user, data }) {
       product_name: String(data?.product_name || "").trim(),
       product_description: data?.product_description ? String(data.product_description).trim() : null,
       plant: data?.plant ? String(data.plant).trim() : null,
+      channel: data?.channel ? String(data.channel).trim() : null,
+      start_date: data?.start_date || null,
       requested_launch_date: data?.requested_launch_date || null,
       estimated_volume: data?.estimated_volume ? String(data.estimated_volume).trim() : null,
       packaging_requirement: data?.packaging_requirement ? String(data.packaging_requirement).trim() : null,
@@ -661,19 +753,29 @@ async function submitStep({ requestId, stepNumber, user, data }) {
     if (!requestFieldsUpdate.customer_name) throw httpError(400, "Customer name is required.");
     if (!requestFieldsUpdate.product_name) throw httpError(400, "Product name is required.");
   }
+  // Same resubmit path recomputes the Gate 1 scorecard from whatever
+  // economics/scores came back with this submission, exactly as createRequest
+  // does — so an approver who sends step 1 back for changes sees an
+  // up-to-date Weighted Score/Priority once it's resubmitted, not the
+  // original numbers.
+  const scorecardUpdate = stepDef.key === "new_product_request" ? buildScorecardFields(data) : null;
 
   const now = new Date().toISOString();
   const isResubmit = step.status === "changes_requested" || step.status === "rejected";
   await db
     .prepare("UPDATE npd_steps SET status = 'completed', data_json = ?, assigned_to = ?, submitted_at = ?, completed_at = ? WHERE id = ?")
-    .run(JSON.stringify(data || {}), user.id, now, now, step.id);
+    .run(JSON.stringify({ ...(data || {}), ...(scorecardUpdate || {}) }), user.id, now, now, step.id);
 
   if (requestFieldsUpdate) {
     await db
       .prepare(
         `UPDATE npd_requests SET customer_name = ?, customer_number = ?, product_name = ?, product_description = ?, plant = ?,
-          requested_launch_date = ?, estimated_volume = ?, packaging_requirement = ?, request_type = ?, customer_contact = ?,
-          general_comments = ?, updated_at = ? WHERE id = ?`
+          channel = ?, start_date = ?, requested_launch_date = ?, estimated_volume = ?, packaging_requirement = ?, request_type = ?, customer_contact = ?,
+          general_comments = ?, annual_volume_kg = ?, annual_revenue = ?, annual_gp_dollars = ?, gp_percent = ?,
+          strategic_fit_score = ?, customer_market_value_score = ?, complexity_score = ?, speed_to_market_score = ?,
+          volume_score = ?, revenue_score = ?, gp_dollar_score = ?, gp_percent_score = ?, weighted_score = ?, priority_tier = ?,
+          capex_required = ?, customer_commitment = ?, key_strategic_rationale = ?, key_risks_comments = ?, decision = ?,
+          updated_at = ? WHERE id = ?`
       )
       .run(
         requestFieldsUpdate.customer_name,
@@ -681,12 +783,33 @@ async function submitStep({ requestId, stepNumber, user, data }) {
         requestFieldsUpdate.product_name,
         requestFieldsUpdate.product_description,
         requestFieldsUpdate.plant,
+        requestFieldsUpdate.channel,
+        requestFieldsUpdate.start_date,
         requestFieldsUpdate.requested_launch_date,
         requestFieldsUpdate.estimated_volume,
         requestFieldsUpdate.packaging_requirement,
         requestFieldsUpdate.request_type,
         requestFieldsUpdate.customer_contact,
         requestFieldsUpdate.general_comments,
+        scorecardUpdate.annual_volume_kg,
+        scorecardUpdate.annual_revenue,
+        scorecardUpdate.annual_gp_dollars,
+        scorecardUpdate.gp_percent,
+        scorecardUpdate.strategic_fit_score,
+        scorecardUpdate.customer_market_value_score,
+        scorecardUpdate.complexity_score,
+        scorecardUpdate.speed_to_market_score,
+        scorecardUpdate.volume_score,
+        scorecardUpdate.revenue_score,
+        scorecardUpdate.gp_dollar_score,
+        scorecardUpdate.gp_percent_score,
+        scorecardUpdate.weighted_score,
+        scorecardUpdate.priority_tier,
+        scorecardUpdate.capex_required,
+        scorecardUpdate.customer_commitment,
+        scorecardUpdate.key_strategic_rationale,
+        scorecardUpdate.key_risks_comments,
+        scorecardUpdate.decision,
         now,
         requestId
       );

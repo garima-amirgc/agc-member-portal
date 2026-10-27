@@ -10,6 +10,7 @@ import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import NpdStepper from "../components/npd/NpdStepper";
 import NpdStepActionPanel from "../components/npd/NpdStepActionPanel";
 import { NPD_REQUEST_STATUS_LABELS, npdRequestStatusBadgeClass } from "../constants/npd";
+import { npdPriorityBadgeClass } from "../utils/npdScoring";
 
 const FIELD = "rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900";
 
@@ -84,9 +85,17 @@ export default function NpdRequestDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title={`${request.request_number} — ${request.product_name}`}
-          subtitle={`${request.customer_name}${request.customer_number ? ` (#${request.customer_number})` : ""}`}
+          subtitle={request.customer_name}
         />
         <div className="flex items-center gap-2">
+          {request.priority_tier ? (
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${npdPriorityBadgeClass(request.priority_tier)}`}
+              title={`Gate 1 Weighted Score: ${request.weighted_score}`}
+            >
+              {request.priority_tier} ({request.weighted_score})
+            </span>
+          ) : null}
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${npdRequestStatusBadgeClass(request.status)}`}>
             {NPD_REQUEST_STATUS_LABELS[request.status] || request.status}
           </span>
@@ -168,35 +177,88 @@ export default function NpdRequestDetailPage() {
 
 function OverviewTab({ request }) {
   const rows = [
-    ["Request type", request.request_type === "existing_product_modification" ? "Existing product modification" : "New product"],
+    ["Channel", request.channel || "—"],
     ["Plant", request.plant || "—"],
-    ["Requested launch date", request.requested_launch_date || "—"],
-    ["Estimated volume", request.estimated_volume || "—"],
-    ["Packaging requirement", request.packaging_requirement || "—"],
-    ["Customer contact", request.customer_contact || "—"],
+    ["Start date", request.start_date || "—"],
+    ["Target launch date", request.requested_launch_date || "—"],
     ["Created by", `${request.created_by_name || "—"} on ${new Date(request.created_at).toLocaleDateString()}`],
     ["Current step", `${request.current_step} of 13`],
   ];
   return (
+    <div className="space-y-4">
+      <section className="card p-4 sm:p-6">
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+          {rows.map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</dt>
+              <dd className="text-sm text-slate-800 dark:text-slate-100">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+      <ScorecardSummary request={request} />
+    </div>
+  );
+}
+
+// Gate 1 launch scorecard — shown on every request's Overview tab so
+// Management Approval (and anyone else looking at the request) sees the
+// objective weighted score/priority alongside the economics and qualitative
+// scores that produced it, not just a bare number. Shows a "not yet scored"
+// state rather than hiding itself, as a nudge that step 1 can be edited to
+// fill this in.
+function ScorecardSummary({ request }) {
+  const economics = [
+    ["Annual Volume (kg)", request.annual_volume_kg],
+    ["Annual Revenue ($)", request.annual_revenue],
+    ["Annual GP$ ($)", request.annual_gp_dollars],
+    ["GP%", request.gp_percent != null ? `${Math.round(request.gp_percent * 1000) / 10}%` : null],
+  ];
+  const qualitative = [
+    ["Strategic Fit", request.strategic_fit_score],
+    ["Customer / Market Value", request.customer_market_value_score],
+    ["Complexity", request.complexity_score],
+    ["Speed to Market", request.speed_to_market_score],
+  ];
+  const commercial = [
+    ["CapEx Required ($)", request.capex_required],
+    ["Customer Commitment", request.customer_commitment],
+    ["SLT Decision", request.decision],
+  ];
+
+  return (
     <section className="card p-4 sm:p-6">
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-        {rows.map(([label, value]) => (
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-[#000000] dark:text-white">Gate 1 — Launch Scorecard</h2>
+        {request.weighted_score != null ? (
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{request.weighted_score}</span>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${npdPriorityBadgeClass(request.priority_tier)}`}>{request.priority_tier}</span>
+          </div>
+        ) : (
+          <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Not yet scored — edit step 1 to fill this in
+          </span>
+        )}
+      </div>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[...economics, ...qualitative, ...commercial].map(([label, value]) => (
           <div key={label}>
             <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</dt>
-            <dd className="text-sm text-slate-800 dark:text-slate-100">{value}</dd>
+            <dd className="text-sm text-slate-800 dark:text-slate-100">{value ?? "—"}</dd>
           </div>
         ))}
       </dl>
-      {request.product_description ? (
+      {request.key_strategic_rationale ? (
         <div className="mt-4">
-          <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Product description</dt>
-          <dd className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-100">{request.product_description}</dd>
+          <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Key Strategic Rationale</dt>
+          <dd className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-100">{request.key_strategic_rationale}</dd>
         </div>
       ) : null}
-      {request.general_comments ? (
+      {request.key_risks_comments ? (
         <div className="mt-4">
-          <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">General comments</dt>
-          <dd className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-100">{request.general_comments}</dd>
+          <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Key Risks / Comments</dt>
+          <dd className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-100">{request.key_risks_comments}</dd>
         </div>
       ) : null}
     </section>

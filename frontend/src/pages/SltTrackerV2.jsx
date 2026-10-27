@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useSearchParams } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { isAdministrator } from "../utils/adminAccess";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import ActionTrackerBoard from "../components/ActionTrackerBoard";
@@ -22,26 +26,28 @@ import ActionTrackerBoard from "../components/ActionTrackerBoard";
  * vocabulary isn't forced into a fixed list).
  *
  * Step 3 (this one): the workbook's other sheets, nested under Master
- * Calendar as sub-tabs (Calendar / Weekly Review / Lists / Read Me) —
- * they're all facets of the same workbook, not separate boards:
+ * Calendar as sub-tabs (Calendar / Lists / Read Me) — they're all facets
+ * of the same workbook, not separate boards:
  *   - Lists: the workbook's reference/lookup sheet. Shown read-only here;
  *     its Categories/Executives/Months values already power the
  *     suggestion dropdowns on the Add/Edit form above. Its Statuses and
  *     Risk Levels columns aren't wired to anything — the Master Calendar
  *     sheet itself has no Status or Risk column, so there's nothing in
  *     the data for those two lists to apply to.
- *   - Weekly Review: the source sheet's own formula is broken in the
- *     uploaded file — `=FILTER('Master Calendar'!A3:M104,
- *     'Master Calendar'!#REF!="Include", ...)` — the column it filters on
- *     was deleted from Master Calendar at some point, so Excel shows
- *     #REF! there too, not just here. This view is a reconstructed
- *     substitute (events overdue, due in the next 14 days, or with prep
- *     overdue/due in 14 days), computed live from the real calendar data,
- *     not a port of the broken formula.
  *   - Read Me: shown as-is. It references two sheets ("Monthly Exec
  *     View", "Calendar Export") that don't exist in the uploaded
- *     workbook — only Read Me, Master Calendar, Weekly Review, and Lists
- *     are actually present — flagged inline rather than silently ignored.
+ *     workbook — flagged inline rather than silently ignored.
+ * Lists and Read Me are admin-only (see ADMIN_ONLY_SUB_TAB_KEYS below) —
+ * everyone else just sees Calendar.
+ *
+ * Step 3b: Master Calendar originally also had its own Weekly Review
+ * sub-tab (a reconstruction of the source sheet's broken
+ * `=FILTER('Master Calendar'!A3:M104, 'Master Calendar'!#REF!="Include",
+ * ...)` formula — the column it filtered on was deleted from Master
+ * Calendar at some point, so Excel shows #REF! there too). It was removed
+ * by explicit request, leaving just Calendar / Lists / Read Me. (Action
+ * Tracker Executive Board has its own, unrelated Weekly Review sub-tab —
+ * see components/ActionTrackerBoard.jsx — which this did not touch.)
  *
  * Step 4 (this one): Action Tracker Executive Board is now built out too
  * — see components/ActionTrackerBoard.jsx for the full sub-tab set
@@ -56,8 +62,8 @@ import ActionTrackerBoard from "../components/ActionTrackerBoard";
  * see the DB config for the full list.
  */
 const SLT_TRACKER_VIEWS = [
-  { key: "action_tracker", label: "Action Tracker Executive Board" },
   { key: "master_calendar", label: "Master Calendar" },
+  { key: "action_tracker", label: "Action Tracker Executive Board" },
 ];
 
 const MONTH_SUGGESTIONS = [
@@ -142,18 +148,19 @@ const READ_ME_ITEMS = [
   },
 ];
 
+// Form fields are kept in lockstep with the table columns on purpose — the
+// workbook also had Month/Prep Start/Prep Deadline/Materials Needed/Notes
+// fields, but those were dropped from the table earlier, and per explicit
+// request the Add/Edit form should only collect what the table displays.
+// "Created by" isn't here because it's never a form field — createCalendarEvent
+// sets it server-side from the logged-in user (see sltCalendar.service.js).
 const CALENDAR_FIELDS = [
-  { key: "month", label: "Month", type: "suggest", suggestions: MONTH_SUGGESTIONS },
   { key: "event_date", label: "Event Date", type: "event_date", required: true },
-  { key: "event_title", label: "Event / Deadline", type: "text", required: true },
-  { key: "category", label: "Category", type: "suggest", suggestions: CATEGORY_SUGGESTIONS },
-  { key: "executives", label: "Executive(s)", type: "suggest", suggestions: EXECUTIVE_SUGGESTIONS },
+  { key: "event_title", label: "Event", type: "text", required: true },
+  { key: "category", label: "Category", type: "select_other", suggestions: CATEGORY_SUGGESTIONS },
+  { key: "executives", label: "Executive(s)", type: "select_other", suggestions: EXECUTIVE_SUGGESTIONS },
   { key: "owner_lead", label: "Owner / Lead", type: "text" },
   { key: "executive_action_required", label: "Executive Action Required", type: "text" },
-  { key: "prep_start_date", label: "Prep Start Date", type: "date" },
-  { key: "prep_deadline", label: "Prep Deadline", type: "date" },
-  { key: "materials_needed", label: "Materials Needed", type: "textarea" },
-  { key: "notes", label: "Notes", type: "textarea" },
 ];
 
 function fieldDefault(type) {
@@ -207,7 +214,26 @@ function fmtEventDate(raw, isTextRange) {
 // Same visual language as the IT Ticket Board (ItTicketsMonitorTable.jsx):
 // colored pill badges, a gradient stat header, and expandable row-cards
 // instead of a wide table — so nothing here ever needs horizontal scroll.
-const PILL_BASE = "inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide";
+// No "truncate" here on purpose — category/executive pills wrap instead of
+// clipping, same "nothing gets cut off" rule as the rest of this board.
+// rounded-md, not rounded-full/capsule: a fully-rounded pill looks fine for
+// one short word, but stretches into an ugly lumpy blob once text wraps to
+// two or three lines (which is exactly what a long "CEO / CFO / VP OPS /
+// PRESIDENT" string did) — see PillGroup below, which also avoids that by
+// splitting a "/"-separated value into several short individual chips
+// instead of one long wrapped one.
+// Request: "why Operations is going out of the green box" — all-caps text
+// with the browser's default line-height sits slightly toward the top of
+// its own line box (caps have no descenders, but line-height still reserves
+// descender space below the baseline), so a pill with tight symmetric
+// padding (py-0.5 = 2px) reads as having almost no margin above the letters
+// and more below — against the Category/Executive(s) columns' new tinted
+// cell background (see calBodyColBg) that imbalance became visible as text
+// "spilling out" of the pill. Fixed with `leading-none` (collapses the line
+// box down to the font's own cap height, removing the reserved descender
+// gap) plus a bit more padding all around, so there's a clear, even margin
+// between the text and the pill's rounded edge on every side.
+const PILL_BASE = "inline-flex min-w-0 max-w-full items-center whitespace-normal break-words rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide leading-none";
 
 const PILL_PALETTE = [
   "bg-sky-100 text-sky-900 ring-1 ring-sky-200 dark:bg-sky-950/50 dark:text-sky-200 dark:ring-sky-800",
@@ -228,6 +254,45 @@ function pillClassFor(text) {
   let hash = 0;
   for (let i = 0; i < s.length; i += 1) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
   return PILL_PALETTE[hash % PILL_PALETTE.length];
+}
+
+// Category and Executive(s) are both sometimes a single value ("FSQA") and
+// sometimes a "/"-separated list ("CEO / CFO / VP OPS / PRESIDENT"). A list
+// rendered as one pill has to wrap its own text across multiple lines,
+// which looks like a stretched blob (reported — see the PILL_BASE comment
+// above). Splitting it into one short chip per value instead, wrapping at
+// the chip level via flex-wrap, reads as a clean tag group no matter how
+// many values there are. All chips for one cell share a color (hashed off
+// the original full string) so they still read as one field at a glance;
+// a different row with different executives gets a different color.
+function splitMultiValue(text) {
+  return String(text || "")
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// A flat gray style, no hashed color — used for Category per explicit
+// request ("you didn't remove light green and blue color from the category
+// background?" — the colored pill fill itself was what read as "background
+// color", not the table cell behind it, which was already made neutral in
+// an earlier fix). Executive(s) keeps the hashed color palette; only
+// Category is affected by the `neutral` prop below.
+const PILL_NEUTRAL = "bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-white/10 dark:text-slate-200 dark:ring-white/15";
+
+function PillGroup({ text, neutral = false }) {
+  const parts = splitMultiValue(text);
+  if (parts.length === 0) return <span className="text-slate-400">—</span>;
+  const cls = neutral ? PILL_NEUTRAL : pillClassFor(text);
+  return (
+    <div className="flex min-w-0 flex-wrap gap-1">
+      {parts.map((part, i) => (
+        <span key={`${part}-${i}`} className={`${PILL_BASE} ${cls}`}>
+          {part}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 // Overdue (red) / due within 14 days (amber) / later or unknown (slate) —
@@ -259,154 +324,330 @@ function DetailField({ label, value, className = "" }) {
   );
 }
 
+// Small round icon button — used for the always-visible Edit/Delete
+// controls on each event (table row and card), so a user with access never
+// has to expand a row first to find them.
+function IconButton({ onClick, label, tone = "neutral", children }) {
+  const toneClass =
+    tone === "danger"
+      ? "text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+      : "text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition ${toneClass}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+const EDIT_ICON = (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const DELETE_ICON = (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 6h18" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+  </svg>
+);
+
+// Request: "design this table just like it ticket board table" — this is the
+// IT Ticket Board's TicketRowActions, same stacked-text-button card (instead
+// of the round icon buttons used before), in place in the Master Calendar
+// table's Actions column. Row clicks elsewhere toggle the expand panel (see
+// CalendarEventTableRow's <tr onClick>), so both buttons stop propagation.
+const CAL_ACTION_BTN_STACK =
+  "flex h-7 w-full items-center justify-center whitespace-nowrap px-2 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B3EAF]/35 disabled:opacity-50";
+
+function CalendarRowActions({ onEdit, onDelete }) {
+  return (
+    <div
+      className="flex w-full max-w-[5.25rem] flex-col divide-y divide-slate-200/90 overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm dark:divide-white/10 dark:border-white/10 dark:bg-[#1a1a1a]"
+      role="group"
+      aria-label="Event actions"
+    >
+      <button
+        type="button"
+        className={`${CAL_ACTION_BTN_STACK} text-[#0B3EAF] hover:bg-[#0B3EAF]/5 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/10`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit();
+        }}
+      >
+        Edit
+      </button>
+      <button
+        type="button"
+        className={`${CAL_ACTION_BTN_STACK} text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+      >
+        Delete
+      </button>
+    </div>
+  );
+}
+
+// A professional confirm dialog, in place of the browser's native
+// window.confirm() — used before any irreversible action (currently just
+// permanently deleting a calendar event).
+function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger = false, busy = false, onConfirm, onCancel }) {
+  // Portaled to document.body: this page's own root wrapper is the shared
+  // `.card` class, which carries Tailwind's `transition` utility. That
+  // utility's default transition-property list includes transform/filter/
+  // backdrop-filter, which makes Chrome/Firefox treat `.card` as a
+  // containing block for `position: fixed` descendants instead of the
+  // viewport — so without the portal this dialog renders clipped/offset
+  // relative to the scrolled page instead of as a true full-screen overlay.
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
+      <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h3>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{message}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <GhostButton onClick={onCancel} disabled={busy}>
+            Cancel
+          </GhostButton>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 ${
+              danger ? "bg-red-600 hover:bg-red-700" : "bg-[#0B3EAF] hover:bg-[#0a3399]"
+            }`}
+          >
+            {busy ? "Working…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // One expandable card per event — collapsed shows date, title, and quick
 // badges; expanded reveals the rest of the fields in a label/value grid.
 // Never scrolls horizontally, unlike a wide multi-column table.
-function CalendarEventCard({ event, canEdit, onEdit, expanded, onToggle }) {
+function CalendarEventCard({ event, onEdit, onDelete, expanded, onToggle, highlighted }) {
   const ev = event;
+  const canEdit = !!ev.can_edit;
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-[#0B3EAF]/30 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#A7D344]/30">
-      <button type="button" onClick={onToggle} className="flex w-full items-start gap-3 px-4 py-3 text-left" aria-expanded={expanded}>
-        <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
-          <span className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
-            {fmtEventDate(ev.event_date, ev.is_text_date_range)}
-          </span>
-          {ev.month ? <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{ev.month}</span> : null}
-        </div>
+    <div
+      id={`cal-event-${ev.id}`}
+      className={`overflow-hidden rounded-xl border bg-white shadow-sm transition hover:border-[#0B3EAF]/30 dark:bg-slate-900 dark:hover:border-[#A7D344]/30 ${
+        highlighted
+          ? "border-[#0B3EAF] ring-2 ring-[#0B3EAF]/40 dark:border-[#A7D344] dark:ring-[#A7D344]/40"
+          : "border-slate-200 dark:border-slate-700"
+      }`}
+    >
+      <div className="flex w-full items-start gap-2 px-4 py-3">
+        <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-3 text-left" aria-expanded={expanded}>
+          <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
+            <span className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
+              {fmtEventDate(ev.event_date, ev.is_text_date_range)}
+            </span>
+            {ev.month ? <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{ev.month}</span> : null}
+          </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1 text-sm font-semibold text-slate-900 dark:text-white">{ev.event_title}</div>
-            <span className={`shrink-0 text-xs text-slate-400 transition ${expanded ? "rotate-180" : ""}`} aria-hidden="true">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-slate-900 dark:text-white">{ev.event_title}</div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {ev.category ? <PillGroup text={ev.category} neutral /> : null}
+              {ev.executives ? <PillGroup text={ev.executives} /> : null}
+              <span className={`${PILL_BASE} ${dueBadgeClass(ev.days_until_event)}`}>{fmtDays(ev.days_until_event)}</span>
+            </div>
+            {ev.owner_lead ? (
+              <div className="mt-1.5 whitespace-normal break-words text-xs text-slate-500 dark:text-slate-400">Owner: {ev.owner_lead}</div>
+            ) : null}
+            {ev.executive_action_required ? (
+              <div className="mt-0.5 whitespace-normal break-words text-xs text-slate-500 dark:text-slate-400">
+                Action: {ev.executive_action_required}
+              </div>
+            ) : null}
+          </div>
+        </button>
+
+        <div className="flex shrink-0 items-center gap-0.5 pt-0.5">
+          {canEdit ? (
+            <>
+              <IconButton label="Edit event" onClick={() => onEdit(ev)}>
+                {EDIT_ICON}
+              </IconButton>
+              <IconButton label="Delete event" tone="danger" onClick={() => onDelete(ev)}>
+                {DELETE_ICON}
+              </IconButton>
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={expanded ? "Collapse" : "Expand"}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <span className={`inline-block text-xs transition ${expanded ? "rotate-180" : ""}`} aria-hidden="true">
               ▾
             </span>
-          </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {ev.category ? <span className={`${PILL_BASE} ${pillClassFor(ev.category)}`}>{ev.category}</span> : null}
-            {ev.executives ? <span className={`${PILL_BASE} ${pillClassFor(ev.executives)}`}>{ev.executives}</span> : null}
-            <span className={`${PILL_BASE} ${dueBadgeClass(ev.days_until_event)}`}>{fmtDays(ev.days_until_event)}</span>
-          </div>
-          {ev.owner_lead ? (
-            <div className="mt-1.5 truncate text-xs text-slate-500 dark:text-slate-400">Owner: {ev.owner_lead}</div>
-          ) : null}
+          </button>
         </div>
-      </button>
+      </div>
 
       {expanded ? (
         <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
           <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="Owner / Lead" value={ev.owner_lead} />
             <DetailField label="Executive Action Required" value={ev.executive_action_required} />
-            <DetailField
-              label="Prep Window"
-              value={
-                ev.prep_start_date || ev.prep_deadline
-                  ? `${fmtDate(ev.prep_start_date)} → ${fmtDate(ev.prep_deadline)}${ev.prep_deadline ? ` (${fmtDays(ev.prep_days_left)})` : ""}`
-                  : ""
-              }
-            />
-            <DetailField label="Materials Needed" value={ev.materials_needed} />
-            <DetailField label="Notes" value={ev.notes} className="sm:col-span-2" />
+            <DetailField label="Created by" value={ev.created_by_name} />
           </div>
-          {canEdit ? (
-            <div className="mt-3 flex justify-end">
-              <GhostButton onClick={() => onEdit(ev)}>Edit</GhostButton>
-            </div>
-          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-const TH = "px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300";
-const TD = "px-3 py-3 align-top text-xs text-slate-700 dark:text-slate-200 overflow-hidden";
+// Same per-column tinted-header / tinted-zebra-row look as the IT Ticket
+// Board (ItTicketsMonitorTable.jsx's thClass/tdClass/HEADER_COL_BG/bodyColBg/
+// vline) — each column gets its own faint color family, alternating with row
+// zebra, plus a thin divider between columns. An earlier pass here had
+// dropped the per-column tint in favor of flat zebra only, over concern that
+// a short cell (e.g. a single-word Category) would sit in a tall mostly-empty
+// colored block next to a long wrapped Executive(s) cell — per explicit
+// request to match the IT Ticket Board look again, that's reinstated below.
+const CAL_TH_BASE = "px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300";
+const CAL_TD_BASE = "px-3 py-3 align-top text-xs leading-relaxed text-slate-700 dark:text-slate-200";
 
-function zebra(rowIdx) {
-  return rowIdx % 2 === 1 ? "bg-slate-50 dark:bg-white/[0.03]" : "bg-white dark:bg-transparent";
+function calVline(isLast) {
+  return isLast ? "" : "border-r border-slate-200 dark:border-slate-600/55";
 }
 
-// Desktop table view — real rows and columns in the source workbook's
-// order (Month, Event Date, Event/Deadline, Category, Executive(s), Owner,
-// Days Until Event, Prep Days Left), sized with table-fixed % widths and
-// truncation so it always fits the viewport width — no horizontal scroll.
-// The remaining fields (Executive Action Required, Prep Window, Materials
-// Needed, Notes) are in the same expand-a-row panel the mobile card uses,
-// not crammed into more columns.
-function CalendarEventTableRow({ event, rowIdx, canEdit, onEdit, expanded, onToggle }) {
+// One color family per column, same approach as the IT Ticket Board's
+// HEADER_COL_BG map.
+// Request: "if you are not able to fix this background color then remove
+// them from the category" — the tinted Category header/cell background kept
+// reading as the pill's green/blue "spilling out" of its box even after the
+// padding fix, so Category is reverted to the plain neutral header color
+// (same gray every other untinted column used before this per-column
+// scheme existed) rather than keep chasing it.
+const CAL_HEADER_COL_BG = {
+  date: "bg-slate-200/70 dark:bg-slate-800",
+  title: "bg-[rgba(11,62,175,0.06)] dark:bg-[rgba(11,62,175,0.18)]",
+  category: "bg-slate-100/85 dark:bg-slate-800/70",
+  executives: "bg-violet-100/45 dark:bg-violet-950/30",
+  owner: "bg-emerald-100/55 dark:bg-emerald-950/35",
+  action: "bg-sky-100/55 dark:bg-sky-950/35",
+  createdBy: "bg-slate-200/55 dark:bg-slate-800/80",
+  actions: "bg-slate-200/60 dark:bg-slate-800",
+};
+
+// Same column, one shade lighter, alternating by row (zebra) — the IT
+// Ticket Board's bodyColBg, with the column keys renamed to the Calendar's.
+function calBodyColBg(col, rowIdx) {
+  const alt = rowIdx % 2 === 1;
+  const map = {
+    date: alt ? "bg-slate-200/45 dark:bg-slate-800/70" : "bg-slate-100/80 dark:bg-slate-800/45",
+    title: alt ? "bg-[#eef3fa] dark:bg-[#1e2433]" : "bg-white dark:bg-[#141414]",
+    category: alt ? "bg-slate-50 dark:bg-white/[0.03]" : "bg-white dark:bg-transparent",
+    executives: alt ? "bg-violet-50/80 dark:bg-violet-950/18" : "bg-violet-50/40 dark:bg-violet-950/10",
+    owner: alt ? "bg-emerald-50/90 dark:bg-emerald-950/20" : "bg-emerald-50/50 dark:bg-emerald-950/10",
+    action: alt ? "bg-sky-50/95 dark:bg-sky-950/20" : "bg-sky-50/55 dark:bg-sky-950/10",
+    createdBy: alt ? "bg-slate-100 dark:bg-slate-800/55" : "bg-slate-50 dark:bg-slate-800/35",
+    actions: alt ? "bg-[#eef3fa] dark:bg-[#1e2433]" : "bg-white dark:bg-[#141414]",
+  };
+  return `${map[col] || (alt ? "bg-[#eef3fa]" : "bg-white")} transition-colors group-hover:brightness-[0.97] dark:group-hover:brightness-110`;
+}
+
+function calThClass(col, extra = "", isLast = false) {
+  return [CAL_TH_BASE, CAL_HEADER_COL_BG[col] || "", calVline(isLast), extra].filter(Boolean).join(" ");
+}
+
+function calTdClass(col, rowIdx, extra = "", isLast = false) {
+  return [CAL_TD_BASE, calBodyColBg(col, rowIdx), calVline(isLast), extra].filter(Boolean).join(" ");
+}
+
+// Desktop table view — columns match the Master Calendar sheet exactly:
+// Event Date, Event/Deadline, Category, Executive(s), Owner/Lead, Executive
+// Action Required, plus a "Created by" column showing whoever raised the
+// event, and an always-visible Edit/Delete pair (no need to expand the row
+// first) for anyone with access to this event. Same tinted-column /
+// zebra-row look as the IT Ticket Board. Sized with table-fixed % widths,
+// but — unlike the IT board — nothing here truncates or clamps: every
+// cell wraps (whitespace-normal break-words), so a row simply grows
+// taller to fit a long value instead of ever cutting text off. The
+// expand-a-row panel is kept as a quick read-only summary of the same
+// four text fields (handy since nothing truncates, there's no longer a
+// hidden-text reason to open it, but it's harmless to leave in place).
+function CalendarEventTableRow({ event, rowIdx, onEdit, onDelete, expanded, onToggle, highlighted }) {
   const ev = event;
+  const canEdit = !!ev.can_edit;
   return (
     <>
-      <tr className={`${zebra(rowIdx)} cursor-pointer border-b border-slate-200/80 transition hover:brightness-[0.98] dark:border-slate-700/50 dark:hover:brightness-110`} onClick={onToggle}>
-        <td className={`${TD} w-[13%]`}>
-          <div className="font-semibold leading-snug text-slate-800 dark:text-slate-100">{fmtEventDate(ev.event_date, ev.is_text_date_range)}</div>
-          {ev.month ? <div className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{ev.month}</div> : null}
-        </td>
-        <td className={`${TD} w-[20%]`}>
-          <div className="line-clamp-2 font-semibold leading-snug text-slate-900 dark:text-white" title={ev.event_title}>
-            {ev.event_title}
+      <tr
+        id={`cal-event-${ev.id}`}
+        className={`group cursor-pointer border-b transition-colors ${
+          highlighted
+            ? "border-[#0B3EAF]/60 bg-[#0B3EAF]/5 ring-1 ring-inset ring-[#0B3EAF]/40 dark:border-[#A7D344]/60 dark:bg-[#A7D344]/10 dark:ring-[#A7D344]/40"
+            : "border-slate-200/80 dark:border-slate-700/50"
+        }`}
+        onClick={onToggle}
+      >
+        <td className={calTdClass("date", rowIdx, "w-[11%]")}>
+          <div className="whitespace-normal break-words font-semibold leading-snug text-slate-800 dark:text-slate-100">
+            {fmtEventDate(ev.event_date, ev.is_text_date_range)}
           </div>
         </td>
-        <td className={`${TD} w-[12%]`}>
-          {ev.category ? (
-            <span className={`${PILL_BASE} ${pillClassFor(ev.category)}`} title={ev.category}>
-              {ev.category}
+        <td className={calTdClass("title", rowIdx, "w-[20%]")}>
+          <div className="whitespace-normal break-words font-semibold leading-snug text-slate-900 dark:text-white">{ev.event_title}</div>
+        </td>
+        <td className={calTdClass("category", rowIdx, "w-[10%]")}>
+          <PillGroup text={ev.category} neutral />
+        </td>
+        <td className={calTdClass("executives", rowIdx, "w-[10%]")}>
+          <PillGroup text={ev.executives} />
+        </td>
+        <td className={calTdClass("owner", rowIdx, "w-[10%] whitespace-normal break-words")}>{ev.owner_lead || "—"}</td>
+        <td className={calTdClass("action", rowIdx, "w-[15%] whitespace-normal break-words")}>
+          {ev.executive_action_required || "—"}
+        </td>
+        <td className={calTdClass("createdBy", rowIdx, "w-[10%] whitespace-normal break-words")}>
+          {ev.created_by_name || "—"}
+        </td>
+        <td className={calTdClass("actions", rowIdx, "w-[14%]", true)}>
+          <div className="flex items-center justify-end gap-1.5">
+            {canEdit ? (
+              <CalendarRowActions
+                onEdit={() => onEdit(ev)}
+                onDelete={() => onDelete(ev)}
+              />
+            ) : (
+              <span className="text-xs text-slate-400">—</span>
+            )}
+            <span className={`inline-block px-1 text-slate-400 transition ${expanded ? "rotate-180" : ""}`} aria-hidden="true">
+              ▾
             </span>
-          ) : (
-            <span className="text-slate-400">—</span>
-          )}
-        </td>
-        <td className={`${TD} w-[12%]`}>
-          {ev.executives ? (
-            <span className={`${PILL_BASE} ${pillClassFor(ev.executives)}`} title={ev.executives}>
-              {ev.executives}
-            </span>
-          ) : (
-            <span className="text-slate-400">—</span>
-          )}
-        </td>
-        <td className={`${TD} w-[13%] truncate`} title={ev.owner_lead || ""}>
-          {ev.owner_lead || "—"}
-        </td>
-        <td className={`${TD} w-[10%]`}>
-          <span className={`${PILL_BASE} ${dueBadgeClass(ev.days_until_event)}`}>{fmtDays(ev.days_until_event)}</span>
-        </td>
-        <td className={`${TD} w-[10%]`}>
-          <span className={`${PILL_BASE} ${dueBadgeClass(ev.prep_days_left)}`}>{fmtDays(ev.prep_days_left)}</span>
-        </td>
-        <td className={`${TD} w-[8%] text-right`}>
-          <span className={`inline-block text-slate-400 transition ${expanded ? "rotate-180" : ""}`} aria-hidden="true">
-            ▾
-          </span>
+          </div>
         </td>
       </tr>
       {expanded ? (
-        <tr className={`${zebra(rowIdx)} border-b border-slate-200/80 dark:border-slate-700/50`}>
-          <td colSpan={8} className="bg-slate-50 px-4 py-3 dark:bg-slate-900/60">
+        <tr className="border-b border-slate-200/80 dark:border-slate-700/50">
+          <td colSpan={8} className={`${calBodyColBg("title", rowIdx)} px-4 py-3`}>
             <div className="grid gap-3 sm:grid-cols-2">
+              <DetailField label="Event" value={ev.event_title} />
+              <DetailField label="Owner / Lead" value={ev.owner_lead} />
               <DetailField label="Executive Action Required" value={ev.executive_action_required} />
-              <DetailField
-                label="Prep Window"
-                value={
-                  ev.prep_start_date || ev.prep_deadline
-                    ? `${fmtDate(ev.prep_start_date)} → ${fmtDate(ev.prep_deadline)}${ev.prep_deadline ? ` (${fmtDays(ev.prep_days_left)})` : ""}`
-                    : ""
-                }
-              />
-              <DetailField label="Materials Needed" value={ev.materials_needed} />
-              <DetailField label="Notes" value={ev.notes} className="sm:col-span-2" />
+              <DetailField label="Created by" value={ev.created_by_name} />
             </div>
-            {canEdit ? (
-              <div className="mt-3 flex justify-end">
-                <GhostButton
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit(ev);
-                  }}
-                >
-                  Edit
-                </GhostButton>
-              </div>
-            ) : null}
           </td>
         </tr>
       ) : null}
@@ -416,10 +657,11 @@ function CalendarEventTableRow({ event, rowIdx, canEdit, onEdit, expanded, onTog
 
 // Renders events as a real table on md+ screens (matching the source
 // workbook's column order) and as expandable cards below md — same
-// responsive split the IT Ticket Board uses. Neither view ever needs
-// horizontal scroll: the table uses table-fixed % widths with truncation
-// instead of overflowing, and secondary fields live in the expand panel.
-function CalendarEventList({ events, canEdit, onEdit, expandedIds, onToggle, emptyMessage }) {
+// responsive split, and the same tinted-column visual language, as the IT
+// Ticket Board. Neither view ever needs horizontal scroll: the table uses
+// table-fixed % widths, and every cell wraps rather than truncating, so a
+// row grows taller for long text instead of ever cutting it off.
+function CalendarEventList({ events, onEdit, onDelete, expandedIds, onToggle, emptyMessage, highlightId }) {
   if (!events.length) {
     return (
       <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center dark:border-slate-700 dark:bg-white/[0.03]">
@@ -435,26 +677,27 @@ function CalendarEventList({ events, canEdit, onEdit, expandedIds, onToggle, emp
           <CalendarEventCard
             key={ev.id}
             event={ev}
-            canEdit={canEdit}
             onEdit={onEdit}
+            onDelete={onDelete}
             expanded={expandedIds.has(ev.id)}
             onToggle={() => onToggle(ev.id)}
+            highlighted={Number(highlightId) === Number(ev.id)}
           />
         ))}
       </div>
 
-      <div className="hidden overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 md:block">
-        <table className="w-full table-fixed border-collapse text-xs">
-          <thead>
-            <tr className="border-b-2 border-slate-300 bg-[rgba(11,62,175,0.06)] dark:border-slate-600 dark:bg-[rgba(167,211,68,0.08)]">
-              <th className={`${TH} w-[13%]`}>Event Date</th>
-              <th className={`${TH} w-[20%]`}>Event / Deadline</th>
-              <th className={`${TH} w-[12%]`}>Category</th>
-              <th className={`${TH} w-[12%]`}>Executive(s)</th>
-              <th className={`${TH} w-[13%]`}>Owner / Lead</th>
-              <th className={`${TH} w-[10%]`}>Days Until</th>
-              <th className={`${TH} w-[10%]`}>Prep Left</th>
-              <th className={`${TH} w-[8%]`}>&nbsp;</th>
+      <div className="hidden md:block">
+        <table className="w-full table-fixed border-collapse border border-slate-200 text-xs dark:border-slate-600/50">
+          <thead className="border-b-2 border-slate-300 dark:border-slate-600">
+            <tr>
+              <th className={calThClass("date", "w-[11%]")}>Event Date</th>
+              <th className={calThClass("title", "w-[20%]")}>Event</th>
+              <th className={calThClass("category", "w-[10%]")}>Category</th>
+              <th className={calThClass("executives", "w-[10%]")}>Executive(s)</th>
+              <th className={calThClass("owner", "w-[10%]")}>Owner / Lead</th>
+              <th className={calThClass("action", "w-[15%]")}>Executive Action Required</th>
+              <th className={calThClass("createdBy", "w-[10%]")}>Created by</th>
+              <th className={calThClass("actions", "w-[14%] text-right", true)}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -463,10 +706,11 @@ function CalendarEventList({ events, canEdit, onEdit, expandedIds, onToggle, emp
                 key={ev.id}
                 event={ev}
                 rowIdx={rowIdx}
-                canEdit={canEdit}
                 onEdit={onEdit}
+                onDelete={onDelete}
                 expanded={expandedIds.has(ev.id)}
                 onToggle={() => onToggle(ev.id)}
+                highlighted={Number(highlightId) === Number(ev.id)}
               />
             ))}
           </tbody>
@@ -549,6 +793,54 @@ function EventDateField({ value, onChange }) {
   );
 }
 
+// A dropdown of preset values plus an explicit "Other" choice that reveals a
+// free-text input — used for Category and Executive(s), which previously
+// were a text input with a <datalist> of suggestions (technically already
+// free-typeable, but that wasn't obvious from the UI). Request: "add an
+// option other as well and when someone selects that allow user to add
+// custom text." Mode is decided once on mount from the current value (same
+// pattern as EventDateField's rangeMode above): a value that isn't one of
+// the presets (including a pre-existing custom value when editing an event)
+// starts in "other" mode with the text box already showing it.
+function SelectWithOtherField({ value, options, onChange }) {
+  const [mode, setMode] = useState(() => (value && !options.includes(value) ? "other" : "select"));
+
+  return (
+    <div>
+      <select
+        value={mode === "other" ? "__other__" : value || ""}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "__other__") {
+            setMode("other");
+            onChange("");
+          } else {
+            setMode("select");
+            onChange(v);
+          }
+        }}
+        className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm focus:border-[#0B3EAF] focus:outline-none focus:ring-1 focus:ring-[#0B3EAF] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+      >
+        <option value="">— Select —</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+        <option value="__other__">Other (type your own)…</option>
+      </select>
+      {mode === "other" ? (
+        <TextInput
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Enter a custom value"
+          className="mt-1.5"
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function FieldInput({ def, value, onChange }) {
   if (def.type === "event_date") {
     return <EventDateField value={value} onChange={onChange} />;
@@ -566,17 +858,8 @@ function FieldInput({ def, value, onChange }) {
   if (def.type === "date") {
     return <TextInput type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} />;
   }
-  if (def.type === "suggest") {
-    return (
-      <div>
-        <TextInput list={`${def.key}-suggestions`} value={value || ""} onChange={(e) => onChange(e.target.value)} />
-        <datalist id={`${def.key}-suggestions`}>
-          {def.suggestions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-      </div>
-    );
+  if (def.type === "select_other") {
+    return <SelectWithOtherField value={value} options={def.suggestions} onChange={onChange} />;
   }
   return <TextInput value={value || ""} onChange={(e) => onChange(e.target.value)} />;
 }
@@ -598,7 +881,13 @@ function CalendarEventFormModal({ title, initialValues, onClose, onSubmit, submi
     }
   };
 
-  return (
+  // Portaled to document.body for the same reason as ConfirmDialog above —
+  // see the comment there. Without this, the modal is a DOM descendant of
+  // this page's `.card` wrapper, which Tailwind's `transition` utility turns
+  // into a containing block for `position: fixed`, clipping/offsetting the
+  // modal's top behind the sticky top navbar instead of centering it over
+  // the full viewport.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900"
@@ -643,16 +932,52 @@ function CalendarEventFormModal({ title, initialValues, onClose, onSubmit, submi
           </PrimaryButton>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
+// Weekly Review used to live here too (a reconstruction of the source
+// workbook's broken FILTER-formula sheet) but was removed by explicit
+// request — Master Calendar now only has the Calendar view plus the
+// admin-only reference tabs below.
 const MASTER_CALENDAR_SUB_TABS = [
   { key: "calendar", label: "Calendar" },
-  { key: "weekly_review", label: "Weekly Review" },
   { key: "lists", label: "Lists" },
   { key: "read_me", label: "Read Me" },
 ];
+
+// Lists and Read Me are reference/how-to content, not calendar data — but
+// they're still admin-only: anyone granted slt_view/slt_edit/cfo access
+// (including a non-admin member an admin delegated access to) sees just
+// Calendar. Only an actual Admin-role account sees all three sub-tabs.
+// See isAdministrator() in utils/adminAccess.js.
+const ADMIN_ONLY_SUB_TAB_KEYS = new Set(["lists", "read_me"]);
+
+// Collapsed by default — click the header to open it. Keeps the screen from
+// being wall-to-wall explanatory text while still surfacing every caveat for
+// whoever wants to read it. (Same component/behavior as ActionTrackerBoard's
+// NoteBanner — kept as its own copy here since this file doesn't import
+// from that one.)
+function NoteBanner({ children, label = "Note" }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-3 overflow-hidden rounded border border-amber-200 bg-amber-50 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left font-semibold"
+        aria-expanded={open}
+      >
+        <span>ⓘ {label}</span>
+        <span className={`shrink-0 transition ${open ? "rotate-180" : ""}`} aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open ? <div className="border-t border-amber-200/70 px-2.5 py-2 dark:border-amber-900/50">{children}</div> : null}
+    </div>
+  );
+}
 
 function SubTabBar({ tabs, active, onChange }) {
   return (
@@ -671,44 +996,6 @@ function SubTabBar({ tabs, active, onChange }) {
           {t.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-// Substitute for the source sheet's broken FILTER formula — see the file
-// header comment for why. "Flagged" = overdue, due in the next 14 days, or
-// prep overdue/due in the next 14 days; a text-range event date (can't be
-// compared to a number of days) is always included since its timing can't
-// be auto-determined.
-function isFlaggedForWeeklyReview(ev) {
-  const within14 = (n) => n !== null && n !== undefined && n <= 14;
-  return within14(ev.days_until_event) || within14(ev.prep_days_left) || !!ev.is_text_date_range;
-}
-
-function WeeklyReviewView({ events, loading, canEdit, onEdit, expandedIds, onToggle }) {
-  const flagged = events.filter(isFlaggedForWeeklyReview);
-
-  return (
-    <div>
-      <div className="mb-3 rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-        The source sheet's own Weekly Review formula is broken in the uploaded workbook — it filters on a column that
-        was deleted from Master Calendar, so Excel shows #REF! there too. This list is a reconstructed substitute:
-        events overdue, due in the next 14 days, or with prep overdue/due in the next 14 days (plus any text-range
-        event date, since its timing can't be auto-computed).
-      </div>
-
-      {loading ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
-      ) : (
-        <CalendarEventList
-          events={flagged}
-          canEdit={canEdit}
-          onEdit={onEdit}
-          expandedIds={expandedIds}
-          onToggle={onToggle}
-          emptyMessage="No items currently flagged for weekly review — same fallback message the source sheet's FILTER formula used."
-        />
-      )}
     </div>
   );
 }
@@ -745,11 +1032,11 @@ function ListsView() {
 function ReadMeView() {
   return (
     <div>
-      <div className="mb-3 rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+      <NoteBanner>
         This note mentions "Monthly Exec View" and "Calendar Export" — those two sheets aren't in the uploaded
         workbook (only Read Me, Master Calendar, Weekly Review, and Lists are), so those specific steps aren't
         available here.
-      </div>
+      </NoteBanner>
       <h3 className="mb-3 text-base font-semibold text-slate-900 dark:text-white">Executive Calendar Draft – How to Use</h3>
       <dl className="space-y-3">
         {READ_ME_ITEMS.map((item) => (
@@ -763,13 +1050,155 @@ function ReadMeView() {
   );
 }
 
-function MasterCalendarView({ canEdit }) {
+// Current calendar month as [first day, last day] ISO strings — the
+// default date-range filter on the Calendar sub-tab.
+function currentMonthRange() {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const iso = (d) => d.toISOString().slice(0, 10);
+  return { from: iso(first), to: iso(last) };
+}
+
+// An event is "in range" if its date (or date range) overlaps [from, to]
+// at all. Changed by explicit request: an event with no computable start
+// date (an Event Date value the importer/date parser couldn't make sense
+// of, e.g. "January 26, 2027 (Auditor: TBC)" — shown as "—" in the table)
+// used to always be kept regardless of the filter, on the theory that its
+// real timing just couldn't be auto-determined. In practice that meant a
+// badly-typed date silently bypassed filtering and showed up in every date
+// range, including ones its real date has nothing to do with — reported as
+// "if events doesn't exist then don't show them." Now it's excluded
+// whenever an actual From/To filter is applied (it can't honestly match
+// one); it still appears when the filter is empty/cleared (viewing
+// everything), so it isn't permanently hidden — just not shown inside a
+// date range it can't be confirmed to belong to. Fix the Event Date value
+// (even approximately) to make it filterable again.
+function eventInDateRange(ev, from, to) {
+  if (!ev.start_date) return !from && !to;
+  const end = ev.end_date || ev.start_date;
+  if (from && end < from) return false;
+  if (to && ev.start_date > to) return false;
+  return true;
+}
+
+// Unstyled on purpose — just the From/To inputs as plain flex items, so
+// MasterCalendarView can lay them out in the same row as the Owner/Created-by
+// dropdowns (see the filter-row container below) instead of as a separate
+// block. The "current month by default" note lives once in that shared row,
+// not here, to keep this short per request.
+function DateRangeFilterBar({ from, to, onChange }) {
+  return (
+    <>
+      <div>
+        <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">From</label>
+        <TextInput type="date" value={from} onChange={(e) => onChange({ from: e.target.value, to })} className="w-full" />
+      </div>
+      <div>
+        <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">To</label>
+        <TextInput type="date" value={to} onChange={(e) => onChange({ from, to: e.target.value })} className="w-full" />
+      </div>
+    </>
+  );
+}
+
+// Unstyled on purpose, same as DateRangeFilterBar — a plain labeled <select>
+// for filtering the Master Calendar by one text field (Owner / Lead, or
+// Created by). `options` is the distinct, sorted list of values actually
+// present among the loaded events, so the dropdown never offers a choice
+// that would return zero results.
+function TextFieldFilterDropdown({ label, value, options, onChange }) {
+  return (
+    <div>
+      <label className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-[38px] w-full rounded-md border border-slate-300 bg-white px-2.5 text-sm text-slate-800 shadow-sm focus:border-[#0B3EAF] focus:outline-none focus:ring-1 focus:ring-[#0B3EAF] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+      >
+        <option value="">All</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// Turns the backend's { notified, failed, error } notification result
+// (see createCalendarEvent in sltCalendar.service.js) into one plain-English
+// line, so whoever creates an event can see immediately whether anyone was
+// actually emailed, instead of that only showing up in a server console.
+// The create-event response no longer waits for notification emails to
+// finish sending (see createCalendarEvent in sltCalendar.service.js — it's
+// fire-and-forget now so "Add event" isn't held up by an SMTP round trip
+// per recipient). That means this can only report that sending started,
+// not whether it actually succeeded — the per-recipient result (and any
+// failure reasons) still goes to the server console via
+// notifyCalendarAccessUsersOfNewEvent's own logging, same as before.
+function summarizeNotification(n) {
+  if (!n) return null;
+  if (n.status === "sending") {
+    return { tone: "ok", text: "Event saved. Notifying everyone with Master Calendar access by email now." };
+  }
+  if (n.error) {
+    return { tone: "warn", text: `Event saved, but the notification email failed to start: ${n.error}` };
+  }
+  return null;
+}
+
+function MasterCalendarView({ canEdit, isAdmin, deepLinkEventId }) {
+  const visibleSubTabs = isAdmin
+    ? MASTER_CALENDAR_SUB_TABS
+    : MASTER_CALENDAR_SUB_TABS.filter((t) => !ADMIN_ONLY_SUB_TAB_KEYS.has(t.key));
   const [subTab, setSubTab] = useState(MASTER_CALENDAR_SUB_TABS[0].key);
+  // Belt-and-suspenders: even if subTab somehow held "lists"/"read_me" (it
+  // can't via the UI below, since those tabs aren't rendered for a
+  // non-admin), never actually show that content to a non-admin.
+  const effectiveSubTab = !isAdmin && ADMIN_ONLY_SUB_TAB_KEYS.has(subTab) ? "calendar" : subTab;
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null); // null | { mode: "add" } | { mode: "edit", event }
   const [expandedIds, setExpandedIds] = useState(() => new Set());
+  const [dateRange, setDateRange] = useState(currentMonthRange);
+  // Owner / Lead and Created-by dropdown filters, added alongside the date
+  // range per explicit request ("add slicer for owner and created by too
+  // add dropdown for them"). Empty string means "All" for both.
+  const [ownerFilter, setOwnerFilter] = useState("");
+  const [createdByFilter, setCreatedByFilter] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null); // event pending delete confirmation
+  const [deleting, setDeleting] = useState(false);
+  // Shown right after creating an event so the "was anyone notified?"
+  // question never has to go dig through a server console again — the
+  // backend now returns a `notification` summary on the create response
+  // (see createCalendarEvent in sltCalendar.service.js) and this just
+  // reports it plainly, success or not.
+  const [notifyBanner, setNotifyBanner] = useState(null); // { tone: "ok" | "warn", text } | null
+
+  // Resolves a "?calEvent=<id>" link from a notification email: once that
+  // event has loaded, expand it, widen the date filter if it would
+  // otherwise be hidden, and scroll it into view. deepLinkHandledRef makes
+  // this a one-time jump — it won't keep re-scrolling or re-widening the
+  // filter on every subsequent events/dateRange change.
+  const deepLinkHandledRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandledRef.current || !deepLinkEventId || loading) return;
+    const targetId = Number(deepLinkEventId);
+    const target = events.find((e) => Number(e.id) === targetId);
+    if (!target) return;
+    deepLinkHandledRef.current = true;
+    setExpandedIds((prev) => (prev.has(target.id) ? prev : new Set(prev).add(target.id)));
+    if (!eventInDateRange(target, dateRange.from, dateRange.to)) {
+      setDateRange({ from: "", to: "" });
+    }
+    const timer = setTimeout(() => {
+      document.getElementById(`cal-event-${target.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [events, loading, deepLinkEventId, dateRange.from, dateRange.to]);
 
   const toggleExpanded = useCallback((id) => {
     setExpandedIds((prev) => {
@@ -798,8 +1227,9 @@ function MasterCalendarView({ canEdit }) {
   }, [load]);
 
   const handleCreate = async (values) => {
-    await api.post("/cfo/slt/v2/calendar", values);
+    const { data } = await api.post("/cfo/slt/v2/calendar", values);
     setModal(null);
+    setNotifyBanner(summarizeNotification(data?.notification));
     await load();
   };
 
@@ -809,9 +1239,43 @@ function MasterCalendarView({ canEdit }) {
     await load();
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/cfo/slt/v2/calendar/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      await load();
+    } catch (e) {
+      window.alert(friendlyErrorMessage(e, "Could not delete this calendar event."));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Distinct, sorted option lists for the Owner/Lead and Created-by
+  // dropdowns, drawn from every loaded event (not just the ones already
+  // passing the date filter) so switching the date range never silently
+  // removes an option the user had selected.
+  const ownerOptions = useMemo(
+    () => Array.from(new Set(events.map((ev) => ev.owner_lead).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [events]
+  );
+  const createdByOptions = useMemo(
+    () => Array.from(new Set(events.map((ev) => ev.created_by_name).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [events]
+  );
+
+  const eventsInRange = events.filter(
+    (ev) =>
+      eventInDateRange(ev, dateRange.from, dateRange.to) &&
+      (!ownerFilter || ev.owner_lead === ownerFilter) &&
+      (!createdByFilter || ev.created_by_name === createdByFilter)
+  );
+
   return (
     <div>
-      <SubTabBar tabs={MASTER_CALENDAR_SUB_TABS} active={subTab} onChange={setSubTab} />
+      <SubTabBar tabs={visibleSubTabs} active={effectiveSubTab} onChange={setSubTab} />
 
       {error ? (
         <div className="mb-3 rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
@@ -819,27 +1283,40 @@ function MasterCalendarView({ canEdit }) {
         </div>
       ) : null}
 
-      {subTab === "calendar" ? (
-        <div>
-          <div className="relative mb-4 overflow-hidden rounded-xl border border-[#082d82]/20 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] px-4 py-4 text-white sm:px-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+      {notifyBanner ? (
+        <div
+          className={`mb-3 flex items-start justify-between gap-3 rounded border p-2.5 text-sm ${
+            notifyBanner.tone === "warn"
+              ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200"
+          }`}
+        >
+          <span>{notifyBanner.text}</span>
+          <button
+            type="button"
+            onClick={() => setNotifyBanner(null)}
+            className="shrink-0 text-xs font-semibold underline opacity-70 hover:opacity-100"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {effectiveSubTab === "calendar" ? (
+        // One unified card (header → filter row → table), same shape as
+        // the IT Ticket Board's <section> in ItTicketsMonitorTable.jsx,
+        // instead of a floating gradient banner sitting above a separate
+        // boxed table.
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg ring-1 ring-slate-200/80 dark:border-slate-700 dark:bg-[#141414] dark:ring-white/10">
+          <div className="relative border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] px-4 py-4 text-white sm:px-5 sm:py-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
               <div>
                 <h3 className="text-base font-bold tracking-tight sm:text-lg">Master Calendar</h3>
-                <p className="mt-0.5 text-xs text-white/75">
-                  {events.length} event{events.length === 1 ? "" : "s"}
-                </p>
+                <p className="mt-0.5 text-xs text-white/75">Executive events, deadlines, and owners in one place.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <StatPill
-                  label="Overdue"
-                  value={events.filter((ev) => ev.days_until_event !== null && ev.days_until_event < 0).length}
-                  accent="bg-red-300 text-red-950"
-                />
-                <StatPill
-                  label="Due ≤14d"
-                  value={events.filter((ev) => ev.days_until_event !== null && ev.days_until_event >= 0 && ev.days_until_event <= 14).length}
-                  accent="bg-amber-300 text-amber-950"
-                />
+                <StatPill label="shown" value={eventsInRange.length} accent="bg-white/15 ring-1 ring-white/20" />
+                <StatPill label="total" value={events.length} accent="bg-[#A7D344] text-[#0a0a0a]" />
                 {canEdit ? (
                   <button
                     type="button"
@@ -853,32 +1330,46 @@ function MasterCalendarView({ canEdit }) {
             </div>
           </div>
 
-          {loading ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
-          ) : (
-            <CalendarEventList
-              events={events}
-              canEdit={canEdit}
-              onEdit={(event) => setModal({ mode: "edit", event })}
-              expandedIds={expandedIds}
-              onToggle={toggleExpanded}
-              emptyMessage={`No calendar events yet${canEdit ? ' — click "Add event" to create the first one.' : "."}`}
-            />
-          )}
-        </div>
-      ) : subTab === "weekly_review" ? (
-        <WeeklyReviewView
-          events={events}
-          loading={loading}
-          canEdit={canEdit}
-          onEdit={(event) => setModal({ mode: "edit", event })}
-          expandedIds={expandedIds}
-          onToggle={toggleExpanded}
-        />
-      ) : subTab === "lists" ? (
+          <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40 sm:px-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <DateRangeFilterBar from={dateRange.from} to={dateRange.to} onChange={setDateRange} />
+              <TextFieldFilterDropdown label="Owner / Lead" value={ownerFilter} options={ownerOptions} onChange={setOwnerFilter} />
+              <TextFieldFilterDropdown label="Created by" value={createdByFilter} options={createdByOptions} onChange={setCreatedByFilter} />
+            </div>
+            <p className="mt-1.5 text-[11px] italic text-slate-500 dark:text-slate-400">Current month selected by default.</p>
+          </div>
+
+          <div className="p-3 sm:p-4">
+            {loading ? (
+              <div className="flex items-center justify-center gap-3 px-6 py-16">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
+                <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading events…</p>
+              </div>
+            ) : (
+              <CalendarEventList
+                events={eventsInRange}
+                onEdit={(event) => setModal({ mode: "edit", event })}
+                onDelete={setDeleteTarget}
+                expandedIds={expandedIds}
+                onToggle={toggleExpanded}
+                highlightId={deepLinkEventId}
+                emptyMessage={
+                  events.length
+                    ? "No events in this date range — widen the range or click \"This month\" to reset it."
+                    : `No calendar events yet${canEdit ? ' — click "Add event" to create the first one.' : "."}`
+                }
+              />
+            )}
+          </div>
+        </section>
+      ) : effectiveSubTab === "lists" ? (
         <ListsView />
-      ) : (
+      ) : effectiveSubTab === "read_me" ? (
         <ReadMeView />
+      ) : (
+        <div />
       )}
 
       {modal?.mode === "add" ? (
@@ -893,35 +1384,78 @@ function MasterCalendarView({ canEdit }) {
           submitLabel="Save changes"
         />
       ) : null}
+
+      {deleteTarget ? (
+        <ConfirmDialog
+          title="Delete calendar event"
+          message={`Permanently delete "${deleteTarget.event_title}"? This cannot be undone.`}
+          confirmLabel="Delete event"
+          danger
+          busy={deleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      ) : null}
     </div>
   );
 }
 
 export default function SltTrackerV2({ canEdit }) {
-  const [view, setView] = useState(SLT_TRACKER_VIEWS[0].key);
+  const { user } = useAuth();
+  const isAdmin = isAdministrator(user);
+  // "?calEvent=<id>" comes from the "new event" notification email — see
+  // sendCalendarEventCreatedEmail in email.service.js. When present, jump
+  // straight to Master Calendar instead of whichever view is first by
+  // default, so clicking the email link lands directly on the event.
+  const [searchParams] = useSearchParams();
+  const deepLinkEventId = searchParams.get("calEvent");
+  const [view, setView] = useState(() => (deepLinkEventId ? "master_calendar" : SLT_TRACKER_VIEWS[0].key));
+
+  // Action Tracker Executive Board is still being worked on and isn't ready
+  // for the live site yet — per explicit request, hide it from the
+  // production build (what actually ships to Render) while leaving it
+  // visible when running the local dev server, so work on it can continue
+  // on localhost without it showing up for real users in the meantime.
+  // `import.meta.env.DEV` is Vite's own dev-vs-build flag: true under
+  // `npm run dev`, false in a `vite build` (what gets deployed). Master
+  // Calendar is unaffected either way — it's already first in
+  // SLT_TRACKER_VIEWS and the default view above.
+  const visibleSltViews = import.meta.env.DEV
+    ? SLT_TRACKER_VIEWS
+    : SLT_TRACKER_VIEWS.filter((v) => v.key !== "action_tracker");
 
   return (
     <div className="card p-4 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center gap-6">
-        {SLT_TRACKER_VIEWS.map((v) => (
-          <label
-            key={v.key}
-            className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"
-          >
-            <input
-              type="radio"
-              name="slt-tracker-view"
-              value={v.key}
-              checked={view === v.key}
-              onChange={() => setView(v.key)}
-              className="h-4 w-4 text-[#0B3EAF] focus:ring-[#0B3EAF]"
-            />
-            {v.label}
-          </label>
-        ))}
-      </div>
+      {visibleSltViews.length > 1 ? (
+        // Only worth showing as a choice when there's more than one option —
+        // with Action Tracker hidden on the live site, there's nothing to
+        // pick between, so the radio row itself is skipped there rather
+        // than showing a single, permanently-checked option.
+        <div className="mb-4 flex flex-wrap items-center gap-6">
+          {visibleSltViews.map((v) => (
+            <label
+              key={v.key}
+              className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"
+            >
+              <input
+                type="radio"
+                name="slt-tracker-view"
+                value={v.key}
+                checked={view === v.key}
+                onChange={() => setView(v.key)}
+                className="h-4 w-4 text-[#0B3EAF] focus:ring-[#0B3EAF]"
+              />
+              {v.label}
+            </label>
+          ))}
+        </div>
+      ) : null}
 
-      {view === "master_calendar" ? <MasterCalendarView canEdit={canEdit} /> : <ActionTrackerBoard canEdit={canEdit} />}
+      {view === "master_calendar" ? (
+        <MasterCalendarView canEdit={canEdit} isAdmin={isAdmin} deepLinkEventId={deepLinkEventId} />
+      ) : (
+        <ActionTrackerBoard canEdit={canEdit} />
+      )}
     </div>
   );
 }

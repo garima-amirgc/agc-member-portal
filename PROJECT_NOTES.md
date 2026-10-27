@@ -897,6 +897,167 @@ in that file are the most likely thing to need adjusting.
 
 ---
 
+## Native, in-portal CFO Incident Reports — 2026-10-02
+
+Replaces hand-editing the SharePoint Excel workbook for new incidents.
+Incidents are now reported and tracked directly on the CFO page; the old
+SharePoint-Excel data (`cfoReports.service.js`) is kept exactly as before,
+read-only, under a collapsed "Legacy history" section — nothing already in
+SharePoint was touched or migrated.
+
+**Permissions — new two-tier grant, distinct from the single `cfo` grant.**
+Garima asked for this to work like IT Tickets' access model: a `view` grant
+for people who should just see incidents, and a separate `edit` grant for
+people who can add/update them (edit implies view). New keys in
+`ADMIN_GRANT_KEYS` (backend `config/adminGrants.js`, frontend
+`constants/adminGrants.js`): `incident_report_view`, `incident_report_edit`.
+Both are managed under Users → admin grants, in a new "Incident Report"
+group, same as every other admin area.
+
+The pre-existing `cfo` grant used to be the only way to see the Incident
+Report (it also covers the unrelated SLT Tracker). To avoid silently
+narrowing access for anyone who already had it, `cfo` now *implies* full
+(view + edit) Incident Report access — see `GRANT_IMPLIED_BY` in both
+`adminGrants.js` files (backend `config/`, frontend `utils/adminAccess.js`
+— keep these two in sync, same pattern as the existing
+`upcoming` → `upcoming_events` alias). SLT Tracker itself stays `cfo`-only;
+the narrower incident grants do NOT unlock it.
+
+- `cfo.routes.js`: no longer one blanket `requireAdminGrant(CFO)` for the
+  whole router. `/status` and `GET /report/incident` (the legacy Excel
+  data) accept `cfo` OR either incident grant; `GET /report/slt` stays
+  `cfo`-only. New `/incidents` routes: `GET` needs view-or-better, `POST`/
+  `PATCH /:id` need edit-or-better, `DELETE /:id` is restricted further —
+  full Administrators only (role check inside `cfoIncidents.service.js`,
+  same restriction `itTickets.service.js` uses for ticket deletion) —
+  deleting a compliance record is a bigger deal than adding/updating one.
+- New table `cfo_incidents` (both `sqlite.js` and the Postgres migrations
+  array in `database/postgres.js`): facility (AQM/SCF/ASP), department,
+  incident_date, severity (L1-L4), status (open/in_progress/closed),
+  description, financial_impact, root_cause, corrective_action,
+  preventive_action, reported_by, closed_by/closed_at (auto-set when status
+  moves to/from `closed`, mirroring how `it_tickets.closed_at` works).
+- New `backend/src/services/cfoIncidents.service.js` — list/get/create/
+  update/delete, all the validation (facility/severity/status enums,
+  required description/date).
+- Frontend `CfoReportsPage.jsx`: new `NativeIncidentDashboard` (facility
+  tabs, status filter, stat tiles + severity/department bar charts reusing
+  the existing chart components, card-per-incident list) replaces the old
+  Excel-driven view as the primary Incident Report screen. "+ Report an
+  incident" button and each card's "Edit"/"Delete" only render for users
+  with the matching grant (`canEditIncidents`/`canDeleteIncidents`,
+  computed from `useAuth()` + `hasAnyAdminGrant`/`isAdministrator`).
+  `IncidentFormModal` is the submission/edit form — facility, date,
+  department, severity, description, financial impact are up front; root
+  cause / corrective / preventive action are behind a "+ Add root cause /
+  corrective action" toggle so a quick report stays quick, but a closeout
+  can fill in the rest later via Edit. No approval step — submissions go
+  straight in, same as IT Tickets.
+- The old Excel-backed `IncidentDashboard` component is untouched and now
+  only renders inside the collapsed "Legacy history" section, which fetches
+  `/cfo/report/incident` lazily (only once expanded) instead of eagerly on
+  every page visit like before.
+- Nav/route gating updated to the three-grant set (`AppSidebar`'s CFO link
+  via `usePortalNavItems.js`, and the `/cfo` route in `App.jsx`) so
+  incident-grant-only users can reach the page at all; the SLT tab itself
+  is hidden client-side unless the user has `cfo`.
+
+Not built (kept out of scope for this pass, flagged in case Garima wants
+it later): an approval workflow before a submission counts (she had no
+preference, and the IT Ticket precedent is "straight in, no approval").
+
+**Attachments (photo or document) — added 2026-10-02, same day.** Mirrors
+the IT Tickets attachment pattern exactly: `cfo_incidents.attachments` is a
+TEXT column holding a JSON array of `{url, name}` (added via `ALTER TABLE
+... ADD COLUMN` in both `sqlite.js` and the Postgres migrations array,
+since the table already existed on deployed databases by the time this was
+added — same two-step dance as `it_tickets.attachments`).
+`cfoIncidents.service.js` has its own `normalizeAttachmentsJson`/
+`parseAttachmentsRow` (small enough not to share with `itTickets.service.js`,
+but same shape/logic, capped at 5 files). New upload endpoint
+`POST /upload/incident-attachment` in `upload.routes.js` — same multer
+disk-then-cloud-storage flow as `/upload/ticket-attachment`
+(`uploadIncidentAttachmentFromDisk` in `objectStorage.service.js`, storing
+under the `incidents/` prefix), but gated by `requireAdminGrantAny(cfo,
+incident_report_edit)` instead of just `authRequired` — only people who can
+add incidents can upload files for one, unlike IT Ticket attachments which
+any authenticated user can add to their own ticket. Frontend:
+`postIncidentAttachment` in `services/api.js` (mirrors `postNpdAttachment`).
+`IncidentFormModal` in `CfoReportsPage.jsx` got a "Choose files" dropzone
+(same UI pattern as `ItTicketsPage.jsx`'s attachment picker) between
+Financial Impact and the root-cause toggle; `NativeIncidentCard` renders
+uploaded files as clickable chips labeled "Photo" or "File".
+
+## Native, in-portal SLT Report — 2026-10-18
+
+Replaces both SharePoint Excel workbooks (`SLT_Action_Tracker_Board_Ready_
+Executive_v4_2026 Master.xlsx` and `AGC_SLT_Calendar_Master 2026-2027.xlsx`)
+the SLT Tracker tab used to read from — unlike the Incident Report, there's
+no "legacy history" fallback left for SLT; it's fully native now. Same
+overall approach as the Incident Report build above (three record types,
+each with its own table and CRUD), but with one deliberate difference: the
+`{headers, rows}` shape the frontend already renders cards/tables from
+(`ActionItemCards`, `CalendarEventCards`, `DecisionCards`,
+`SltPerformanceDashboard`'s roster) was kept exactly as-is — the native
+backend produces rows with the same header labels
+(`sltItems.service.js`'s `ACTION_COLUMNS`/`CALENDAR_COLUMNS`/
+`DECISION_COLUMNS`) the old Excel-parsing code used, so none of those
+display components needed to change, only where the data comes from and
+that rows now carry an `id` (via a new parallel `ids` array) so they can be
+edited/deleted.
+
+**Permissions — new `slt_view`/`slt_edit` grants, same two-tier pattern as
+Incident Report.** `cfo` continues to imply full (view + edit) SLT access,
+same as it already did (see `GRANT_IMPLIED_BY` in both `adminGrants.js`
+files — keep in sync). Both new keys live under a new "SLT Report" group in
+Users → admin grants.
+
+- Three new tables (`slt_action_items`, `slt_calendar_events`,
+  `slt_decisions` — both `sqlite.js` and the Postgres migrations array).
+  Deliberately *not* a 1:1 copy of the original Excel columns (Action
+  Register had 20, Master Calendar 13) — just the fields actually used for
+  display/sorting/the performance roster (Item/Owner/Due Date/Status/
+  Priority/Category/Next Action, etc.) plus one free-text `notes` column
+  per table for anything else. Keeps the add/edit forms short.
+- New `backend/src/services/sltItems.service.js` — list/create/update/
+  delete for all three types, plus `buildSltPerformance()` (ported 1:1 from
+  `cfoReports.service.js`'s old version — same owner-matching rules, now
+  reading live DB rows instead of parsed Excel records) and
+  `getSltReport()`, which assembles both into the report shape above.
+- `cfo.routes.js`: `GET /report/slt` now special-cased to call
+  `sltItems.getSltReport()` instead of the old SharePoint fetch — the
+  frontend's existing `loadReport("slt")` call didn't need to change at
+  all. New `/slt/action-items`, `/slt/calendar-events`, `/slt/decisions`
+  routes (`POST` + `PATCH/DELETE :id`), all gated by `cfo` or `slt_edit`.
+  Unlike incident deletion, SLT deletion is NOT restricted to full
+  Administrators — `slt_edit` covers the full CRUD set, since these aren't
+  compliance records the way incidents are.
+- Frontend `CfoReportsPage.jsx`: `SLT_FIELD_DEFS` (one config object per
+  record type — field keys, labels, input kind, required) drives one
+  shared `SltItemFormModal` for add/edit across all three types, instead of
+  three near-duplicate forms. `sltRowToFields()` reconstructs an edit
+  form's initial values from a card's `{headers, row}` pair — the inverse
+  of the backend's `toSheet()`. "+ Add action item"/"+ Add event"/
+  "+ Add decision" buttons and each card's "Edit"/"Delete" only render for
+  `canEditSlt` (`cfo` or `slt_edit`); after any add/update/delete the whole
+  report is just re-fetched (`onRefresh()`) rather than patching local
+  state — simpler to follow, and the performance roster has to be
+  recomputed from all three lists together anyway so there's no real
+  savings in trying to patch it client-side.
+- `visibleTabs` in `CfoReportsPage.jsx` now checks each tab's own grant
+  (`canSeeIncidents` for "incident", `canSeeSlt` for "slt") instead of
+  showing "Incident Report" unconditionally — needed once SLT got its own
+  grants, so someone with only `slt_view` (no incident access) doesn't land
+  on a broken Incident tab. Nav/route gating (`usePortalNavItems.js`,
+  `App.jsx`'s `/cfo` route) extended to include `slt_view`/`slt_edit` so
+  SLT-only users can reach the page at all.
+- `cfoReports.service.js`'s old `fetchAndParseSlt()`/`buildSltPerformance()`
+  (SharePoint-Excel version) are now dead code — left in place rather than
+  deleted, same as the Incident Report's legacy SharePoint path, in case
+  it's ever needed as a reference.
+
+---
+
 This Claude session has NO direct shell or git access to Garima's machine — all
 file edits go through a device-bridge (stage → edit locally → commit back), which
 writes files but does not touch git. Garima runs `git add` / `git commit` /

@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 const { db } = require("../config/db");
 const { ROLES, canonicalRole } = require("../config/constants");
 const userDeptSvc = require("../services/userDepartments.service");
-const { parseAdminGrantsColumn } = require("../config/adminGrants");
+const { parseAdminGrantsColumn, parseCalendarEditDelegatesColumn } = require("../config/adminGrants");
 
 const authRequired = (req, res, next) => {
   (async () => {
@@ -19,7 +19,7 @@ const authRequired = (req, res, next) => {
 
     const user = await db
       .prepare(
-        "SELECT id, name, email, role, business_unit, manager_id, designation, admin_grants, adp_associate_oid, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
+        "SELECT id, name, email, role, business_unit, manager_id, designation, admin_grants, calendar_edit_delegates, adp_associate_oid, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department FROM users WHERE id = ?"
       )
       .get(payload.id);
 
@@ -29,6 +29,7 @@ const authRequired = (req, res, next) => {
     const departments = await userDeptSvc.listForUser(user.id);
     const department = departments[0] || user.department || "Production";
     const adminGrants = parseAdminGrantsColumn(user.admin_grants);
+    const calendarEditDelegates = parseCalendarEditDelegatesColumn(user.calendar_edit_delegates);
     req.user = {
       id: user.id,
       name: user.name,
@@ -40,6 +41,7 @@ const authRequired = (req, res, next) => {
       department,
       departments,
       adminGrants,
+      calendarEditDelegates,
       adp_associate_oid: user.adp_associate_oid || null,
     };
     return next();

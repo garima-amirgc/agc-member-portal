@@ -24,6 +24,8 @@ const {
   parseAdminGrantsColumn,
   sanitizeAdminGrantsPayload,
   isFullAdminUser,
+  parseCalendarEditDelegatesColumn,
+  sanitizeCalendarEditDelegatesPayload,
 } = require("../config/adminGrants");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const {
@@ -56,6 +58,28 @@ function readAdminGrantsFromBody(body) {
     return { present: true, value: normalizeAdminGrantsValue(body.adminGrants) };
   }
   return { present: false, value: undefined };
+}
+
+// Master Calendar delegated-edit access — same JSON-body shape as
+// admin_grants above (array of ids, or null to clear).
+function readCalendarEditDelegatesFromBody(body) {
+  if (!body || typeof body !== "object") return { present: false, value: undefined };
+  if (!Object.prototype.hasOwnProperty.call(body, "calendar_edit_delegates")) {
+    return { present: false, value: undefined };
+  }
+  let v = body.calendar_edit_delegates;
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (t === "" || t.toLowerCase() === "null") v = null;
+    else {
+      try {
+        v = JSON.parse(t);
+      } catch {
+        /* leave as string; sanitizeCalendarEditDelegatesPayload will reject it */
+      }
+    }
+  }
+  return { present: true, value: v };
 }
 
 const { normalizeBirthMonthDay, normalizeJoinDate } = require("../utils/profileDates");
@@ -420,7 +444,7 @@ router.post("/:id/resend-invite", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), asy
 router.get("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => {
   const user = await db
     .prepare(
-      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, created_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(is_new_hire, 0) AS is_new_hire, new_hire_marked_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
+      "SELECT id, name, email, role, business_unit, manager_id, profile_image_url, designation, created_at, admin_grants, calendar_edit_delegates, COALESCE(facility_university_only, 0) AS facility_university_only, COALESCE(is_new_hire, 0) AS is_new_hire, new_hire_marked_at, COALESCE(NULLIF(TRIM(department), ''), 'Production') AS department, invite_token_hash, invite_expires_at FROM users WHERE id = ?"
     )
     .get(req.params.id);
   if (!user) return res.status(404).json({ message: "User not found" });
@@ -436,11 +460,12 @@ router.get("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
   const departments = await userDeptSvc.listForUser(req.params.id);
 
   const invite_status = inviteSvc.inviteStatusForRow(user);
-  const { invite_token_hash: _h, invite_expires_at: _e, admin_grants: rawAg, ...safe } = user;
+  const { invite_token_hash: _h, invite_expires_at: _e, admin_grants: rawAg, calendar_edit_delegates: rawCed, ...safe } = user;
   return res.json({
     ...safe,
     role: canonicalRole(safe.role),
     admin_grants: parseAdminGrantsColumn(rawAg),
+    calendar_edit_delegates: parseCalendarEditDelegatesColumn(rawCed),
     facility_university_only: Boolean(safe.facility_university_only),
     is_new_hire: Boolean(safe.is_new_hire),
     facilities,
@@ -464,6 +489,7 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
     is_new_hire,
   } = req.body;
   const adminGrantsInBody = readAdminGrantsFromBody(req.body || {});
+  const calendarEditDelegatesInBody = readCalendarEditDelegatesFromBody(req.body || {});
   const businessUnits = Array.isArray(business_units)
     ? business_units
     : business_unit
@@ -515,6 +541,16 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
     const g = sanitizeAdminGrantsPayload(adminGrantsInBody.value, { targetIsAdminRole: roleNorm === ROLES.ADMIN });
     if (g.error) return res.status(400).json({ message: g.error });
     if (!g.omit) insertAdminGrants = g.db;
+  }
+
+  let insertCalendarEditDelegates;
+  if (calendarEditDelegatesInBody.present) {
+    if (!isFullAdminUser(req.user)) {
+      return res.status(403).json({ message: "Only a full administrator can assign Master Calendar edit-delegation." });
+    }
+    const d = sanitizeCalendarEditDelegatesPayload(calendarEditDelegatesInBody.value, {});
+    if (d.error) return res.status(400).json({ message: d.error });
+    insertCalendarEditDelegates = d.db;
   }
 
   const facilityUniversityOnlyFlag = parseFacilityUniversityOnlyFlag(
@@ -599,6 +635,10 @@ router.post("/", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) => 
 
     const userId = result.lastInsertRowid;
 
+    if (insertCalendarEditDelegates !== undefined) {
+      await db.prepare("UPDATE users SET calendar_edit_delegates = ? WHERE id = ?").run(insertCalendarEditDelegates, userId);
+    }
+
     const ins = db.prepare("INSERT OR IGNORE INTO user_facilities(user_id, business_unit) VALUES (?, ?)");
     for (const bu of businessUnits) await ins.run(userId, bu);
 
@@ -674,10 +714,11 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
     is_new_hire,
   } = req.body;
   const adminGrantsInBody = readAdminGrantsFromBody(req.body || {});
+  const calendarEditDelegatesInBody = readCalendarEditDelegatesFromBody(req.body || {});
   const existing = await db
     .prepare(
       `SELECT id, name, email, role, business_unit, manager_id, password, department, designation, profile_image_url, created_at,
-              invite_token_hash, invite_expires_at, admin_grants, COALESCE(facility_university_only, 0) AS facility_university_only,
+              invite_token_hash, invite_expires_at, admin_grants, calendar_edit_delegates, COALESCE(facility_university_only, 0) AS facility_university_only,
               COALESCE(is_new_hire, 0) AS is_new_hire, new_hire_marked_at
        FROM users WHERE id = ?`
     )
@@ -794,6 +835,16 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
   }
   if (nextAdminGrantsDb === undefined) nextAdminGrantsDb = null;
 
+  let nextCalendarEditDelegatesDb = existing.calendar_edit_delegates ?? null;
+  if (calendarEditDelegatesInBody.present) {
+    if (!isFullAdminUser(req.user)) {
+      return res.status(403).json({ message: "Only a full administrator can change Master Calendar edit-delegation." });
+    }
+    const d = sanitizeCalendarEditDelegatesPayload(calendarEditDelegatesInBody.value, { selfId: userId });
+    if (d.error) return res.status(400).json({ message: d.error });
+    nextCalendarEditDelegatesDb = d.db;
+  }
+
   let nextFacilityUniversityOnly = Boolean(Number(existing.facility_university_only) === 1);
   if (Object.prototype.hasOwnProperty.call(req.body, "facility_university_only")) {
     nextFacilityUniversityOnly = parseFacilityUniversityOnlyFlag(req.body.facility_university_only, nextRole);
@@ -824,7 +875,7 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
   try {
     await db
       .prepare(
-        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, designation=?, invite_token_hash=?, invite_expires_at=?, admin_grants=?, facility_university_only=?, is_new_hire=?, new_hire_marked_at=? WHERE id=?"
+        "UPDATE users SET name=?, email=?, role=?, business_unit=?, manager_id=?, password=?, department=?, designation=?, invite_token_hash=?, invite_expires_at=?, admin_grants=?, calendar_edit_delegates=?, facility_university_only=?, is_new_hire=?, new_hire_marked_at=? WHERE id=?"
       )
       .run(
         nextName,
@@ -838,6 +889,7 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
         nextInviteHash,
         nextInviteExpires,
         nextAdminGrantsDb,
+        nextCalendarEditDelegatesDb,
         uniPut.flag ? 1 : 0,
         nextIsNewHire ? 1 : 0,
         nextNewHireMarkedAt,
@@ -886,6 +938,7 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
         designation,
         manager_id,
         admin_grants,
+        calendar_edit_delegates,
         COALESCE(facility_university_only, 0) AS facility_university_only,
         COALESCE(is_new_hire, 0) AS is_new_hire,
         new_hire_marked_at
@@ -894,13 +947,14 @@ router.put("/:id", requireAdminGrant(ADMIN_GRANT_KEYS.USERS), async (req, res) =
     .get(userId);
 
   const departmentsOut = await userDeptSvc.listForUser(userId);
-  const { admin_grants: rawAg2, ...updatedRest } = updated;
+  const { admin_grants: rawAg2, calendar_edit_delegates: rawCed2, ...updatedRest } = updated;
 
   return res.json({
     message: "User updated",
     user: {
       ...updatedRest,
       admin_grants: parseAdminGrantsColumn(rawAg2),
+      calendar_edit_delegates: parseCalendarEditDelegatesColumn(rawCed2),
       facility_university_only: Boolean(updatedRest.facility_university_only),
       is_new_hire: Boolean(updatedRest.is_new_hire),
       departments: departmentsOut,

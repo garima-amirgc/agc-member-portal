@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import { PAGE_SHELL } from "../constants/pageLayout";
@@ -8,6 +8,41 @@ import { useAuth } from "../context/AuthContext";
 import { hasAdminGrant } from "../utils/adminAccess";
 import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
 import NpdRequestBoardTable from "../components/npd/NpdRequestBoardTable";
+
+// Mirrors the KPI tiles on the source workbook's "Management Dashboard"
+// sheet (Active Projects, Priority 1 count, Total Annual GP$) — computed
+// client-side from the same /npd/requests list the board table already
+// loads, so this needs no new backend endpoint.
+function ScorecardKpis({ requests }) {
+  const stats = useMemo(() => {
+    const active = requests.filter((r) => !["completed", "cancelled", "rejected", "customer_rejected"].includes(r.status));
+    const priority1 = active.filter((r) => r.priority_tier === "Priority 1").length;
+    const totalGp = active.reduce((sum, r) => sum + (Number(r.annual_gp_dollars) || 0), 0);
+    return { activeCount: active.length, priority1, totalGp };
+  }, [requests]);
+
+  if (requests.length === 0) return null;
+
+  const fmtMoney = (n) =>
+    n >= 1000000 ? `$${(n / 1000000).toFixed(1)}M` : n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : `$${Math.round(n)}`;
+
+  const tiles = [
+    { label: "Active Projects", value: stats.activeCount },
+    { label: "Priority 1", value: stats.priority1 },
+    { label: "Total Annual GP$ (scored, active)", value: fmtMoney(stats.totalGp) },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {tiles.map((t) => (
+        <div key={t.label} className="card p-4 text-center">
+          <div className="text-2xl font-bold tabular-nums text-[#0B3EAF] dark:text-[#A7D344]">{t.value}</div>
+          <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function IconClipboard({ className = "h-5 w-5" }) {
   return (
@@ -97,6 +132,8 @@ export default function NpdDashboardPage() {
           {error}
         </div>
       ) : null}
+
+      <ScorecardKpis requests={requests} />
 
       {(myTasks.length > 0 || myApprovals.length > 0) && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

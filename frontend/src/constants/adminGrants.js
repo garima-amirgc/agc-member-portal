@@ -20,6 +20,10 @@ export const ADMIN_GRANT_KEYS = Object.freeze({
   NPD: "npd",
   SHAREPOINT: "sharepoint",
   CFO: "cfo",
+  INCIDENT_REPORT_VIEW: "incident_report_view",
+  INCIDENT_REPORT_EDIT: "incident_report_edit",
+  SLT_VIEW: "slt_view",
+  SLT_EDIT: "slt_edit",
 });
 
 export const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
@@ -101,11 +105,44 @@ export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
   },
   {
     groupKey: "cfo",
-    label: "CFO",
+    label: "SLT and Incident Tracker",
     options: [
       {
+        // CFO no longer implies SLT Report access (see GRANT_IMPLIED_BY in
+        // backend/src/config/adminGrants.js) — that implicit grant was
+        // reported as confusing ("why we have SLT under CFO and SLT
+        // Report?"), so SLT Report is now only granted from its own
+        // checkboxes below. Anyone who needs both must have both checked.
         key: ADMIN_GRANT_KEYS.CFO,
-        label: "CFO — view Incident Report and SLT Tracker",
+        label: "CFO — full access (Incident Report, view & add)",
+      },
+    ],
+  },
+  {
+    groupKey: "incident_report",
+    label: "Incident Report",
+    options: [
+      {
+        key: ADMIN_GRANT_KEYS.INCIDENT_REPORT_VIEW,
+        label: "Incident Report — view incidents",
+      },
+      {
+        key: ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT,
+        label: "Incident Report — add & update incidents (includes view)",
+      },
+    ],
+  },
+  {
+    groupKey: "slt_report",
+    label: "SLT Report",
+    options: [
+      {
+        key: ADMIN_GRANT_KEYS.SLT_VIEW,
+        label: "SLT Report — view action items, calendar, and decisions",
+      },
+      {
+        key: ADMIN_GRANT_KEYS.SLT_EDIT,
+        label: "SLT Report — add & update entries (includes view)",
       },
     ],
   },

@@ -8,6 +8,7 @@ import {
   npdStepOwnerLabel,
   stepMatchesDepartmentFilter,
 } from "../../constants/npd";
+import { npdPriorityBadgeClass } from "../../utils/npdScoring";
 
 const FIELD =
   "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-[#0B3EAF] focus:outline-none focus:ring-2 focus:ring-[#0B3EAF]/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-[#A7D344] dark:focus:ring-[#A7D344]/20";
@@ -115,6 +116,18 @@ function RequesterCell({ name }) {
       </div>
       <span className="truncate text-xs font-semibold text-slate-900 dark:text-white">{name || "—"}</span>
     </div>
+  );
+}
+
+// Gate 1 launch scorecard's weighted score/priority — null until step 1's
+// 8 scoring inputs are all filled in, so this renders nothing rather than a
+// misleading badge for a request that just hasn't been scored yet.
+function PriorityBadge({ tier, score }) {
+  if (!tier) return null;
+  return (
+    <span className={`${BADGE} ${npdPriorityBadgeClass(tier)}`} title={`Gate 1 Weighted Score: ${score}`}>
+      {tier} ({score})
+    </span>
   );
 }
 
@@ -342,6 +355,7 @@ export default function NpdRequestBoardTable({ requests, loading, onDelete, dele
                       Step {r.current_step}/13: {stepDef?.name || "—"}
                     </span>
                     <span className={`${BADGE} ${DEPT_BADGE}`}>{npdStepOwnerLabel(stepDef)}</span>
+                    <PriorityBadge tier={r.priority_tier} score={r.weighted_score} />
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <RequesterCell name={r.created_by_name} />
@@ -390,6 +404,9 @@ export default function NpdRequestBoardTable({ requests, loading, onDelete, dele
                             {r.product_name}
                           </div>
                           <div className="truncate text-[10px] text-slate-500 dark:text-slate-400">{r.customer_name}</div>
+                          <div className="mt-1">
+                            <PriorityBadge tier={r.priority_tier} score={r.weighted_score} />
+                          </div>
                         </div>
                       </td>
                       <td className={tdClass("status", rowIdx)}>

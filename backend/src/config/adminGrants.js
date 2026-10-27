@@ -22,6 +22,36 @@ const ADMIN_GRANT_KEYS = Object.freeze({
   NPD: "npd",
   SHAREPOINT: "sharepoint",
   CFO: "cfo",
+  INCIDENT_REPORT_VIEW: "incident_report_view",
+  INCIDENT_REPORT_EDIT: "incident_report_edit",
+  SLT_VIEW: "slt_view",
+  SLT_EDIT: "slt_edit",
+});
+
+// Some grants are implied by a broader one a user already holds, so a single
+// grant key doesn't need to be re-added everywhere it overlaps with an
+// existing area. Edit access always implies view access — someone who can
+// add/update records can obviously see them too.
+//
+// CFO used to also imply full SLT Report (view + edit) access, from back
+// when CFO was the only way to reach the SLT Tracker. Once the SLT Report
+// checkboxes existed as their own grant, that meant SLT access could come
+// from two different places in the Admin grant screen (checking CFO, or
+// checking SLT Report directly), which read as confusing/duplicated —
+// reported as "why we have SLT under CFO and SLT Report? keep it under SLT
+// Report." Removed per that explicit request: CFO now only implies Incident
+// Report access; SLT Report (view/edit) has to be granted explicitly via its
+// own checkboxes. This takes effect immediately for every live request (the
+// implication is evaluated on each permission check, not just at save time)
+// — anyone who currently holds only the CFO grant, without SLT Report
+// checked, will lose Master Calendar access the moment this deploys. Go
+// check Manage Users for anyone with CFO checked who still needs the
+// calendar, and check SLT Report (view, or view & add) for them explicitly.
+const GRANT_IMPLIED_BY = Object.freeze({
+  [ADMIN_GRANT_KEYS.UPCOMING_EVENTS]: [ADMIN_GRANT_KEYS.UPCOMING],
+  [ADMIN_GRANT_KEYS.INCIDENT_REPORT_VIEW]: [ADMIN_GRANT_KEYS.CFO, ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT],
+  [ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT]: [ADMIN_GRANT_KEYS.CFO],
+  [ADMIN_GRANT_KEYS.SLT_VIEW]: [ADMIN_GRANT_KEYS.SLT_EDIT],
 });
 
 const SPOTLIGHT_ADMIN_GRANT_KEYS = Object.freeze([
@@ -86,6 +116,13 @@ function _grantList(reqUser) {
   return Array.isArray(g) ? g : [];
 }
 
+function _grantSatisfies(grants, grantKey) {
+  if (grants.includes(grantKey)) return true;
+  const impliedBy = GRANT_IMPLIED_BY[grantKey];
+  if (impliedBy && impliedBy.some((k) => grants.includes(k))) return true;
+  return false;
+}
+
 function hasAdminGrant(reqUser, grantKey) {
   if (!reqUser || !grantKey) return false;
   const role = canonicalRole(reqUser.role);
@@ -94,21 +131,10 @@ function hasAdminGrant(reqUser, grantKey) {
   if (role === ROLES.ADMIN) {
     const g = reqUser.adminGrants;
     if (g == null || (Array.isArray(g) && g.length === 0)) return true;
-    if (grants.includes(grantKey)) return true;
-    if (
-      grantKey === ADMIN_GRANT_KEYS.UPCOMING_EVENTS &&
-      grants.includes(ADMIN_GRANT_KEYS.UPCOMING)
-    ) {
-      return true;
-    }
-    return false;
+    return _grantSatisfies(grants, grantKey);
   }
 
-  if (grants.includes(grantKey)) return true;
-  if (grantKey === ADMIN_GRANT_KEYS.UPCOMING_EVENTS && grants.includes(ADMIN_GRANT_KEYS.UPCOMING)) {
-    return true;
-  }
-  return false;
+  return _grantSatisfies(grants, grantKey);
 }
 
 function hasAnyAdminGrant(reqUser, grantKeys) {
@@ -171,6 +197,58 @@ async function migrateLegacyUpcomingGrantKey(db) {
   }
 }
 
+// Master Calendar delegated-edit access (SLT Tracker v2). A full admin can,
+// from the Manage Users screen, give a user the ability to edit/delete
+// Master Calendar events that other specific users created — e.g. an EA who
+// edits the calendar "on behalf of" the executives who actually raise the
+// events. Stored the same way admin_grants is: a nullable JSON array TEXT
+// column on users, this time of other users' numeric ids rather than grant
+// key strings.
+function parseCalendarEditDelegatesColumn(raw) {
+  if (raw == null || raw === "") return [];
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(raw)) {
+    return parseCalendarEditDelegatesColumn(raw.toString("utf8"));
+  }
+  if (Array.isArray(raw)) return _sanitizeUserIds(raw);
+  if (typeof raw === "object") return [];
+  const s = String(raw).trim();
+  if (!s) return [];
+  try {
+    const arr = JSON.parse(s);
+    if (!Array.isArray(arr)) return [];
+    return _sanitizeUserIds(arr);
+  } catch {
+    return [];
+  }
+}
+
+function _sanitizeUserIds(arr) {
+  const seen = new Set();
+  const out = [];
+  for (const x of arr) {
+    const n = Number(x);
+    if (!Number.isFinite(n) || n < 1) continue;
+    const k = Math.trunc(n);
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(k);
+    }
+  }
+  out.sort((a, b) => a - b);
+  return out;
+}
+
+// Returns { db } (a JSON string or null to clear) or { error }. `selfId`
+// excludes a user from being able to delegate to themselves.
+function sanitizeCalendarEditDelegatesPayload(value, { selfId } = {}) {
+  if (value == null) return { db: null };
+  if (!Array.isArray(value)) {
+    return { error: "calendar_edit_delegates must be null or an array of user ids" };
+  }
+  const cleaned = _sanitizeUserIds(value).filter((id) => selfId == null || id !== Number(selfId));
+  return { db: cleaned.length ? JSON.stringify(cleaned) : null };
+}
+
 module.exports = {
   ADMIN_GRANT_KEYS,
   SPOTLIGHT_ADMIN_GRANT_KEYS,
@@ -182,4 +260,6 @@ module.exports = {
   normalizeGrantKeysForSave,
   sanitizeAdminGrantsPayload,
   migrateLegacyUpcomingGrantKey,
+  parseCalendarEditDelegatesColumn,
+  sanitizeCalendarEditDelegatesPayload,
 };

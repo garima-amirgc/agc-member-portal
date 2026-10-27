@@ -909,6 +909,86 @@ async function sendManagerTimeOffRequestEmail({
   return sendMail({ to: managerEmail, subject, text, html });
 }
 
+/**
+ * Sent to every user with access to the SLT Tracker's Master Calendar (cfo
+ * / slt_view / slt_edit admin grant — see adminGrants.js) whenever someone
+ * adds a new event, so the group finds out without having to keep
+ * rechecking the tracker. One call per recipient (not a single
+ * multi-address "to"), so each person is addressed by name — see
+ * sltCalendar.service.js's notifyCalendarAccessUsersOfNewEvent, which
+ * fans this out and excludes the event's own creator.
+ */
+async function sendCalendarEventCreatedEmail({
+  to,
+  recipientName,
+  creatorName,
+  eventTitle,
+  eventDateLabel,
+  category,
+  executives,
+  ownerLead,
+  executiveActionRequired,
+  eventId,
+}) {
+  if (!to) return { skipped: true };
+
+  // "tab=slt" lands on the SLT Tracker tab of the CFO page (it defaults to
+  // Incident Report otherwise); "calEvent=<id>" is read by SltTrackerV2.jsx
+  // to switch to Master Calendar, expand that exact event, widen the date
+  // filter if needed so it isn't hidden, and scroll it into view — see the
+  // deepLinkEventId handling in SltTrackerV2.jsx/CfoReportsPage.jsx.
+  const base = String(process.env.APP_BASE_URL || process.env.FRONTEND_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  const calendarUrl = eventId ? `${base}/cfo?tab=slt&calEvent=${encodeURIComponent(eventId)}` : `${base}/cfo?tab=slt`;
+
+  const subject = `New Master Calendar event: ${eventTitle}`;
+  const text = [
+    `Hello${recipientName ? ` ${recipientName}` : ""},`,
+    "",
+    `${creatorName || "Someone"} added a new event to the SLT Tracker's Master Calendar.`,
+    "",
+    `Event: ${eventTitle}`,
+    `Date: ${eventDateLabel || "—"}`,
+    category ? `Category: ${category}` : "",
+    executives ? `Executive(s): ${executives}` : "",
+    ownerLead ? `Owner/Lead: ${ownerLead}` : "",
+    executiveActionRequired ? `Executive action required: ${executiveActionRequired}` : "",
+    "",
+    "View it on the Master Calendar in the member portal.",
+    "",
+    `This message was sent by ${APP_MAIL_BRAND}.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const bodyHtml = `
+  <p style="margin:0 0 12px 0;font-size:18px;font-weight:600;color:#0f172a;">New Master Calendar event</p>
+  <p style="margin:0 0 16px 0;">Hello${recipientName ? ` ${escapeHtml(recipientName)}` : ""},</p>
+  <p style="margin:0 0 16px 0;"><strong>${escapeHtml(creatorName || "Someone")}</strong> added a new event to the SLT Tracker's Master Calendar.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f8fafc;border-radius:10px;padding:16px 20px;border:1px solid #e2e8f0;margin-bottom:20px;">
+    <tr><td style="padding:5px 0;font-size:13px;color:#64748b;width:160px;vertical-align:top;">Event</td><td style="padding:5px 0;font-size:13px;color:#0f172a;font-weight:600;">${escapeHtml(eventTitle)}</td></tr>
+    <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Date</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(eventDateLabel || "—")}</td></tr>
+    ${category ? `<tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Category</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(category)}</td></tr>` : ""}
+    ${executives ? `<tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Executive(s)</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(executives)}</td></tr>` : ""}
+    ${ownerLead ? `<tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Owner/Lead</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(ownerLead)}</td></tr>` : ""}
+    ${executiveActionRequired ? `<tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Action required</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(executiveActionRequired)}</td></tr>` : ""}
+  </table>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:8px;">
+    <tr><td align="center">
+      <a href="${escapeHtml(calendarUrl)}" style="display:inline-block;padding:12px 28px;background:#0B3EAF;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Open Master Calendar →</a>
+    </td></tr>
+  </table>`;
+
+  const html = emailShell({
+    title: subject,
+    preheader: `${creatorName || "Someone"} added "${eventTitle}" to the Master Calendar`,
+    bodyHtml,
+  });
+
+  return sendMail({ to, subject, text, html });
+}
+
 module.exports = {
   EMAIL_TEMPLATE_VERSION,
   isEmailConfigured,
@@ -929,4 +1009,5 @@ module.exports = {
   sendCustomerInquiryToFsqa,
   sendCustomerInquiryToManagement,
   sendManagerTimeOffRequestEmail,
+  sendCalendarEventCreatedEmail,
 };

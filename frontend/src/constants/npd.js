@@ -1,3 +1,10 @@
+import { FACILITY_CODES } from "./facilities";
+
+// The real production plants (Garima: "there are 3 plants AQM, SCF, ASP").
+// Reuses the app's existing FACILITY_CODES list rather than a separate
+// hardcoded one, minus "AGC" — that's the parent company code, not a plant.
+export const NPD_PLANT_OPTIONS = FACILITY_CODES.filter((c) => c !== "AGC").map((c) => ({ value: c, label: c }));
+
 // Mirrors backend/src/services/npdWorkflow.service.js STEP_DEFS. The
 // backend is the source of truth for what's allowed — this is display-only.
 // `skippable: false` on steps 1 and 3 mirrors NON_SKIPPABLE_STEP_NUMBERS on
@@ -26,34 +33,110 @@ export const NPD_STEP_DEFS = [
   { number: 13, key: "first_shipment", name: "First Shipment Confirmation", department: "Sales", type: "submit", skippable: true },
 ];
 
+// Shared 1–5 option list for the Gate 1 scorecard's manual scores. 1/3/5 are
+// anchored to the Scoring Guide's own wording; 2 and 4 get their own short
+// in-between labels (not invented Excel content — just a plain-language
+// midpoint) so every option looks filled in and consistent, rather than
+// mixing worded options with bare numbers.
+export function NPD_SCORE_OPTIONS(label1, label2, label3, label4, label5) {
+  return [
+    { value: "1", label: `1 — ${label1}` },
+    { value: "2", label: `2 — ${label2}` },
+    { value: "3", label: `3 — ${label3}` },
+    { value: "4", label: `4 — ${label4}` },
+    { value: "5", label: `5 — ${label5}` },
+  ];
+}
+
+// The 4 manual Gate 1 scores, as their own list — reused by both
+// NPD_STEP_FORM_FIELDS.new_product_request (the generic resubmit-step
+// editor) and NpdNewRequestPage's dedicated scorecard section with its live
+// weighted-score preview, so the anchor wording only has to be written once.
+export const NPD_SCORECARD_METRIC_DEFS = [
+  {
+    key: "strategic_fit_score",
+    label: "Strategic Fit",
+    options: NPD_SCORE_OPTIONS(
+      "Weak / opportunistic",
+      "Limited strategic value",
+      "Supports an established strategic priority",
+      "Strong strategic fit",
+      "Critical to a major strategic priority"
+    ),
+  },
+  {
+    key: "customer_market_value_score",
+    label: "Customer / Market Value",
+    options: NPD_SCORE_OPTIONS(
+      "Small/niche opportunity",
+      "Modest customer or market value",
+      "Meaningful customer or market growth",
+      "Significant customer or market growth",
+      "Major customer, market entry or scalable platform"
+    ),
+  },
+  {
+    key: "complexity_score",
+    label: "Complexity (easy to execute scores HIGH)",
+    options: NPD_SCORE_OPTIONS(
+      "Very complex / major changes",
+      "Fairly complex",
+      "Moderate complexity",
+      "Mostly straightforward",
+      "Fits current capabilities / simple execution"
+    ),
+  },
+  {
+    key: "speed_to_market_score",
+    label: "Speed to Market (fast scores HIGH)",
+    options: NPD_SCORE_OPTIONS("More than 9 months", "6–9 months", "3–6 months", "90 days – 3 months", "Less than 90 days"),
+  },
+];
+
+// Channel values as actually used across the Launch Scorecard workbook's
+// real rows (Co-man, Retail, Foodservice, Industrial Sales — one entry had
+// a typo, "Industial Sales", normalized here). The workbook itself left
+// this column as free text with no dropdown, but a fixed list keeps new
+// entries consistent going forward.
+export const NPD_CHANNEL_OPTIONS = [
+  { value: "Co-man", label: "Co-man" },
+  { value: "Retail", label: "Retail" },
+  { value: "Foodservice", label: "Foodservice" },
+  { value: "Industrial Sales", label: "Industrial Sales" },
+];
+
 // Lightweight, step-specific field sets for the "submit" steps so the form
 // captures something more useful than a bare notes box. Any step not listed
 // here falls back to a single Notes textarea.
 export const NPD_STEP_FORM_FIELDS = {
-  // Mirrors the fields captured on NpdNewRequestPage. Used when step 1 needs
-  // to be edited and resubmitted — e.g. after a later approver sends the
-  // request back with "request changes", which rewinds the workflow to
-  // step 1 so the submitter can fix it.
+  // Mirrors the single unified Gate 1 — Launch Scorecard form on
+  // NpdNewRequestPage (field set and order match the original Launch
+  // Scorecard workbook's own columns: Product/SKU, Customer, Channel, Plant,
+  // Start Date, Target Launch Date, then economics/scores/commercial
+  // detail). Used when step 1 needs to be edited and resubmitted — e.g.
+  // after a later approver sends the request back with "request changes",
+  // which rewinds the workflow to step 1 so the submitter can fix it.
   new_product_request: [
-    { key: "customer_name", label: "Customer name", type: "text" },
-    { key: "customer_number", label: "Customer number", type: "text" },
-    { key: "customer_contact", label: "Customer contact", type: "text" },
-    { key: "product_name", label: "Product name", type: "text" },
-    { key: "product_description", label: "Product description", type: "textarea" },
-    {
-      key: "request_type",
-      label: "Request type",
-      type: "select",
-      options: [
-        { value: "new_product", label: "New product" },
-        { value: "existing_product_modification", label: "Existing product modification" },
-      ],
-    },
-    { key: "plant", label: "Plant", type: "text" },
-    { key: "requested_launch_date", label: "Requested launch date", type: "date" },
-    { key: "estimated_volume", label: "Estimated volume", type: "text" },
-    { key: "packaging_requirement", label: "Packaging requirement", type: "text" },
-    { key: "general_comments", label: "General comments", type: "textarea" },
+    { key: "customer_name", label: "Customer", type: "text" },
+    { key: "product_name", label: "Product / SKU", type: "text" },
+    { key: "channel", label: "Channel", type: "select", options: NPD_CHANNEL_OPTIONS },
+    { key: "plant", label: "Plant", type: "select", options: NPD_PLANT_OPTIONS },
+    { key: "start_date", label: "Start date", type: "date" },
+    { key: "requested_launch_date", label: "Target launch date", type: "date" },
+    // Gate 1 launch scorecard — economics + qualitative scoring, so
+    // Management Approval (step 2) has a weighted score/priority to act on
+    // instead of a bare yes/no. The 4 manual scores reuse NPD_SCORE_OPTIONS
+    // so the Scoring Guide's anchor wording lives in one place.
+    { key: "annual_volume_kg", label: "Annual Volume (kg)", type: "number" },
+    { key: "annual_revenue", label: "Annual Revenue ($)", type: "number" },
+    { key: "annual_gp_dollars", label: "Annual GP$ ($)", type: "number" },
+    { key: "gp_percent", label: "GP% (e.g. 11 for 11%)", type: "number" },
+    ...NPD_SCORECARD_METRIC_DEFS.map((m) => ({ key: m.key, label: `${m.label} (1–5)`, type: "select", options: m.options })),
+    { key: "capex_required", label: "CapEx Required ($)", type: "number" },
+    { key: "customer_commitment", label: "Customer Commitment (e.g. Confirmed, RFP, Not Confirmed)", type: "text" },
+    { key: "key_strategic_rationale", label: "Key Strategic Rationale", type: "textarea" },
+    { key: "key_risks_comments", label: "Key Risks / Comments", type: "textarea" },
+    { key: "decision", label: "SLT Decision (e.g. SLT Approved, Hold, Hold need more details)", type: "text" },
   ],
   plu_creation: [
     { key: "plu_number", label: "PLU number", type: "text" },

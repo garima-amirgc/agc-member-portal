@@ -208,16 +208,33 @@ router.delete("/slt/decisions/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), as
 // ── SLT Tracker — Master Calendar ───────────────────────────────────────
 // Native table (slt_calendar) matching the source workbook's "Master
 // Calendar" sheet column-for-column — see sltCalendar.service.js. Viewing
-// requires cfo, slt_view, or slt_edit; add/edit requires cfo or slt_edit.
+// requires cfo, slt_view, or slt_edit. Adding a new event still requires
+// the full cfo/slt_edit grant. Editing/deleting an *existing* event is
+// broader than a flat grant check: it's allowed for anyone with
+// the full edit grant, for the event's own creator, or for anyone a full
+// admin has delegated "edit on behalf of" that creator to (set on the
+// Manage Users screen, see adminGrants.js's calendar_edit_delegates) — see
+// canEditCalendarEvent() below. So the route-level middleware only
+// requires *view* access here; the finer-grained check happens per-event
+// inside each handler.
 
 function sltErrorHandler(res, e) {
   const code = e?.statusCode || 500;
   res.status(code).json({ message: e?.message || "Server error" });
 }
 
+function canEditCalendarEvent(user, event) {
+  if (hasAnyAdminGrant(user, SLT_EDIT_GRANTS)) return true;
+  if (event?.created_by == null) return false;
+  if (Number(user?.id) === Number(event.created_by)) return true;
+  const delegates = Array.isArray(user?.calendarEditDelegates) ? user.calendarEditDelegates : [];
+  return delegates.includes(Number(event.created_by));
+}
+
 router.get("/slt/v2/calendar", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
   try {
-    res.json({ events: await sltCalendar.listCalendar(req.query) });
+    const events = await sltCalendar.listCalendar(req.query);
+    res.json({ events: events.map((ev) => ({ ...ev, can_edit: canEditCalendarEvent(req.user, ev) })) });
   } catch (e) {
     sltErrorHandler(res, e);
   }
@@ -225,7 +242,8 @@ router.get("/slt/v2/calendar", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (
 
 router.get("/slt/v2/calendar/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
   try {
-    res.json(await sltCalendar.getCalendarEventById(req.params.id));
+    const event = await sltCalendar.getCalendarEventById(req.params.id);
+    res.json({ ...event, can_edit: canEditCalendarEvent(req.user, event) });
   } catch (e) {
     sltErrorHandler(res, e);
   }
@@ -239,9 +257,29 @@ router.post("/slt/v2/calendar", requireAdminGrantAny(...SLT_EDIT_GRANTS), async 
   }
 });
 
-router.patch("/slt/v2/calendar/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+router.patch("/slt/v2/calendar/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
   try {
+    const existing = await sltCalendar.getCalendarEventById(req.params.id);
+    if (!canEditCalendarEvent(req.user, existing)) {
+      return res.status(403).json({ message: "You can only edit calendar events you created (or were delegated)." });
+    }
     res.json(await sltCalendar.updateCalendarEvent(req.user.id, req.params.id, req.body));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+// True, permanent delete (by explicit request) — not the archive-only
+// pattern used elsewhere in SLT Tracker. There is no restore once this
+// succeeds; the audit log (entityType "calendar", action "delete") is the
+// only record the event ever existed.
+router.delete("/slt/v2/calendar/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
+  try {
+    const existing = await sltCalendar.getCalendarEventById(req.params.id);
+    if (!canEditCalendarEvent(req.user, existing)) {
+      return res.status(403).json({ message: "You can only delete calendar events you created (or were delegated)." });
+    }
+    res.json(await sltCalendar.deleteCalendarEvent(req.user.id, req.params.id));
   } catch (e) {
     sltErrorHandler(res, e);
   }

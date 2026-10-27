@@ -1,0 +1,103 @@
+{
+  "dryRun": true,
+  "sheets": {
+    "action_register": {
+      "inserted": 55,
+      "updated": 0,
+      "unchanged": 0,
+      "history_only": 0,
+      "pending_review": 0,
+      "skipped_template": 0
+    },
+    "decision_queue": {
+      "inserted": 5,
+      "updated": 0,
+      "unchanged": 0,
+      "history_only": 0,
+      "pending_review": 0,
+      "skipped_template": 0
+    },
+    "decision_register": {
+      "inserted": 33,
+      "updated": 0,
+      "unchanged": 0,
+      "history_only": 0,
+      "pending_review": 0,
+      "skipped_template": 0
+    },
+    "commitments": {
+      "inserted": 19,
+      "updated": 0,
+      "unchanged": 0,
+      "history_only": 0,
+      "pending_review": 0,
+      "skipped_template": 0
+    },
+    "decision_queue_bak": {
+      "inserted": 0,
+      "updated": 0,
+      "unchanged": 0,
+      "history_only": 1,
+      "pending_review": 0,
+      "skipped_template": 0
+    },
+    "decision_register_bak": {
+      "inserted": 0,
+      "updated": 0,
+      "unchanged": 0,
+      "history_only": 1,
+      "pending_review": 0,
+      "skipped_template": 0
+    },
+    "master_calendar": {
+      "inserted": 22,
+      "updated": 0,
+      "unchanged": 0,
+      "history_only": 0,
+      "pending_review": 0,
+      "skipped_template": 0
+    }
+  },
+  "flagged": [
+    {
+      "sheet": "Decision Queue",
+      "row": 8,
+      "message": "Queue Immutable Key was blank in the source; generated DECQ-K-A3AD4ECE8D for DEC-0004."
+    },
+    {
+      "sheet": "Decision Queue",
+      "row": 9,
+      "message": "Queue Immutable Key was blank in the source; generated DECQ-K-128E9D1553 for DEC-0005."
+    },
+    {
+      "sheet": "Decision Register",
+      "row": 5,
+      "message": "Row has both \"Decision Required\" (\"Work order closure\nPlan to hit the 20th deadline\") and Decision Log fields (Source Decision ID=DEC-0001, Decision Summary=\"YVF Price Increase\") — confirm these describe the same decision before relying on the link."
+    },
+    {
+      "sheet": "Decision Register",
+      "row": 5,
+      "message": "Source Decision ID \"DEC-0001\" / Queue Source Key \"null\" did not match any Decision Queue row — left unresolved."
+    },
+    {
+      "sheet": "Decision Register",
+      "row": 6,
+      "message": "Row has both \"Decision Required\" (\"YVF Price Increase\") and Decision Log fields (Source Decision ID=DEC-0002, Decision Summary=\"Popeyes Price Increase\") — confirm these describe the same decision before relying on the link."
+    },
+    {
+      "sheet": "Decision Register",
+      "row": 6,
+      "message": "Source Decision ID \"DEC-0002\" / Queue Source Key \"null\" did not match any Decision Queue row — left unresolved."
+    },
+    {
+      "sheet": "Master Calendar",
+      "row": 17,
+      "message": "Prep Deadline (2027-05-08) is after the Event Date (2026-11-04) for \"OMAFA Audit - Arthur\" — likely a year typo; not auto-corrected."
+    },
+    {
+      "sheet": "Master Calendar",
+      "row": 19,
+      "message": "Prep Deadline (2027-06-02) is after the Event Date (2026-12-01) for \"Monthly Coldbox Meeting\" — likely a year typo; not auto-corrected."
+    }
+  ]
+}

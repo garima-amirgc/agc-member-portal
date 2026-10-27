@@ -25,9 +25,74 @@ const EMPTY_USER = {
   departments: ["Production"],
   admin_full_access: false,
   admin_grants: [],
+  calendar_edit_delegates: [],
   facility_university_only: false,
   is_new_hire: false,
 };
+
+// Master Calendar delegated-edit access: a small checkbox list of other
+// users, used both on the Add-user and Edit-user forms. Only a full admin
+// can set this (gated the same as admin_grants), and it only matters for a
+// user who actually has some SLT access — but we don't try to compute that
+// here, since the admin can grant SLT access and delegation in the same
+// save. The list excludes the user being edited (can't delegate to self).
+function CalendarDelegatePicker({ allUsers, selfId, selectedIds, onToggle }) {
+  const [query, setQuery] = useState("");
+  const options = (allUsers || []).filter((u) => Number(u.id) !== Number(selfId));
+  const selectedCount = (selectedIds || []).length;
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? options.filter((u) => String(u.name || "").toLowerCase().includes(q) || String(u.email || "").toLowerCase().includes(q))
+    : options;
+
+  return (
+    <div className="rounded border border-slate-200 p-3 dark:border-slate-600">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium">Master Calendar — edit on behalf of</p>
+        {selectedCount > 0 ? (
+          <span className="shrink-0 rounded-full bg-[#0B3EAF]/10 px-2 py-0.5 text-[10px] font-bold text-[#0B3EAF] dark:bg-[#A7D344]/10 dark:text-[#A7D344]">
+            {selectedCount} selected
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+        Lets this user edit or delete Master Calendar events created by whoever is checked below, even without full
+        SLT edit access. Useful for an assistant who maintains the calendar for one or more executives.
+      </p>
+      {options.length === 0 ? (
+        <p className="mt-2 text-[11px] italic text-slate-400">No other users yet.</p>
+      ) : (
+        <>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or email…"
+            className="mt-2 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm focus:border-[#0B3EAF] focus:outline-none focus:ring-1 focus:ring-[#0B3EAF] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+          <div className="mt-2 max-h-40 overflow-y-auto rounded border border-slate-100 p-2 dark:border-slate-700">
+            {filtered.length === 0 ? (
+              <p className="px-1 py-2 text-[11px] italic text-slate-400">No users match "{query.trim()}".</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                {filtered.map((u) => (
+                  <label key={u.id} className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={(selectedIds || []).map(Number).includes(Number(u.id))}
+                      onChange={() => onToggle(Number(u.id))}
+                    />
+                    <span className="truncate">{u.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function AdminUsersSection({ className = "card" }) {
   const { user: me, refreshMe } = useAuth();
@@ -208,6 +273,10 @@ export default function AdminUsersSection({ className = "card" }) {
           const keys = formGrantsSnapshotRef.current.filter(Boolean);
           if (keys.length) payload.admin_grants = keys;
         }
+        const delegateIds = Array.isArray(form.calendar_edit_delegates)
+          ? form.calendar_edit_delegates.map(Number).filter((n) => Number.isFinite(n) && n > 0)
+          : [];
+        if (delegateIds.length) payload.calendar_edit_delegates = delegateIds;
       }
       if (!isAdminRole(form.role)) {
         payload.facility_university_only = Boolean(form.facility_university_only);
@@ -353,6 +422,9 @@ export default function AdminUsersSection({ className = "card" }) {
         password: "",
         admin_full_access: isAdminRole(roleResolved) && grantsResolved.length === 0,
         admin_grants: grantsResolved,
+        calendar_edit_delegates: Array.isArray(data.calendar_edit_delegates)
+          ? data.calendar_edit_delegates.map(Number).filter(Number.isFinite)
+          : [],
         facility_university_only: Boolean(data.facility_university_only),
         is_new_hire: Boolean(data.is_new_hire ?? u.is_new_hire),
       });
@@ -466,6 +538,10 @@ export default function AdminUsersSection({ className = "card" }) {
           const keys = Array.isArray(ed.admin_grants) ? ed.admin_grants.filter(Boolean) : [];
           body.admin_grants = keys.length ? keys : null;
         }
+        const delegateIds = Array.isArray(ed.calendar_edit_delegates)
+          ? ed.calendar_edit_delegates.map(Number).filter((n) => Number.isFinite(n) && n > 0)
+          : [];
+        body.calendar_edit_delegates = delegateIds.length ? delegateIds : null;
       }
       const res = await putUserSave(ed.id, body);
       editGrantsSnapshotRef.current = [];
@@ -706,6 +782,22 @@ export default function AdminUsersSection({ className = "card" }) {
                 />
                 </div>
               </div>
+            ) : null}
+
+            {canManageAdminGrants(me) ? (
+              <CalendarDelegatePicker
+                allUsers={users}
+                selfId={null}
+                selectedIds={form.calendar_edit_delegates || []}
+                onToggle={(id) => {
+                  setForm((prev) => {
+                    const s = new Set((prev.calendar_edit_delegates || []).map(Number));
+                    if (s.has(id)) s.delete(id);
+                    else s.add(id);
+                    return { ...prev, calendar_edit_delegates: Array.from(s) };
+                  });
+                }}
+              />
             ) : null}
 
             <div className="rounded border p-3 dark:border-slate-700">
@@ -1190,6 +1282,23 @@ export default function AdminUsersSection({ className = "card" }) {
                   />
                   </div>
                 </div>
+              ) : null}
+
+              {canManageAdminGrants(me) ? (
+                <CalendarDelegatePicker
+                  allUsers={users}
+                  selfId={editing.id}
+                  selectedIds={editing.calendar_edit_delegates || []}
+                  onToggle={(id) => {
+                    setEditing((prev) => {
+                      if (!prev) return prev;
+                      const s = new Set((prev.calendar_edit_delegates || []).map(Number));
+                      if (s.has(id)) s.delete(id);
+                      else s.add(id);
+                      return { ...prev, calendar_edit_delegates: Array.from(s) };
+                    });
+                  }}
+                />
               ) : null}
 
               <div className="rounded border p-3 dark:border-slate-700">
