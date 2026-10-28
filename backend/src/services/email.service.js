@@ -142,7 +142,11 @@ function resetTransporter() {
   transporter = null;
 }
 
-async function sendMail({ to, subject, text, html }) {
+// attachments (optional): nodemailer's own [{ filename, content, contentType }]
+// shape, content as a Buffer — passed straight through. Used by
+// sendCalendarDigestEmail below to attach the exported Master Calendar
+// workbook; every other caller just omits it.
+async function sendMail({ to, subject, text, html, attachments }) {
   const t = getTransporter();
   if (!t) {
     console.log(
@@ -160,6 +164,7 @@ async function sendMail({ to, subject, text, html }) {
     subject,
     text,
     html,
+    ...(attachments && attachments.length ? { attachments } : {}),
   });
   console.log(`[EMAIL] Sent "${subject}" to ${to}${info.messageId ? ` (${info.messageId})` : ""}`);
   return { sent: true, messageId: info.messageId };
@@ -989,6 +994,82 @@ async function sendCalendarEventCreatedEmail({
   return sendMail({ to, subject, text, html });
 }
 
+/**
+ * Master Calendar subscription digest — the whole calendar as an Excel
+ * attachment, sent on whatever schedule an admin configures under SLT
+ * Report → Administration (see sltCalendar.service.js's
+ * checkAndRunScheduledCalendarDigest / sendCalendarDigestNow). Deliberately
+ * plain: no per-event detail in the email body since the attachment already
+ * has everything — just enough text to say what's attached and how many
+ * events it covers.
+ */
+async function sendCalendarDigestEmail({ to, recipientName, attachmentBuffer, attachmentFilename, eventCount, periodLabel, isTest }) {
+  if (!to) return { skipped: true };
+
+  const base = String(process.env.APP_BASE_URL || process.env.FRONTEND_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  const calendarUrl = `${base}/cfo?tab=slt`;
+
+  const subject = isTest ? "Master Calendar subscription — test email" : `Master Calendar — ${periodLabel || "scheduled"} update`;
+  const text = [
+    `Hello${recipientName ? ` ${recipientName}` : ""},`,
+    "",
+    isTest
+      ? "This is a test of the Master Calendar subscription email — a real send will look just like this."
+      : "Here's your scheduled Master Calendar update.",
+    "",
+    `Attached: ${attachmentFilename} (${eventCount} event${eventCount === 1 ? "" : "s"}).`,
+    "",
+    "Open the Master Calendar in the member portal any time to see it live, or make changes from the attached file and import it back in once you're ready.",
+    "",
+    `This message was sent by ${APP_MAIL_BRAND}.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const bodyHtml = `
+  <p style="margin:0 0 12px 0;font-size:18px;font-weight:600;color:#0f172a;">${isTest ? "Master Calendar subscription — test email" : "Master Calendar update"}</p>
+  <p style="margin:0 0 16px 0;">Hello${recipientName ? ` ${escapeHtml(recipientName)}` : ""},</p>
+  <p style="margin:0 0 16px 0;">
+    ${
+      isTest
+        ? "This is a test of the Master Calendar subscription email &mdash; a real send will look just like this."
+        : "Here&rsquo;s your scheduled Master Calendar update."
+    }
+  </p>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f8fafc;border-radius:10px;padding:16px 20px;border:1px solid #e2e8f0;margin-bottom:20px;">
+    <tr><td style="padding:5px 0;font-size:13px;color:#64748b;width:140px;vertical-align:top;">Attached</td><td style="padding:5px 0;font-size:13px;color:#0f172a;font-weight:600;">${escapeHtml(attachmentFilename)}</td></tr>
+    <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Events</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${eventCount}</td></tr>
+  </table>
+  <p style="margin:0 0 16px 0;font-size:13px;color:#475569;">Make changes from the attached file and import it back in once you're ready &mdash; see the Import button on the Master Calendar.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:8px;">
+    <tr><td align="center">
+      <a href="${escapeHtml(calendarUrl)}" style="display:inline-block;padding:12px 28px;background:#0B3EAF;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Open Master Calendar →</a>
+    </td></tr>
+  </table>`;
+
+  const html = emailShell({
+    title: subject,
+    preheader: `${attachmentFilename} — ${eventCount} event${eventCount === 1 ? "" : "s"}`,
+    bodyHtml,
+  });
+
+  return sendMail({
+    to,
+    subject,
+    text,
+    html,
+    attachments: [
+      {
+        filename: attachmentFilename,
+        content: attachmentBuffer,
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+    ],
+  });
+}
+
 module.exports = {
   EMAIL_TEMPLATE_VERSION,
   isEmailConfigured,
@@ -1010,4 +1091,5 @@ module.exports = {
   sendCustomerInquiryToManagement,
   sendManagerTimeOffRequestEmail,
   sendCalendarEventCreatedEmail,
+  sendCalendarDigestEmail,
 };

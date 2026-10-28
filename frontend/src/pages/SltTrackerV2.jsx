@@ -549,7 +549,6 @@ function CalendarEventCard({ event, onEdit, onDelete, expanded, onToggle, highli
             <span className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-[#0B3EAF] dark:bg-white/10 dark:text-[#A7D344]">
               {fmtEventDate(ev.event_date, ev.is_text_date_range)}
             </span>
-            {ev.month ? <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{ev.month}</span> : null}
           </div>
 
           <div className="min-w-0 flex-1">
@@ -1035,14 +1034,14 @@ const MASTER_CALENDAR_SUB_TABS = [
   { key: "calendar", label: "Calendar" },
   { key: "lists", label: "Lists" },
   { key: "read_me", label: "Read Me" },
+  { key: "administration", label: "Administration" },
 ];
 
-// Lists and Read Me are reference/how-to content, not calendar data — but
-// they're still admin-only: anyone granted slt_view/slt_edit/cfo access
-// (including a non-admin member an admin delegated access to) sees just
-// Calendar. Only an actual Admin-role account sees all three sub-tabs.
-// See isAdministrator() in utils/adminAccess.js.
-const ADMIN_ONLY_SUB_TAB_KEYS = new Set(["lists", "read_me"]);
+// Lists, Read Me, and Administration are all admin-only: anyone granted
+// slt_view/slt_edit/cfo access (including a non-admin member an admin
+// delegated access to) sees just Calendar. Only an actual Admin-role
+// account sees the rest. See isAdministrator() in utils/adminAccess.js.
+const ADMIN_ONLY_SUB_TAB_KEYS = new Set(["lists", "read_me", "administration"]);
 
 // Collapsed by default — click the header to open it. Keeps the screen from
 // being wall-to-wall explanatory text while still surfacing every caveat for
@@ -1136,6 +1135,305 @@ function ReadMeView() {
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
+
+const SUBSCRIPTION_WEEKDAYS = [
+  { value: 0, label: "Sunday" },
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+];
+
+const SUBSCRIPTION_HOURS = Array.from({ length: 24 }, (_, h) => ({
+  value: h,
+  label: h === 0 ? "12:00 AM" : h < 12 ? `${h}:00 AM` : h === 12 ? "12:00 PM" : `${h - 12}:00 PM`,
+}));
+
+const SUBSCRIPTION_TIMEZONES = [
+  { value: "America/New_York", label: "Eastern (New York)" },
+  { value: "America/Chicago", label: "Central (Chicago)" },
+  { value: "America/Denver", label: "Mountain (Denver)" },
+  { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
+  { value: "America/Toronto", label: "Eastern (Toronto)" },
+  { value: "UTC", label: "UTC" },
+];
+
+const SUBSCRIPTION_SELECT_CLASS =
+  "h-[38px] w-full rounded-md border border-slate-300 bg-white px-2.5 text-sm text-slate-800 shadow-sm focus:border-[#0B3EAF] focus:outline-none focus:ring-1 focus:ring-[#0B3EAF] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
+
+// Admin-only "Administration" sub-tab — lets an Admin-role account turn on
+// an automatic email of the whole Master Calendar (same file Export
+// produces) on a schedule, instead of everyone relying on clicking Export
+// themselves. See cfo.routes.js's GET/PATCH /slt/v2/calendar/subscription
+// and sltCalendar.service.js's checkAndRunScheduledCalendarDigest for the
+// backend half.
+function SubscriptionAdminView() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [settings, setSettings] = useState(null);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
+  const [banner, setBanner] = useState(null); // { tone: "ok" | "warn", text } | null
+
+  const formFromSettings = (data) => ({
+    enabled: !!data.enabled,
+    frequency: data.frequency,
+    day_of_week: data.day_of_week,
+    day_of_month: data.day_of_month,
+    send_hour: data.send_hour,
+    timezone: data.timezone,
+    recipient_mode: data.recipient_mode,
+    recipient_emails_text: (data.recipient_emails || []).join("\n"),
+  });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await api.get("/cfo/slt/v2/calendar/subscription");
+      setSettings(data);
+      setForm(formFromSettings(data));
+    } catch (e) {
+      setError(friendlyErrorMessage(e, "Could not load subscription settings."));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleSave = async () => {
+    if (!form) return;
+    setSaving(true);
+    setBanner(null);
+    try {
+      const { data } = await api.patch("/cfo/slt/v2/calendar/subscription", {
+        enabled: form.enabled,
+        frequency: form.frequency,
+        day_of_week: form.day_of_week,
+        day_of_month: form.day_of_month,
+        send_hour: form.send_hour,
+        timezone: form.timezone,
+        recipient_mode: form.recipient_mode,
+        recipient_emails: form.recipient_emails_text,
+      });
+      setSettings(data);
+      setForm(formFromSettings(data));
+      setBanner({ tone: "ok", text: "Subscription settings saved." });
+    } catch (e) {
+      setBanner({ tone: "warn", text: friendlyErrorMessage(e, "Could not save subscription settings.") });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    setTestBusy(true);
+    setBanner(null);
+    try {
+      const { data } = await api.post("/cfo/slt/v2/calendar/subscription/test");
+      setBanner({
+        tone: data.sent > 0 ? "ok" : "warn",
+        text:
+          data.sent > 0
+            ? "Test email sent to your own inbox."
+            : `Test email could not be sent${data.failureReasons?.[0] ? `: ${data.failureReasons[0]}` : "."}`,
+      });
+    } catch (e) {
+      setBanner({ tone: "warn", text: friendlyErrorMessage(e, "Could not send test email.") });
+    } finally {
+      setTestBusy(false);
+    }
+  };
+
+  if (loading) {
+    return <p className="text-sm text-slate-500 dark:text-slate-400">Loading subscription settings…</p>;
+  }
+  if (error) {
+    return (
+      <div className="rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+        {error}
+      </div>
+    );
+  }
+  if (!form) return null;
+
+  return (
+    <div className="max-w-xl">
+      <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
+        Automatically email the whole Master Calendar (the same file the Export button downloads) on a schedule —
+        handy for anyone who wants it in their inbox without opening the portal, or as a standing backup if the
+        server ever goes down.
+      </p>
+
+      {banner ? (
+        <div
+          className={`mb-4 flex items-start justify-between gap-3 rounded border p-2.5 text-sm ${
+            banner.tone === "warn"
+              ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200"
+          }`}
+        >
+          <span>{banner.text}</span>
+          <button
+            type="button"
+            onClick={() => setBanner(null)}
+            className="shrink-0 text-xs font-semibold underline opacity-70 hover:opacity-100"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      <label className="mb-4 flex items-center gap-2.5">
+        <input
+          type="checkbox"
+          checked={form.enabled}
+          onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
+          className="h-4 w-4 rounded border-slate-300 text-[#0B3EAF] focus:ring-[#0B3EAF]"
+        />
+        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Send this calendar automatically</span>
+      </label>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Frequency</label>
+          <select
+            value={form.frequency}
+            onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))}
+            className={SUBSCRIPTION_SELECT_CLASS}
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+
+        {form.frequency === "weekly" ? (
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Day of week</label>
+            <select
+              value={form.day_of_week}
+              onChange={(e) => setForm((f) => ({ ...f, day_of_week: Number(e.target.value) }))}
+              className={SUBSCRIPTION_SELECT_CLASS}
+            >
+              {SUBSCRIPTION_WEEKDAYS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {form.frequency === "monthly" ? (
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Day of month</label>
+            <select
+              value={form.day_of_month}
+              onChange={(e) => setForm((f) => ({ ...f, day_of_month: Number(e.target.value) }))}
+              className={SUBSCRIPTION_SELECT_CLASS}
+            >
+              {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Send at</label>
+          <select
+            value={form.send_hour}
+            onChange={(e) => setForm((f) => ({ ...f, send_hour: Number(e.target.value) }))}
+            className={SUBSCRIPTION_SELECT_CLASS}
+          >
+            {SUBSCRIPTION_HOURS.map((h) => (
+              <option key={h.value} value={h.value}>
+                {h.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Time zone</label>
+          <select
+            value={form.timezone}
+            onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
+            className={SUBSCRIPTION_SELECT_CLASS}
+          >
+            {SUBSCRIPTION_TIMEZONES.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Recipients</label>
+        <div className="mb-2 flex flex-wrap gap-4 text-sm text-slate-700 dark:text-slate-200">
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="recipient_mode"
+              checked={form.recipient_mode === "calendar_access"}
+              onChange={() => setForm((f) => ({ ...f, recipient_mode: "calendar_access" }))}
+            />
+            Everyone with calendar access
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="recipient_mode"
+              checked={form.recipient_mode === "custom"}
+              onChange={() => setForm((f) => ({ ...f, recipient_mode: "custom" }))}
+            />
+            Specific email addresses
+          </label>
+        </div>
+        {form.recipient_mode === "custom" ? (
+          <textarea
+            value={form.recipient_emails_text}
+            onChange={(e) => setForm((f) => ({ ...f, recipient_emails_text: e.target.value }))}
+            rows={4}
+            placeholder="One email per line (or comma-separated)"
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-[#0B3EAF] focus:outline-none focus:ring-1 focus:ring-[#0B3EAF] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+        ) : (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Sent to everyone who currently holds Master Calendar access (cfo / SLT Report view or edit) — the same
+            list the "new event" notification already uses.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <PrimaryButton onClick={handleSave} disabled={saving}>
+          {saving ? "Saving…" : "Save subscription settings"}
+        </PrimaryButton>
+        <GhostButton onClick={handleTest} disabled={testBusy}>
+          {testBusy ? "Sending…" : "Send test email to myself"}
+        </GhostButton>
+      </div>
+
+      {settings?.last_sent_at ? (
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Last sent: {new Date(settings.last_sent_at).toLocaleString()}</p>
+      ) : (
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Not sent yet.</p>
+      )}
     </div>
   );
 }
@@ -1601,6 +1899,8 @@ function MasterCalendarView({ canEdit, isAdmin, deepLinkEventId }) {
         <ListsView />
       ) : effectiveSubTab === "read_me" ? (
         <ReadMeView />
+      ) : effectiveSubTab === "administration" ? (
+        <SubscriptionAdminView />
       ) : (
         <div />
       )}

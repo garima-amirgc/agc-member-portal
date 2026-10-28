@@ -1515,7 +1515,6 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS slt_calendar (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id TEXT UNIQUE,
-      month_raw TEXT,
       event_date_raw TEXT,
       is_text_date_range INTEGER NOT NULL DEFAULT 0,
       start_date TEXT,
@@ -1527,10 +1526,6 @@ async function initDb() {
       executives TEXT,
       owner_lead TEXT,
       executive_action_required TEXT,
-      prep_start_date TEXT,
-      prep_deadline TEXT,
-      materials_needed TEXT,
-      notes TEXT,
       status TEXT,
       risk TEXT,
       last_reviewed_date TEXT,
@@ -2131,6 +2126,48 @@ async function initDb() {
     );
     console.log("[sqlite] npd_step_assignees: OK");
   } catch (e) { console.error("[sqlite] npd_step_assignees table:", e.message); }
+
+  // Master Calendar email subscription — one admin-configured row (always
+  // id=1) controlling an automatic "send the whole calendar as an Excel
+  // attachment" digest email. See sltCalendar.service.js. Mirrors the
+  // Postgres table in config/database/postgres.js — keep both in sync.
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS slt_calendar_subscription (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        frequency TEXT NOT NULL DEFAULT 'weekly' CHECK(frequency IN ('daily','weekly','monthly')),
+        day_of_week INTEGER NOT NULL DEFAULT 1,
+        day_of_month INTEGER NOT NULL DEFAULT 1,
+        send_hour INTEGER NOT NULL DEFAULT 7,
+        timezone TEXT NOT NULL DEFAULT 'America/New_York',
+        recipient_mode TEXT NOT NULL DEFAULT 'calendar_access' CHECK(recipient_mode IN ('calendar_access','custom')),
+        recipient_emails TEXT NOT NULL DEFAULT '[]',
+        last_sent_period TEXT,
+        last_sent_at TEXT,
+        updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] slt_calendar_subscription: OK");
+  } catch (e) { console.error("[sqlite] slt_calendar_subscription table:", e.message); }
+
+  // Month, Prep Start Date, Prep Deadline, Materials Needed, Notes — never
+  // exposed on the Add/Edit event form (see CALENDAR_FIELDS in
+  // SltTrackerV2.jsx), only ever populated by the one-time source-workbook
+  // import. Explicit request to remove them for good, not just hide them —
+  // the full original data still exists in the source workbook file itself.
+  // Requires SQLite 3.35+ (bundled with modern better-sqlite3); each is
+  // independently try/caught so one failing never blocks the rest.
+  for (const col of ["month_raw", "prep_start_date", "prep_deadline", "materials_needed", "notes"]) {
+    try {
+      rawDb.exec(`ALTER TABLE slt_calendar DROP COLUMN ${col}`);
+    } catch (e) {
+      if (!String(e.message || "").includes("no such column")) {
+        console.error(`[sqlite] slt_calendar DROP COLUMN ${col}:`, e.message);
+      }
+    }
+  }
 
   try {
     rawDb.exec(`

@@ -260,7 +260,7 @@ router.get("/slt/v2/calendar", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (
 // Registered BEFORE the "/:id" route below so Express doesn't try to parse
 // "export" as an id. Offline-continuity export — see
 // sltCalendar.service.js's exportCalendarWorkbookBuffer() for the format
-// and why it includes a "Record ID" column.
+// (same data columns as the source sheet, nothing extra).
 router.get("/slt/v2/calendar/export", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
   try {
     const buf = await sltCalendar.exportCalendarWorkbookBuffer();
@@ -340,6 +340,39 @@ router.delete("/slt/v2/calendar/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), 
       return res.status(403).json({ message: "You can only delete calendar events you created (or were delegated)." });
     }
     res.json(await sltCalendar.deleteCalendarEvent(req.user.id, req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+// Master Calendar email subscription — admin-configured scheduled digest
+// (whole calendar as an Excel attachment). GET/PATCH gated the same as the
+// rest of this calendar block (view vs edit), matching the frontend, which
+// only shows this under SLT Report → Administration to a full Admin-role
+// account (see ADMIN_ONLY_SUB_TAB_KEYS in SltTrackerV2.jsx) — that's a UI
+// choice, not a separate backend authorization tier.
+router.get("/slt/v2/calendar/subscription", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltCalendar.getCalendarSubscriptionSettings());
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.patch("/slt/v2/calendar/subscription", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltCalendar.updateCalendarSubscriptionSettings(req.user.id, req.body));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+// Sends a one-off test digest to the requesting admin's own email only
+// (never the real subscriber list), so they can confirm it looks right
+// before relying on the schedule. Doesn't touch last_sent_period.
+router.post("/slt/v2/calendar/subscription/test", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltCalendar.sendCalendarDigestTestEmail(req.user));
   } catch (e) {
     sltErrorHandler(res, e);
   }

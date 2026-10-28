@@ -14,13 +14,20 @@
  * request — "update the portal with this... nothing should be missed"):
  * each row's immutable key is derived from its title + raw event date
  * (same scheme as importSltWorkbooks.js). A row whose key isn't in the DB
- * yet is INSERTED; a row whose key already exists gets its fields (month,
- * category, executives, owner/lead, action required, prep dates, materials,
- * notes) UPDATED to match the sheet — so re-running after the sheet changes
- * actually picks up those edits, not just brand-new rows. This only ever
- * touches rows whose title+date match something in the sheet — any event
- * added or edited directly in the portal, with no matching title+date here,
- * is left completely alone.
+ * yet is INSERTED; a row whose key already exists gets its fields (category,
+ * executives, owner/lead, action required) UPDATED to match the sheet — so
+ * re-running after the sheet changes actually picks up those edits, not
+ * just brand-new rows. This only ever touches rows whose title+date match
+ * something in the sheet — any event added or edited directly in the
+ * portal, with no matching title+date here, is left completely alone.
+ *
+ * Month, Prep Start Date, Prep Deadline, Materials Needed, and Notes used
+ * to also be read from the sheet and synced here, but by explicit request
+ * ("remove the fields permanently that are not in use") those columns were
+ * dropped from slt_calendar entirely — see the migration in
+ * config/database/postgres.js / sqlite.js — since nothing in the portal's
+ * Add/Edit event form ever exposed them. This script no longer reads or
+ * writes them either.
  *
  * Usage (from the backend/ directory):
  *   node scripts/importMasterCalendarData.js            # imports/updates
@@ -175,13 +182,10 @@ async function main() {
       .digest("hex")
       .slice(0, 16);
 
-    const prepDeadlineIso = dateToIso(values["Prep Deadline"]) || textOrNull(values["Prep Deadline"]);
-
     // event_id/immutable_key are identity, not content — left out of the
     // update-comparison/SET list below so an existing row keeps its own
     // event_id instead of ever being rewritten.
     const contentFields = {
-      month_raw: textOrNull(values["Month"]),
       // Store a clean ISO date for a real date, or the typed text for a
       // range — never String(aDateObject), which produces a full
       // "Tue Aug 18 2026 20:00:00 GMT-0400 (...)" toString().
@@ -194,10 +198,6 @@ async function main() {
       executives: textOrNull(values["Executive(s)"]),
       owner_lead: textOrNull(values["Owner / Lead"]),
       executive_action_required: textOrNull(values["Executive Action Required"]),
-      prep_start_date: dateToIso(values["Prep Start Date"]) || textOrNull(values["Prep Start Date"]),
-      prep_deadline: prepDeadlineIso,
-      materials_needed: textOrNull(values["Materials Needed"]),
-      notes: textOrNull(values["Notes"]),
     };
 
     const existing = await db.prepare("SELECT * FROM slt_calendar WHERE immutable_key = ?").get(immutableKey);

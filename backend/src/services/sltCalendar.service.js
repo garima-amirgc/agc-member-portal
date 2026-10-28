@@ -10,16 +10,21 @@ const { ADMIN_GRANT_KEYS, hasAnyAdminGrant, parseAdminGrantsColumn } = require("
  * Backs the "Master Calendar" radio-button view in SltTrackerV2.jsx, using
  * the slt_calendar table (already created in config/database/{sqlite,
  * postgres}.js and previously populated, then emptied, by
- * scripts/importSltWorkbooks.js). Field set and column order mirror the
- * source workbook's "Master Calendar" sheet exactly: Month, Event Date,
- * Event / Deadline, Category, Executive(s), Owner / Lead, Executive Action
- * Required, Prep Start Date, Prep Deadline, Materials Needed, Notes, plus
- * the two computed columns (Days Until Event, Prep Days Left) — see
- * mapCalendarEvent() below. The table has a few extra columns
- * (start_time/end_time/status/risk/last_reviewed_date/
- * digital_calendar_eligible/calendar_entry_title/deferred_return_date)
- * left over from an earlier, broader design; none of those are in the
- * source sheet, so this service doesn't read or write them.
+ * scripts/importSltWorkbooks.js). Field set mirrors exactly what the
+ * Add/Edit event form manages (CALENDAR_FIELDS in SltTrackerV2.jsx): Event
+ * Date, Event / Deadline, Category, Executive(s), Owner / Lead, Executive
+ * Action Required, plus the computed Days Until Event — see
+ * mapCalendarEvent() below. The source workbook's sheet originally also had
+ * Month, Prep Start Date, Prep Deadline, Materials Needed, and Notes
+ * columns; those were never exposed on the form, so by explicit request
+ * ("remove the fields permanently that are not in use") they were dropped
+ * from the table entirely rather than kept as unused dead columns — see the
+ * slt_calendar migration in config/database/postgres.js / sqlite.js. The
+ * table also still has a few other extra columns (start_time/end_time/
+ * status/risk/last_reviewed_date/digital_calendar_eligible/
+ * calendar_entry_title/deferred_return_date/prep_after_event_flag) left
+ * over from an earlier, broader design that were never part of the source
+ * sheet at all; this service doesn't read or write those either.
  *
  * Event Date in the sheet is sometimes a real date and sometimes a text
  * range ("Oct 17-21, 2026") in the same column — normalizeEventDate below
@@ -54,17 +59,6 @@ function normalizeText(raw, { required = false, label = "This field", max = MAX_
   if (required && !s) throw badRequest(`${label} is required.`);
   if (s.length > max) throw badRequest(`${label} is too long.`);
   return s || null;
-}
-
-function normalizeDate(raw, { required = false, label = "Date" } = {}) {
-  const s = raw == null ? "" : String(raw).trim();
-  if (!s) {
-    if (required) throw badRequest(`${label} is required.`);
-    return null;
-  }
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) throw badRequest(`Invalid ${label.toLowerCase()}.`);
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : d.toISOString().slice(0, 10);
 }
 
 // Same pattern scripts/importSltWorkbooks.js uses for text date ranges in
@@ -126,7 +120,6 @@ function mapCalendarEvent(row) {
   return {
     id: Number(row.id),
     event_id: row.event_id,
-    month: row.month_raw,
     event_date: row.event_date_raw,
     is_text_date_range: !!row.is_text_date_range,
     start_date: row.start_date,
@@ -136,12 +129,7 @@ function mapCalendarEvent(row) {
     executives: row.executives,
     owner_lead: row.owner_lead,
     executive_action_required: row.executive_action_required,
-    prep_start_date: row.prep_start_date,
-    prep_deadline: row.prep_deadline,
-    materials_needed: row.materials_needed,
-    notes: row.notes,
     days_until_event: daysBetween(today, row.start_date),
-    prep_days_left: daysBetween(today, row.prep_deadline),
     archived: !!row.archived,
     created_by: row.created_by != null ? Number(row.created_by) : null,
     created_by_name: row.created_by_name || null,
@@ -199,15 +187,18 @@ function isConcurrentConnectionsError(err) {
   return /432/.test(msg) && /concurrent connections/i.test(msg);
 }
 
-async function sendCalendarNotificationWithRetry(payload) {
+// Generic retry wrapper — takes a zero-arg send function so both the
+// new-event notification below and the digest-subscription sender further
+// down can share it instead of each reimplementing the same backoff loop.
+async function sendEmailWithThrottleRetry(sendFn, recipientLabel) {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await email.sendCalendarEventCreatedEmail(payload);
+      return await sendFn();
     } catch (err) {
       if (isConcurrentConnectionsError(err) && attempt < MAX_THROTTLE_RETRIES) {
         const backoff = 1500 * (attempt + 1);
         console.warn(
-          `[SLT_CALENDAR] Outlook throttled the send to ${payload.to} — retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_THROTTLE_RETRIES})`
+          `[SLT_CALENDAR] Outlook throttled the send to ${recipientLabel} — retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_THROTTLE_RETRIES})`
         );
         await sleep(backoff);
         continue;
@@ -222,7 +213,7 @@ async function sendCalendarNotificationWithRetry(payload) {
 // they obviously already know. Sent as one email per recipient (not a
 // single multi-address "to") so each person is addressed by name, and
 // sent ONE AT A TIME (not concurrently — see EMAIL_SEND_GAP_MS/
-// sendCalendarNotificationWithRetry above) so a large SLT distribution
+// sendEmailWithThrottleRetry above) so a large SLT distribution
 // list never trips Outlook's concurrent-connection throttle. A failed
 // send to one recipient (after retries) doesn't stop the others — each
 // result is recorded individually in the same shape Promise.allSettled
@@ -276,23 +267,27 @@ async function notifyCalendarAccessUsersOfNewEvent(creatorUser, eventRow) {
 
   // Same { status, value: { email, out } } / { status, reason } shape
   // Promise.allSettled would have produced, built sequentially instead —
-  // see the comment above sendCalendarNotificationWithRetry for why.
+  // see the comment above sendEmailWithThrottleRetry for why.
   const results = [];
   for (let i = 0; i < recipients.length; i += 1) {
     const r = recipients[i];
     try {
-      const out = await sendCalendarNotificationWithRetry({
-        to: r.email,
-        recipientName: r.name,
-        creatorName: creatorUser?.name || eventRow.created_by_name,
-        eventTitle: eventRow.event_title,
-        eventDateLabel,
-        category: eventRow.category,
-        executives: eventRow.executives,
-        ownerLead: eventRow.owner_lead,
-        executiveActionRequired: eventRow.executive_action_required,
-        eventId: eventRow.id,
-      });
+      const out = await sendEmailWithThrottleRetry(
+        () =>
+          email.sendCalendarEventCreatedEmail({
+            to: r.email,
+            recipientName: r.name,
+            creatorName: creatorUser?.name || eventRow.created_by_name,
+            eventTitle: eventRow.event_title,
+            eventDateLabel,
+            category: eventRow.category,
+            executives: eventRow.executives,
+            ownerLead: eventRow.owner_lead,
+            executiveActionRequired: eventRow.executive_action_required,
+            eventId: eventRow.id,
+          }),
+        r.email
+      );
       results.push({ status: "fulfilled", value: { email: r.email, out } });
     } catch (err) {
       results.push({ status: "rejected", reason: err });
@@ -327,24 +322,18 @@ async function notifyCalendarAccessUsersOfNewEvent(creatorUser, eventRow) {
 }
 
 async function createCalendarEvent(userId, body) {
-  const month = normalizeText(body?.month, { label: "Month", max: 40 });
   const eventDate = normalizeEventDate(body?.event_date, { required: true });
   const eventTitle = normalizeText(body?.event_title, { required: true, label: "Event / Deadline" });
   const category = normalizeText(body?.category, { label: "Category", max: 120 });
   const executives = normalizeText(body?.executives, { label: "Executive(s)", max: 200 });
   const ownerLead = normalizeText(body?.owner_lead, { label: "Owner / Lead" });
   const executiveActionRequired = normalizeText(body?.executive_action_required, { label: "Executive Action Required" });
-  const prepStartDate = normalizeDate(body?.prep_start_date, { label: "Prep start date" });
-  const prepDeadline = normalizeDate(body?.prep_deadline, { label: "Prep deadline" });
-  const materialsNeeded = normalizeText(body?.materials_needed, { label: "Materials needed" });
-  const notes = normalizeText(body?.notes, { label: "Notes" });
 
   const eventId = `EVT-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
   const immutableKey = crypto.randomBytes(8).toString("hex");
 
   const fields = {
     event_id: eventId,
-    month_raw: month,
     event_date_raw: eventDate.raw,
     is_text_date_range: eventDate.isTextDateRange,
     start_date: eventDate.startDate,
@@ -354,10 +343,6 @@ async function createCalendarEvent(userId, body) {
     executives,
     owner_lead: ownerLead,
     executive_action_required: executiveActionRequired,
-    prep_start_date: prepStartDate,
-    prep_deadline: prepDeadline,
-    materials_needed: materialsNeeded,
-    notes,
     immutable_key: immutableKey,
   };
 
@@ -399,7 +384,6 @@ async function updateCalendarEvent(userId, id, body) {
   const existing = await db.prepare("SELECT * FROM slt_calendar WHERE id = ?").get(eventId);
   if (!existing) throw notFound("Calendar event not found.");
 
-  const month = body?.month !== undefined ? normalizeText(body.month, { label: "Month", max: 40 }) : existing.month_raw;
   const eventDate =
     body?.event_date !== undefined
       ? normalizeEventDate(body.event_date, { required: true })
@@ -421,24 +405,15 @@ async function updateCalendarEvent(userId, id, body) {
     body?.executive_action_required !== undefined
       ? normalizeText(body.executive_action_required, { label: "Executive Action Required" })
       : existing.executive_action_required;
-  const prepStartDate =
-    body?.prep_start_date !== undefined ? normalizeDate(body.prep_start_date, { label: "Prep start date" }) : existing.prep_start_date;
-  const prepDeadline =
-    body?.prep_deadline !== undefined ? normalizeDate(body.prep_deadline, { label: "Prep deadline" }) : existing.prep_deadline;
-  const materialsNeeded =
-    body?.materials_needed !== undefined ? normalizeText(body.materials_needed, { label: "Materials needed" }) : existing.materials_needed;
-  const notes = body?.notes !== undefined ? normalizeText(body.notes, { label: "Notes" }) : existing.notes;
-
   await db
     .prepare(
       `UPDATE slt_calendar SET
-        month_raw = ?, event_date_raw = ?, is_text_date_range = ?, start_date = ?, end_date = ?,
+        event_date_raw = ?, is_text_date_range = ?, start_date = ?, end_date = ?,
         event_title = ?, category = ?, executives = ?, owner_lead = ?, executive_action_required = ?,
-        prep_start_date = ?, prep_deadline = ?, materials_needed = ?, notes = ?, updated_at = datetime('now')
+        updated_at = datetime('now')
        WHERE id = ?`
     )
     .run(
-      month,
       eventDate.raw,
       eventDate.isTextDateRange,
       eventDate.startDate,
@@ -448,10 +423,6 @@ async function updateCalendarEvent(userId, id, body) {
       executives,
       ownerLead,
       executiveActionRequired,
-      prepStartDate,
-      prepDeadline,
-      materialsNeeded,
-      notes,
       eventId
     );
 
@@ -493,31 +464,22 @@ async function deleteCalendarEvent(userId, id) {
 // ── Export / Import (offline continuity) ────────────────────────────────
 // If the server/portal is down, the team needs to be able to keep working
 // from a spreadsheet, then bring those changes back in once it's back up.
-// Export produces a workbook shaped like the source "Master Calendar"
-// sheet (same column names/order scripts/importMasterCalendarData.js
-// already expects), plus one extra leading "Record ID" column holding each
-// row's event_id. That column is what makes the round trip safe: matching
-// on it (not on re-hashing the title+date, which is sensitive to exactly
-// how Excel/ExcelJS represent a date cell) means re-importing an exported
-// file updates the SAME rows it came from, instead of creating duplicates.
-// A row added fresh in the offline copy simply has no Record ID yet, which
-// importCalendarFromBuffer() below treats as "insert new."
-const EXPORT_HEADERS = [
-  "Record ID",
-  "Month",
-  "Event Date",
-  "Event / Deadline",
-  "Category",
-  "Executive(s)",
-  "Owner / Lead",
-  "Executive Action Required",
-  "Prep Start Date",
-  "Prep Deadline",
-  "Materials Needed",
-  "Notes",
-  "Days Until Event",
-  "Prep Days Left",
-];
+// Export produces a workbook with exactly the fields the portal itself
+// manages — the same ones on the Add/Edit event form (see CALENDAR_FIELDS
+// in SltTrackerV2.jsx) — nothing more. Month, Prep Start Date, Prep
+// Deadline, Materials Needed, and Notes used to also be exported (and were
+// even still in the underlying slt_calendar table) purely as leftovers
+// from the original one-time source-workbook import; by explicit request
+// ("remove the fields permanently that are not in use") those columns have
+// been dropped from the table entirely — see the slt_calendar migration in
+// config/database/postgres.js / sqlite.js — since nothing in the portal
+// ever reads, writes, or displays them. Re-importing matches each row back
+// to its existing event by (title, event date) — the same identity
+// scripts/importMasterCalendarData.js's immutable_key scheme is built
+// on — so editing a row offline and re-importing updates that row instead
+// of creating a duplicate; a row whose title+date don't match anything
+// already here is added as new.
+const EXPORT_HEADERS = ["Event Date", "Event / Deadline", "Category", "Executive(s)", "Owner / Lead", "Executive Action Required"];
 
 function requireExcelJs() {
   try {
@@ -547,39 +509,19 @@ async function exportCalendarWorkbookBuffer() {
   // Row 1 is a plain instructional note — the header row the
   // import/import-from-UI logic actually reads is row 2, same as the
   // source workbook's own layout, so this row is free to use.
-  sheet.addRow([
-    `Master Calendar — exported ${todayIso()}. Keep "Record ID" as-is on rows you're editing; leave it blank only on a brand-new row you're adding here.`,
-  ]);
+  sheet.addRow([`Master Calendar — exported ${todayIso()}.`]);
   sheet.addRow(EXPORT_HEADERS);
   sheet.getRow(2).font = { bold: true };
 
   for (const ev of events) {
     const eventDateCell = ev.is_text_date_range ? ev.event_date : isoToExcelDate(ev.start_date) || ev.event_date || null;
-    sheet.addRow([
-      ev.event_id,
-      ev.month,
-      eventDateCell,
-      ev.event_title,
-      ev.category,
-      ev.executives,
-      ev.owner_lead,
-      ev.executive_action_required,
-      isoToExcelDate(ev.prep_start_date),
-      isoToExcelDate(ev.prep_deadline),
-      ev.materials_needed,
-      ev.notes,
-      ev.days_until_event,
-      ev.prep_days_left,
-    ]);
+    sheet.addRow([eventDateCell, ev.event_title, ev.category, ev.executives, ev.owner_lead, ev.executive_action_required]);
   }
 
-  sheet.getColumn(3).numFmt = "mm/dd/yyyy";
-  sheet.getColumn(9).numFmt = "mm/dd/yyyy";
-  sheet.getColumn(10).numFmt = "mm/dd/yyyy";
+  sheet.getColumn(1).numFmt = "mm/dd/yyyy";
   EXPORT_HEADERS.forEach((h, i) => {
     sheet.getColumn(i + 1).width = Math.min(42, Math.max(12, String(h).length + 4));
   });
-  sheet.getColumn(1).width = 18;
 
   return workbook.xlsx.writeBuffer();
 }
@@ -648,16 +590,35 @@ function parseCalendarDateCell(eventDateRaw) {
   return { startDate: null, endDate: null, isTextDateRange: 0 };
 }
 
-const IMPORT_HEADER_ROW = 2;
-const IMPORT_FIRST_DATA_ROW = 3;
+const IMPORT_HEADER_SCAN_ROWS = 10;
 const MAX_IMPORT_DETAILS = 300;
+
+// Export writes a note in row 1 and the real headers in row 2, but a user
+// building/editing the sheet by hand (e.g. adding new rows to an exported
+// file, or typing up a fresh one without that note row) may well end up
+// with headers on row 1 instead — that used to get flat-out rejected
+// ("missing the expected Event Date / Event / Deadline columns") even
+// though the data was perfectly good, just one row off. Scanning the first
+// few rows for whichever one actually has those two column names makes
+// import tolerant of both layouts (and of an extra blank row, a title row,
+// etc.) instead of requiring an exact row-2 match.
+function findImportHeaderRow(ws) {
+  const lastRow = Math.min(IMPORT_HEADER_SCAN_ROWS, ws.rowCount);
+  for (let r = 1; r <= lastRow; r += 1) {
+    const hm = headerMapFor(ws, r);
+    if (hm["Event / Deadline"] && hm["Event Date"]) return { headerRow: r, hm };
+  }
+  return null;
+}
 
 // Parses an uploaded .xlsx buffer (exported by exportCalendarWorkbookBuffer
 // above, or the original source workbook scripts/importMasterCalendarData.js
-// reads) and upserts it into slt_calendar. Matches existing rows by the
-// "Record ID" column (= event_id) when present; a row with no Record ID is
-// always treated as new. dryRun:true computes and returns the same counts
-// without writing anything, so the UI can show a preview before committing.
+// reads) and upserts it into slt_calendar. Matches existing rows by (title,
+// event date) — same identity the script's immutable_key is built from —
+// so a row whose title+date already exist here gets its other fields
+// updated in place, and a row with no match is added as new. dryRun:true
+// computes and returns the same counts without writing anything, so the UI
+// can show a preview before committing.
 async function importCalendarFromBuffer(userId, buffer, { dryRun = false } = {}) {
   const ExcelJS = requireExcelJs();
 
@@ -671,10 +632,11 @@ async function importCalendarFromBuffer(userId, buffer, { dryRun = false } = {})
   const ws = wb.getWorksheet("Master Calendar");
   if (!ws) throw badRequest('That workbook has no "Master Calendar" sheet.');
 
-  const hm = headerMapFor(ws, IMPORT_HEADER_ROW);
-  if (!hm["Event / Deadline"] || !hm["Event Date"]) {
+  const headerMatch = findImportHeaderRow(ws);
+  if (!headerMatch) {
     throw badRequest('That sheet is missing the expected "Event Date" / "Event / Deadline" columns.');
   }
+  const { headerRow, hm } = headerMatch;
 
   let inserted = 0;
   let updated = 0;
@@ -682,7 +644,7 @@ async function importCalendarFromBuffer(userId, buffer, { dryRun = false } = {})
   let skippedBlank = 0;
   const details = [];
 
-  let row = IMPORT_FIRST_DATA_ROW;
+  let row = headerRow + 1;
   while (row <= ws.rowCount) {
     const values = readRowValues(ws, row, hm);
     const title = textOrNullCell(values["Event / Deadline"]);
@@ -696,7 +658,6 @@ async function importCalendarFromBuffer(userId, buffer, { dryRun = false } = {})
     const { startDate, endDate, isTextDateRange } = parseCalendarDateCell(eventDateRaw);
 
     const contentFields = {
-      month_raw: textOrNullCell(values["Month"]),
       event_date_raw: eventDateRaw instanceof Date ? dateCellToIso(eventDateRaw) : textOrNullCell(eventDateRaw),
       is_text_date_range: isTextDateRange,
       start_date: startDate,
@@ -706,14 +667,21 @@ async function importCalendarFromBuffer(userId, buffer, { dryRun = false } = {})
       executives: textOrNullCell(values["Executive(s)"]),
       owner_lead: textOrNullCell(values["Owner / Lead"]),
       executive_action_required: textOrNullCell(values["Executive Action Required"]),
-      prep_start_date: dateCellToIso(values["Prep Start Date"]) || textOrNullCell(values["Prep Start Date"]),
-      prep_deadline: dateCellToIso(values["Prep Deadline"]) || textOrNullCell(values["Prep Deadline"]),
-      materials_needed: textOrNullCell(values["Materials Needed"]),
-      notes: textOrNullCell(values["Notes"]),
     };
 
-    const recordId = textOrNullCell(values["Record ID"]);
-    const existing = recordId ? await db.prepare("SELECT * FROM slt_calendar WHERE event_id = ?").get(recordId) : null;
+    // Match by title + event date, not a hidden id column — a real date
+    // matches on the normalized start_date (stable across the export/
+    // import round trip since both sides go through the same ISO
+    // conversion), a text range matches on the exact raw text.
+    const existing = isTextDateRange
+      ? await db
+          .prepare("SELECT * FROM slt_calendar WHERE event_title = ? AND is_text_date_range = 1 AND event_date_raw = ?")
+          .get(title, contentFields.event_date_raw)
+      : startDate
+        ? await db
+            .prepare("SELECT * FROM slt_calendar WHERE event_title = ? AND is_text_date_range = 0 AND start_date = ?")
+            .get(title, startDate)
+        : null;
 
     if (!existing) {
       const eventId = `EVT-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
@@ -759,6 +727,313 @@ async function importCalendarFromBuffer(userId, buffer, { dryRun = false } = {})
   return { dryRun: !!dryRun, inserted, updated, unchanged, skippedBlank, details };
 }
 
+// ── Subscription (scheduled digest email) ───────────────────────────────
+// Admin-configured under SLT Report → Administration: an automatic email
+// with the whole Master Calendar attached (the same .xlsx export above),
+// sent on a schedule instead of waiting for someone to click Export. Only
+// one settings row ever exists (id is always SUBSCRIPTION_ROW_ID) — this
+// is one shared subscription, not per-user. checkAndRunScheduledCalendarDigest
+// is the poll function; startCalendarDigestScheduler() runs it on an
+// interval (wired up in server.js, same pattern as the ADP background jobs
+// — see adpTimeOffEvents.service.js's startPolling for the sibling
+// version of this).
+const SUBSCRIPTION_ROW_ID = 1;
+const VALID_FREQUENCIES = ["daily", "weekly", "monthly"];
+const VALID_RECIPIENT_MODES = ["calendar_access", "custom"];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function defaultSubscriptionSettings() {
+  return {
+    id: SUBSCRIPTION_ROW_ID,
+    enabled: false,
+    frequency: "weekly",
+    day_of_week: 1, // Monday
+    day_of_month: 1,
+    send_hour: 7,
+    timezone: "America/New_York",
+    recipient_mode: "calendar_access",
+    recipient_emails: [],
+    last_sent_period: null,
+    last_sent_at: null,
+    updated_by: null,
+    updated_at: null,
+  };
+}
+
+function mapSubscriptionRow(row) {
+  if (!row) return defaultSubscriptionSettings();
+  let recipientEmails = [];
+  try {
+    const parsed = JSON.parse(row.recipient_emails || "[]");
+    if (Array.isArray(parsed)) recipientEmails = parsed.filter((e) => typeof e === "string" && e.trim());
+  } catch {
+    recipientEmails = [];
+  }
+  return {
+    id: row.id,
+    enabled: !!row.enabled,
+    frequency: row.frequency,
+    day_of_week: Number(row.day_of_week),
+    day_of_month: Number(row.day_of_month),
+    send_hour: Number(row.send_hour),
+    timezone: row.timezone,
+    recipient_mode: row.recipient_mode,
+    recipient_emails: recipientEmails,
+    last_sent_period: row.last_sent_period,
+    last_sent_at: row.last_sent_at,
+    updated_by: row.updated_by != null ? Number(row.updated_by) : null,
+    updated_at: row.updated_at,
+  };
+}
+
+async function getCalendarSubscriptionSettings() {
+  const row = await db.prepare("SELECT * FROM slt_calendar_subscription WHERE id = ?").get(SUBSCRIPTION_ROW_ID);
+  return mapSubscriptionRow(row);
+}
+
+async function updateCalendarSubscriptionSettings(userId, body) {
+  const frequency = VALID_FREQUENCIES.includes(body?.frequency) ? body.frequency : "weekly";
+  const dayOfWeek = Math.min(6, Math.max(0, Number.isFinite(Number(body?.day_of_week)) ? Number(body.day_of_week) : 1));
+  const dayOfMonth = Math.min(28, Math.max(1, Number.isFinite(Number(body?.day_of_month)) ? Number(body.day_of_month) : 1));
+  const sendHour = Math.min(23, Math.max(0, Number.isFinite(Number(body?.send_hour)) ? Number(body.send_hour) : 7));
+  const timezone = normalizeText(body?.timezone, { label: "Timezone", max: 80 }) || "America/New_York";
+  const recipientMode = VALID_RECIPIENT_MODES.includes(body?.recipient_mode) ? body.recipient_mode : "calendar_access";
+  const enabled = body?.enabled === true || body?.enabled === 1 || body?.enabled === "1" ? 1 : 0;
+
+  let recipientEmails = [];
+  if (Array.isArray(body?.recipient_emails)) {
+    recipientEmails = body.recipient_emails.map((e) => String(e || "").trim()).filter(Boolean);
+  } else if (typeof body?.recipient_emails === "string") {
+    recipientEmails = body.recipient_emails
+      .split(/[\n,;]/)
+      .map((e) => e.trim())
+      .filter(Boolean);
+  }
+  const invalid = recipientEmails.filter((e) => !EMAIL_RE.test(e));
+  if (recipientMode === "custom" && invalid.length) {
+    throw badRequest(`Not a valid email address: ${invalid[0]}`);
+  }
+  if (recipientMode === "custom" && recipientEmails.length === 0) {
+    throw badRequest("Add at least one recipient email, or switch to \"Everyone with calendar access.\"");
+  }
+
+  const existing = await db.prepare("SELECT id FROM slt_calendar_subscription WHERE id = ?").get(SUBSCRIPTION_ROW_ID);
+  if (!existing) {
+    await db
+      .prepare(
+        `INSERT INTO slt_calendar_subscription
+          (id, enabled, frequency, day_of_week, day_of_month, send_hour, timezone, recipient_mode, recipient_emails, updated_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+      )
+      .run(SUBSCRIPTION_ROW_ID, enabled, frequency, dayOfWeek, dayOfMonth, sendHour, timezone, recipientMode, JSON.stringify(recipientEmails), userId);
+  } else {
+    await db
+      .prepare(
+        `UPDATE slt_calendar_subscription SET
+          enabled = ?, frequency = ?, day_of_week = ?, day_of_month = ?, send_hour = ?, timezone = ?,
+          recipient_mode = ?, recipient_emails = ?, updated_by = ?, updated_at = datetime('now')
+         WHERE id = ?`
+      )
+      .run(enabled, frequency, dayOfWeek, dayOfMonth, sendHour, timezone, recipientMode, JSON.stringify(recipientEmails), userId, SUBSCRIPTION_ROW_ID);
+  }
+
+  return getCalendarSubscriptionSettings();
+}
+
+async function resolveSubscriptionRecipients(settings) {
+  if (settings.recipient_mode === "custom") {
+    return settings.recipient_emails.map((e) => ({ email: e, name: null }));
+  }
+  // Same CALENDAR_ACCESS_GRANTS list the "new event" notification uses —
+  // everyone who currently holds cfo/slt_view/slt_edit.
+  const rows = await db
+    .prepare("SELECT id, name, email, role, admin_grants FROM users WHERE email IS NOT NULL AND TRIM(email) <> ''")
+    .all();
+  return (rows || [])
+    .filter((r) => hasAnyAdminGrant({ role: r.role, adminGrants: parseAdminGrantsColumn(r.admin_grants) }, CALENDAR_ACCESS_GRANTS))
+    .map((r) => ({ email: r.email, name: r.name }));
+}
+
+function periodLabelFor(frequency) {
+  if (frequency === "daily") return "daily";
+  if (frequency === "monthly") return "monthly";
+  return "weekly";
+}
+
+// Builds the export once and emails it to every resolved recipient, one at
+// a time (same throttle-safe pattern as notifyCalendarAccessUsersOfNewEvent
+// above). Used both by the real scheduled send (checkAndRunScheduledCalendarDigest)
+// and by the "send a test email to myself" button (recipientsOverride +
+// isTest), so a test never touches last_sent_period/goes to the real list.
+async function sendCalendarDigestNow({ settings, recipientsOverride, isTest = false } = {}) {
+  const effectiveSettings = settings || (await getCalendarSubscriptionSettings());
+  const buf = await exportCalendarWorkbookBuffer();
+  const attachmentBuffer = Buffer.from(buf);
+  const attachmentFilename = `AGC_SLT_Master_Calendar_${todayIso()}.xlsx`;
+  const events = await listCalendar({ archived: false });
+  const eventCount = events.length;
+
+  const recipients = recipientsOverride || (await resolveSubscriptionRecipients(effectiveSettings));
+
+  if (!recipients.length) {
+    console.warn("[SLT_CALENDAR] Subscription digest: no recipients to send to.");
+    return { sent: 0, failed: 0, recipients: 0, failureReasons: [] };
+  }
+
+  let sentCount = 0;
+  let failedCount = 0;
+  const failureReasons = [];
+  for (let i = 0; i < recipients.length; i += 1) {
+    const r = recipients[i];
+    try {
+      const out = await sendEmailWithThrottleRetry(
+        () =>
+          email.sendCalendarDigestEmail({
+            to: r.email,
+            recipientName: r.name,
+            attachmentBuffer,
+            attachmentFilename,
+            eventCount,
+            periodLabel: periodLabelFor(effectiveSettings.frequency),
+            isTest,
+          }),
+        r.email
+      );
+      if (out?.skipped) {
+        failedCount += 1;
+        failureReasons.push(`${r.email}: ${out.reason || "(no reason given)"}`);
+        console.warn(`[SLT_CALENDAR] Digest email to ${r.email} was skipped:`, out.reason);
+      } else {
+        sentCount += 1;
+        console.log(`[SLT_CALENDAR] Digest email sent to ${r.email}`);
+      }
+    } catch (err) {
+      failedCount += 1;
+      const reason = err?.message || String(err);
+      failureReasons.push(`${r.email}: ${reason}`);
+      console.error(`[SLT_CALENDAR] Digest email to ${r.email} failed:`, reason);
+    }
+    if (i < recipients.length - 1) await sleep(EMAIL_SEND_GAP_MS);
+  }
+
+  return { sent: sentCount, failed: failedCount, recipients: recipients.length, failureReasons };
+}
+
+async function sendCalendarDigestTestEmail(user) {
+  if (!user?.email) throw badRequest("Your account has no email on file — add one under your profile first.");
+  const settings = await getCalendarSubscriptionSettings();
+  return sendCalendarDigestNow({ settings, recipientsOverride: [{ email: user.email, name: user.name }], isTest: true });
+}
+
+// Reads the schedule's configured timezone as plain local date/hour/weekday
+// parts via Intl, instead of hand-rolling timezone-offset math — handles DST
+// automatically. Falls back to server time (UTC on Render) if the stored
+// timezone string is somehow invalid, rather than throwing and silently
+// disabling the whole scheduler.
+function localPartsInTimezone(timezone) {
+  try {
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      hour12: false,
+      weekday: "short",
+    });
+    const parts = fmt.formatToParts(now);
+    const get = (type) => parts.find((p) => p.type === type)?.value;
+    const year = get("year");
+    const month = get("month");
+    const day = get("day");
+    let hour = Number(get("hour"));
+    if (hour === 24) hour = 0; // some locales render midnight as "24" instead of "00"
+    const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return {
+      dateStr: `${year}-${month}-${day}`,
+      monthStr: `${year}-${month}`,
+      hour,
+      weekday: weekdayMap[get("weekday")],
+      dayOfMonth: Number(day),
+    };
+  } catch (e) {
+    const now = new Date();
+    return {
+      dateStr: now.toISOString().slice(0, 10),
+      monthStr: now.toISOString().slice(0, 7),
+      hour: now.getUTCHours(),
+      weekday: now.getUTCDay(),
+      dayOfMonth: now.getUTCDate(),
+    };
+  }
+}
+
+function isDueNow(settings, parts) {
+  if (!settings.enabled) return false;
+  if (parts.hour < settings.send_hour) return false;
+  if (settings.frequency === "daily") return true;
+  if (settings.frequency === "weekly") return parts.weekday === settings.day_of_week;
+  if (settings.frequency === "monthly") return parts.dayOfMonth === settings.day_of_month;
+  return false;
+}
+
+function currentPeriodKey(settings, parts) {
+  return settings.frequency === "monthly" ? parts.monthStr : parts.dateStr;
+}
+
+// The actual poll check — called on an interval by startCalendarDigestScheduler
+// below. Compares last_sent_period against the current period (computed in
+// the configured timezone) so it never double-sends within the same day/
+// week/month, and only fires once the configured send hour has passed —
+// not necessarily instantly at that hour, since this only runs every
+// SUBSCRIPTION_POLL_INTERVAL_MS minutes.
+async function checkAndRunScheduledCalendarDigest() {
+  let settings;
+  try {
+    settings = await getCalendarSubscriptionSettings();
+  } catch (e) {
+    console.error("[SLT_CALENDAR] Subscription scheduler: could not load settings:", e?.message || e);
+    return;
+  }
+  if (!settings.enabled) return;
+
+  const parts = localPartsInTimezone(settings.timezone);
+  const periodKey = currentPeriodKey(settings, parts);
+  if (settings.last_sent_period === periodKey) return;
+  if (!isDueNow(settings, parts)) return;
+
+  console.log(`[SLT_CALENDAR] Subscription digest due (${settings.frequency}, period ${periodKey}) — sending…`);
+  try {
+    const result = await sendCalendarDigestNow({ settings });
+    await db
+      .prepare("UPDATE slt_calendar_subscription SET last_sent_period = ?, last_sent_at = datetime('now') WHERE id = ?")
+      .run(periodKey, SUBSCRIPTION_ROW_ID);
+    console.log(
+      `[SLT_CALENDAR] Subscription digest sent — ${result.sent} sent, ${result.failed} failed, ${result.recipients} recipient(s).`
+    );
+  } catch (e) {
+    console.error("[SLT_CALENDAR] Subscription digest failed:", e?.message || e);
+  }
+}
+
+let _subscriptionTimer = null;
+// 15 minutes is fine-grained enough that "every Monday at 7am" fires within
+// 15 minutes of 7am, without polling so often it's wasteful — same interval
+// class as the ADP background jobs elsewhere in this backend.
+const SUBSCRIPTION_POLL_INTERVAL_MS = 15 * 60 * 1000;
+
+function startCalendarDigestScheduler() {
+  if (_subscriptionTimer) return;
+  setTimeout(() => {
+    checkAndRunScheduledCalendarDigest();
+    _subscriptionTimer = setInterval(checkAndRunScheduledCalendarDigest, SUBSCRIPTION_POLL_INTERVAL_MS);
+  }, 90_000); // stagger after the other background jobs' own startup delays
+  console.log(
+    `[SLT_CALENDAR] Subscription digest scheduler started — checking every ${(SUBSCRIPTION_POLL_INTERVAL_MS / 60000).toFixed(0)}m`
+  );
+}
+
 module.exports = {
   listCalendar,
   getCalendarEventById,
@@ -767,4 +1042,8 @@ module.exports = {
   deleteCalendarEvent,
   exportCalendarWorkbookBuffer,
   importCalendarFromBuffer,
+  getCalendarSubscriptionSettings,
+  updateCalendarSubscriptionSettings,
+  sendCalendarDigestTestEmail,
+  startCalendarDigestScheduler,
 };

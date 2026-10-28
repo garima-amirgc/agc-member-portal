@@ -992,7 +992,6 @@ async function migrateColumns(client) {
     `CREATE TABLE IF NOT EXISTS slt_calendar (
       id SERIAL PRIMARY KEY,
       event_id TEXT UNIQUE,
-      month_raw TEXT,
       event_date_raw TEXT,
       is_text_date_range INTEGER NOT NULL DEFAULT 0,
       start_date TEXT,
@@ -1004,10 +1003,6 @@ async function migrateColumns(client) {
       executives TEXT,
       owner_lead TEXT,
       executive_action_required TEXT,
-      prep_start_date TEXT,
-      prep_deadline TEXT,
-      materials_needed TEXT,
-      notes TEXT,
       status TEXT,
       risk TEXT,
       last_reviewed_date TEXT,
@@ -1023,6 +1018,17 @@ async function migrateColumns(client) {
     )`,
     "CREATE INDEX IF NOT EXISTS idx_slt_calendar_start_date ON slt_calendar (start_date)",
     "CREATE INDEX IF NOT EXISTS idx_slt_calendar_archived ON slt_calendar (archived)",
+    // Month, Prep Start Date, Prep Deadline, Materials Needed, Notes — never
+    // exposed on the Add/Edit event form (see CALENDAR_FIELDS in
+    // SltTrackerV2.jsx), only ever populated by the one-time source-workbook
+    // import. Explicit request to remove them for good, not just hide them —
+    // "remove the fields permanently that are not in use" — since the full
+    // original data still exists in the source workbook file itself.
+    "ALTER TABLE slt_calendar DROP COLUMN IF EXISTS month_raw",
+    "ALTER TABLE slt_calendar DROP COLUMN IF EXISTS prep_start_date",
+    "ALTER TABLE slt_calendar DROP COLUMN IF EXISTS prep_deadline",
+    "ALTER TABLE slt_calendar DROP COLUMN IF EXISTS materials_needed",
+    "ALTER TABLE slt_calendar DROP COLUMN IF EXISTS notes",
 
     "CREATE INDEX IF NOT EXISTS idx_users_manager_id ON users (manager_id)",
     "CREATE INDEX IF NOT EXISTS idx_lessons_course_id ON lessons (course_id)",
@@ -1368,6 +1374,30 @@ async function migrateColumns(client) {
     "CREATE INDEX IF NOT EXISTS idx_npd_approver_config_type ON npd_approver_config (approval_type)",
     "CREATE INDEX IF NOT EXISTS idx_npd_notifications_user ON npd_notifications (user_id, status)",
     "CREATE INDEX IF NOT EXISTS idx_npd_step_assignees_key ON npd_step_assignees (step_key)",
+    // Master Calendar email subscription — one admin-configured row (always
+    // id=1) controlling an automatic "send the whole calendar as an Excel
+    // attachment" digest email. See sltCalendar.service.js's
+    // getCalendarSubscriptionSettings/updateCalendarSubscriptionSettings/
+    // checkAndRunScheduledCalendarDigest. recipient_emails is a JSON array
+    // of strings, only read when recipient_mode = 'custom'. last_sent_period
+    // (e.g. "2026-10-28" for daily/weekly, "2026-10" for monthly) is what
+    // keeps the scheduler from sending the same period's digest twice, not
+    // a raw timestamp comparison.
+    `CREATE TABLE IF NOT EXISTS slt_calendar_subscription (
+      id SERIAL PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      frequency TEXT NOT NULL DEFAULT 'weekly' CHECK(frequency IN ('daily','weekly','monthly')),
+      day_of_week INTEGER NOT NULL DEFAULT 1,
+      day_of_month INTEGER NOT NULL DEFAULT 1,
+      send_hour INTEGER NOT NULL DEFAULT 7,
+      timezone TEXT NOT NULL DEFAULT 'America/New_York',
+      recipient_mode TEXT NOT NULL DEFAULT 'calendar_access' CHECK(recipient_mode IN ('calendar_access','custom')),
+      recipient_emails TEXT NOT NULL DEFAULT '[]',
+      last_sent_period TEXT,
+      last_sent_at TIMESTAMPTZ,
+      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
   ];
   for (const q of alters) {
     try {
