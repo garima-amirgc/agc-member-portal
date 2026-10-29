@@ -6,67 +6,32 @@ import { useAuth } from "../context/AuthContext";
 import { isAdministrator } from "../utils/adminAccess";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
-import ActionTrackerBoard from "../components/ActionTrackerBoard";
 
 /**
- * SLT Tracker — rebuild in progress, built step by step per instructions.
+ * SLT Tracker — now just Master Calendar.
  *
- * Step 1: a choice between the two source boards this tracker covers —
- * Action Tracker Executive Board and Master Calendar.
+ * This used to offer a choice between two boards — Action Tracker
+ * Executive Board and Master Calendar — via a radio row at the top. Action
+ * Tracker Executive Board (its Dashboard / Action Register / Decisions /
+ * 90-Day Commitments / Weekly Review / Reference sub-tabs, the
+ * ActionTrackerBoard.jsx component, its backend services
+ * — sltActions/sltDecisions/sltCommitments/sltOverview.service.js — and
+ * their routes and database tables) was removed entirely by explicit
+ * request ("completely remove this... everything about this... delete
+ * everything related to this"). See the slt_* table migrations in
+ * config/database/postgres.js / sqlite.js for the DROP TABLE list.
  *
- * Step 2 (this one): Master Calendar is wired up to the backend's
+ * What's left is just Master Calendar, wired up to the backend's
  * /cfo/slt/v2/calendar routes (sltCalendar.service.js / slt_calendar
- * table). Field set, column order, and the two computed columns (Days
- * Until Event, Prep Days Left) all mirror the source workbook's "Master
- * Calendar" sheet exactly — see sltCalendar.service.js for the field
- * mapping. Event Date accepts either a real date ("2026-08-19") or a text
- * range ("Oct 17-21, 2026"), same as the sheet allows. Category,
- * Executive(s), and Month are free text with suggestions drawn from the
- * workbook's Lists sheet, not locked dropdowns — matching the house
- * pattern already used for status fields elsewhere in this app (status
- * vocabulary isn't forced into a fixed list).
- *
- * Step 3 (this one): the workbook's other sheets, nested under Master
- * Calendar as sub-tabs (Calendar / Lists / Read Me) — they're all facets
- * of the same workbook, not separate boards:
- *   - Lists: the workbook's reference/lookup sheet. Shown read-only here;
- *     its Categories/Executives/Months values already power the
- *     suggestion dropdowns on the Add/Edit form above. Its Statuses and
- *     Risk Levels columns aren't wired to anything — the Master Calendar
- *     sheet itself has no Status or Risk column, so there's nothing in
- *     the data for those two lists to apply to.
- *   - Read Me: shown as-is. It references two sheets ("Monthly Exec
- *     View", "Calendar Export") that don't exist in the uploaded
- *     workbook — flagged inline rather than silently ignored.
- * Lists and Read Me are admin-only (see ADMIN_ONLY_SUB_TAB_KEYS below) —
- * everyone else just sees Calendar.
- *
- * Step 3b: Master Calendar originally also had its own Weekly Review
- * sub-tab (a reconstruction of the source sheet's broken
- * `=FILTER('Master Calendar'!A3:M104, 'Master Calendar'!#REF!="Include",
- * ...)` formula — the column it filtered on was deleted from Master
- * Calendar at some point, so Excel shows #REF! there too). It was removed
- * by explicit request, leaving just Calendar / Lists / Read Me. (Action
- * Tracker Executive Board has its own, unrelated Weekly Review sub-tab —
- * see components/ActionTrackerBoard.jsx — which this did not touch.)
- *
- * Step 4 (this one): Action Tracker Executive Board is now built out too
- * — see components/ActionTrackerBoard.jsx for the full sub-tab set
- * (Dashboard, Action Register, Decisions, 90-Day Commitments, Weekly
- * Review, Reference) and the backend services it talks to
- * (sltActions/sltDecisions/sltCommitments/sltOverview/sltAudit.service.js).
- *
- * The "SLT Tracker" tab mount point (CfoReportsPage.jsx) and the
- * slt_view/slt_edit grants were kept from the previous build. The other
- * database tables from the previous build (actions, decisions,
- * commitments, etc.) still exist (empty) in case they're reused later —
- * see the DB config for the full list.
+ * table), with its own sub-tabs (Calendar / Lists / Read Me /
+ * Administration — see MASTER_CALENDAR_SUB_TABS below). Since there's only
+ * one board now, the old choice-between-two-boards radio row and the
+ * `view` state it drove are gone too — this component renders
+ * MasterCalendarView directly. The slt_view/slt_edit admin grants are
+ * unchanged (still used to gate calendar view/edit access) — see
+ * adminGrants.js, where the SLT_VIEW label was updated to drop the
+ * now-gone "action items" / "decisions" wording.
  */
-const SLT_TRACKER_VIEWS = [
-  { key: "master_calendar", label: "Master Calendar" },
-  { key: "action_tracker", label: "Action Tracker Executive Board" },
-];
-
 const MONTH_SUGGESTIONS = [
   "January",
   "February",
@@ -1045,9 +1010,7 @@ const ADMIN_ONLY_SUB_TAB_KEYS = new Set(["lists", "read_me", "administration"]);
 
 // Collapsed by default — click the header to open it. Keeps the screen from
 // being wall-to-wall explanatory text while still surfacing every caveat for
-// whoever wants to read it. (Same component/behavior as ActionTrackerBoard's
-// NoteBanner — kept as its own copy here since this file doesn't import
-// from that one.)
+// whoever wants to read it.
 function NoteBanner({ children, label = "Note" }) {
   const [open, setOpen] = useState(false);
   return (
@@ -1941,58 +1904,15 @@ export default function SltTrackerV2({ canEdit }) {
   const { user } = useAuth();
   const isAdmin = isAdministrator(user);
   // "?calEvent=<id>" comes from the "new event" notification email — see
-  // sendCalendarEventCreatedEmail in email.service.js. When present, jump
-  // straight to Master Calendar instead of whichever view is first by
-  // default, so clicking the email link lands directly on the event.
+  // sendCalendarEventCreatedEmail in email.service.js. When present, the
+  // Add/Edit modal for that event opens automatically so clicking the
+  // email link lands directly on it.
   const [searchParams] = useSearchParams();
   const deepLinkEventId = searchParams.get("calEvent");
-  const [view, setView] = useState(() => (deepLinkEventId ? "master_calendar" : SLT_TRACKER_VIEWS[0].key));
-
-  // Action Tracker Executive Board is still being worked on and isn't ready
-  // for the live site yet — per explicit request, hide it from the
-  // production build (what actually ships to Render) while leaving it
-  // visible when running the local dev server, so work on it can continue
-  // on localhost without it showing up for real users in the meantime.
-  // `import.meta.env.DEV` is Vite's own dev-vs-build flag: true under
-  // `npm run dev`, false in a `vite build` (what gets deployed). Master
-  // Calendar is unaffected either way — it's already first in
-  // SLT_TRACKER_VIEWS and the default view above.
-  const visibleSltViews = import.meta.env.DEV
-    ? SLT_TRACKER_VIEWS
-    : SLT_TRACKER_VIEWS.filter((v) => v.key !== "action_tracker");
 
   return (
     <div className="card p-4 sm:p-6">
-      {visibleSltViews.length > 1 ? (
-        // Only worth showing as a choice when there's more than one option —
-        // with Action Tracker hidden on the live site, there's nothing to
-        // pick between, so the radio row itself is skipped there rather
-        // than showing a single, permanently-checked option.
-        <div className="mb-4 flex flex-wrap items-center gap-6">
-          {visibleSltViews.map((v) => (
-            <label
-              key={v.key}
-              className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"
-            >
-              <input
-                type="radio"
-                name="slt-tracker-view"
-                value={v.key}
-                checked={view === v.key}
-                onChange={() => setView(v.key)}
-                className="h-4 w-4 text-[#0B3EAF] focus:ring-[#0B3EAF]"
-              />
-              {v.label}
-            </label>
-          ))}
-        </div>
-      ) : null}
-
-      {view === "master_calendar" ? (
-        <MasterCalendarView canEdit={canEdit} isAdmin={isAdmin} deepLinkEventId={deepLinkEventId} />
-      ) : (
-        <ActionTrackerBoard canEdit={canEdit} />
-      )}
+      <MasterCalendarView canEdit={canEdit} isAdmin={isAdmin} deepLinkEventId={deepLinkEventId} />
     </div>
   );
 }

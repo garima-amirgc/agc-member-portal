@@ -138,7 +138,7 @@ export const ADMIN_GRANT_OPTION_GROUPS = Object.freeze([
     options: [
       {
         key: ADMIN_GRANT_KEYS.SLT_VIEW,
-        label: "SLT Report — view action items, calendar, and decisions",
+        label: "SLT Report — view calendar",
       },
       {
         key: ADMIN_GRANT_KEYS.SLT_EDIT,

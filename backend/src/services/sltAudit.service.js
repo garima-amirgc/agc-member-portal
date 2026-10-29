@@ -1,22 +1,26 @@
 const { db } = require("../config/db");
 
 /**
- * SLT Tracker v2 — shared audit-trail helper.
+ * SLT Tracker — shared audit-trail helper.
  *
- * Every SLT entity type (action, decision_queue, decision_register,
- * commitment, calendar) writes its field-level change history into the one
- * shared slt_audit_log table (see config/database/{sqlite,postgres}.js),
- * rather than each service inventing its own history table. This module is
- * the only thing that reads or writes slt_audit_log + slt_links directly;
- * the per-entity services (sltActions/sltDecisions/sltCommitments/
- * sltCalendar) call logAudit()/logFieldChanges() after every create/update
- * so "who changed what, and when" is always available, and call
- * listLinksFor()/createLink() when they want to relate one SLT record to
- * another outside of a dedicated foreign key (e.g. Decision Register's own
- * parent_decision_id column, which does NOT go through this table).
+ * Writes field-level change history into the shared slt_audit_log table
+ * (see config/database/{sqlite,postgres}.js) rather than each service
+ * inventing its own history table. sltCalendar.service.js calls
+ * logAudit()/logFieldChanges() after every create/update so "who changed
+ * what, and when" is always available, and can call
+ * listLinksFor()/createLink() if it ever wants to relate one SLT record to
+ * another via the generic slt_links table.
+ *
+ * This used to also be shared by the Action Tracker Executive Board
+ * (action/decision_queue/decision_register/commitment entity types). That
+ * feature was removed entirely by explicit request ("completely remove
+ * this... delete everything related to this") — their rows were purged
+ * from slt_audit_log/slt_links (see the migration in
+ * config/database/postgres.js / sqlite.js) and those types dropped from
+ * the list below. "calendar" is the only entity type left.
  */
 
-const ENTITY_TYPES = ["action", "decision_queue", "decision_register", "commitment", "calendar"];
+const ENTITY_TYPES = ["calendar"];
 
 function isValidEntityType(t) {
   return ENTITY_TYPES.includes(t);

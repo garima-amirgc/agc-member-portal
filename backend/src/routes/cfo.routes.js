@@ -5,12 +5,7 @@ const { requireAdminGrantAny } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS, hasAnyAdminGrant } = require("../config/adminGrants");
 const cfoReports = require("../services/cfoReports.service");
 const cfoIncidents = require("../services/cfoIncidents.service");
-const sltItems = require("../services/sltItems.service");
 const sltCalendar = require("../services/sltCalendar.service");
-const sltActions = require("../services/sltActions.service");
-const sltDecisions = require("../services/sltDecisions.service");
-const sltCommitments = require("../services/sltCommitments.service");
-const sltOverview = require("../services/sltOverview.service");
 const sltAudit = require("../services/sltAudit.service");
 const sp = require("../services/sharepoint.service");
 
@@ -35,19 +30,13 @@ router.get("/status", requireAdminGrantAny(...INCIDENT_OR_CFO_GRANTS), (req, res
 });
 
 // "incident" is still the legacy SharePoint-Excel-backed history (kept
-// read-only, no longer surfaced in the UI). "slt" used to be SharePoint-Excel
-// too, but is now native, in-portal data (see sltItems.service.js below) —
-// routed here so the frontend's existing loadReport("slt") call didn't need
-// to change.
+// read-only, no longer surfaced in the UI). The "slt" key this route used
+// to special-case (sltItems.service.js's legacy combined report) was
+// removed along with the rest of the Action Tracker / legacy SLT report
+// system by explicit request — SLT Tracker now loads its own data
+// directly from /cfo/slt/v2/calendar instead of going through this route.
 router.get("/report/:key", async (req, res) => {
   try {
-    if (req.params.key === "slt") {
-      if (!hasAnyAdminGrant(req.user, SLT_VIEW_GRANTS)) {
-        return res.status(403).json({ message: "You do not have access to this administration area." });
-      }
-      const data = await sltItems.getSltReport();
-      return res.json(data);
-    }
     const grants = req.params.key === "incident" ? INCIDENT_OR_CFO_GRANTS : [ADMIN_GRANT_KEYS.CFO];
     if (!hasAnyAdminGrant(req.user, grants)) {
       return res.status(403).json({ message: "You do not have access to this administration area." });
@@ -108,103 +97,11 @@ router.delete("/incidents/:id", async (req, res) => {
   }
 });
 
-// ── Native, in-portal SLT Report ────────────────────────────────────────
-// Three record types (action items, calendar events, decisions), each with
-// its own add/update/delete routes below. Listing all three together (plus
-// the computed per-person performance roster) goes through GET
-// /report/slt above — that's what the SLT tab actually loads, same as it
-// did when "slt" meant a SharePoint fetch. Viewing requires cfo, slt_view,
-// or slt_edit; adding/updating/deleting requires cfo or slt_edit.
-
-router.post("/slt/action-items", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    const item = await sltItems.createActionItem(req.user.id, req.body);
-    res.status(201).json(item);
-  } catch (e) {
-    const code = e.statusCode || 500;
-    res.status(code).json({ message: e.message || "Server error" });
-  }
-});
-
-router.patch("/slt/action-items/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    const item = await sltItems.updateActionItem(req.params.id, req.body);
-    res.json(item);
-  } catch (e) {
-    const code = e.statusCode || 500;
-    res.status(code).json({ message: e.message || "Server error" });
-  }
-});
-
-router.delete("/slt/action-items/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    const result = await sltItems.deleteActionItem(req.params.id);
-    res.json(result);
-  } catch (e) {
-    const code = e.statusCode || 500;
-    res.status(code).json({ message: e.message || "Server error" });
-  }
-});
-
-router.post("/slt/calendar-events", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    const event = await sltItems.createCalendarEvent(req.user.id, req.body);
-    res.status(201).json(event);
-  } catch (e) {
-    const code = e.statusCode || 500;
-    res.status(code).json({ message: e.message || "Server error" });
-  }
-});
-
-router.patch("/slt/calendar-events/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    const event = await sltItems.updateCalendarEvent(req.params.id, req.body);
-    res.json(event);
-  } catch (e) {
-    const code = e.statusCode || 500;
-    res.status(code).json({ message: e.message || "Server error" });
-  }
-});
-
-router.delete("/slt/calendar-events/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    const result = await sltItems.deleteCalendarEvent(req.params.id);
-    res.json(result);
-  } catch (e) {
-    const code = e.statusCode || 500;
-    res.status(code).json({ message: e.message || "Server error" });
-  }
-});
-
-router.post("/slt/decisions", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    const decision = await sltItems.createDecision(req.user.id, req.body);
-    res.status(201).json(decision);
-  } catch (e) {
-    const code = e.statusCode || 500;
-    res.status(code).json({ message: e.message || "Server error" });
-  }
-});
-
-router.patch("/slt/decisions/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    const decision = await sltItems.updateDecision(req.params.id, req.body);
-    res.json(decision);
-  } catch (e) {
-    const code = e.statusCode || 500;
-    res.status(code).json({ message: e.message || "Server error" });
-  }
-});
-
-router.delete("/slt/decisions/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    const result = await sltItems.deleteDecision(req.params.id);
-    res.json(result);
-  } catch (e) {
-    const code = e.statusCode || 500;
-    res.status(code).json({ message: e.message || "Server error" });
-  }
-});
+// The old legacy-v1 routes here (POST/PATCH/DELETE /slt/action-items,
+// /slt/calendar-events, /slt/decisions, backed by sltItems.service.js) were
+// already dead — the live UI has not called them since SltTrackerV2
+// replaced the old combined-list view. Removed along with the rest of the
+// Action Tracker / legacy SLT report system.
 
 // ── SLT Tracker — Master Calendar ───────────────────────────────────────
 // Native table (slt_calendar) matching the source workbook's "Master
@@ -378,258 +275,12 @@ router.post("/slt/v2/calendar/subscription/test", requireAdminGrantAny(...SLT_ED
   }
 });
 
-// ── SLT Tracker — Action Tracker Executive Board ───────────────────────
-// Action Register, Decisions (Queue + Register), 90-Day Commitments,
-// Dashboard and Weekly Review — see sltActions/sltDecisions/
-// sltCommitments/sltOverview.service.js. Same cfo/slt_view/slt_edit grants
-// as the rest of SLT Tracker v2; archive/restore only, never hard delete.
-
-// Action Register
-router.get("/slt/v2/actions", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json({ actions: await sltActions.listActions(req.query) });
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.get("/slt/v2/actions/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltActions.getActionById(req.params.id));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.get("/slt/v2/actions/:id/history", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json({ history: await sltActions.getActionStatusHistory(req.params.id) });
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/actions", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.status(201).json(await sltActions.createAction(req.user.id, req.body));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.patch("/slt/v2/actions/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltActions.updateAction(req.user.id, req.params.id, req.body));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/actions/:id/archive", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltActions.setActionArchived(req.user.id, req.params.id, true));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/actions/:id/restore", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltActions.setActionArchived(req.user.id, req.params.id, false));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-// Decision Queue
-router.get("/slt/v2/decision-queue", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json({ items: await sltDecisions.listDecisionQueue(req.query) });
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.get("/slt/v2/decision-queue/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltDecisions.getDecisionQueueById(req.params.id));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/decision-queue", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.status(201).json(await sltDecisions.createDecisionQueueItem(req.user.id, req.body));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.patch("/slt/v2/decision-queue/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltDecisions.updateDecisionQueueItem(req.user.id, req.params.id, req.body));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/decision-queue/:id/archive", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltDecisions.setDecisionQueueArchived(req.user.id, req.params.id, true));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/decision-queue/:id/restore", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltDecisions.setDecisionQueueArchived(req.user.id, req.params.id, false));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-// "Record Decision" — moves a Decision Queue item into the permanent
-// Decision Register, linked via the queue item's own id (never by title).
-router.post("/slt/v2/decision-queue/:id/record-decision", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.status(201).json(await sltDecisions.recordDecision(req.user.id, req.params.id, req.body));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-// Decision Register
-router.get("/slt/v2/decision-register", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json({ entries: await sltDecisions.listDecisionRegister(req.query) });
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.get("/slt/v2/decision-register/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltDecisions.getDecisionRegisterById(req.params.id));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/decision-register", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.status(201).json(await sltDecisions.createDecisionRegisterEntry(req.user.id, req.body));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.patch("/slt/v2/decision-register/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltDecisions.updateDecisionRegisterEntry(req.user.id, req.params.id, req.body));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/decision-register/:id/archive", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltDecisions.setDecisionRegisterArchived(req.user.id, req.params.id, true));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/decision-register/:id/restore", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltDecisions.setDecisionRegisterArchived(req.user.id, req.params.id, false));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-// 90-Day Commitments
-router.get("/slt/v2/commitments", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json({ commitments: await sltCommitments.listCommitments(req.query) });
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.get("/slt/v2/commitments/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltCommitments.getCommitmentById(req.params.id));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.get("/slt/v2/commitments/:id/checkins", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json({ checkins: await sltCommitments.listCheckins(req.params.id) });
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/commitments", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.status(201).json(await sltCommitments.createCommitment(req.user.id, req.body));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.patch("/slt/v2/commitments/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltCommitments.updateCommitment(req.user.id, req.params.id, req.body));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/commitments/:id/archive", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltCommitments.setCommitmentArchived(req.user.id, req.params.id, true));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/commitments/:id/restore", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltCommitments.setCommitmentArchived(req.user.id, req.params.id, false));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.post("/slt/v2/commitments/checkins/:checkinId/complete", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltCommitments.completeCheckin(req.user.id, req.params.checkinId, req.body?.notes));
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-// Dashboard + Weekly Review (cross-area, read-only)
-router.get("/slt/v2/dashboard", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltOverview.getDashboard());
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
-
-router.get("/slt/v2/weekly-review", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
-  try {
-    res.json(await sltOverview.getWeeklyReview());
-  } catch (e) {
-    sltErrorHandler(res, e);
-  }
-});
+// Action Tracker Executive Board routes (Action Register, Decision
+// Queue/Register, 90-Day Commitments, Dashboard, Weekly Review — formerly
+// here, backed by sltActions/sltDecisions/sltCommitments/sltOverview.
+// service.js) were removed entirely by explicit request ("completely
+// remove this... delete everything related to this"). The generic audit
+// trail route below is unaffected — it still serves calendar entries.
 
 // Shared audit trail (any entity type)
 router.get("/slt/v2/audit/:entityType/:entityId", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {

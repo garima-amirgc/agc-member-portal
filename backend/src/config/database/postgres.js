@@ -716,87 +716,19 @@ async function migrateColumns(client) {
     // CREATE TABLE IF NOT EXISTS above only takes effect on a brand-new
     // install, same as the it_tickets.attachments column elsewhere.
     "ALTER TABLE cfo_incidents ADD COLUMN IF NOT EXISTS attachments TEXT",
-    // Native, in-portal SLT Report — replaces the two SharePoint Excel
-    // workbooks (Action Tracker, Calendar) the SLT Tracker tab used to read
-    // from. Three tables, one per record type the tab shows (action items,
-    // calendar events, decisions); see sltItems.service.js for the
-    // per-person "performance" roster computed from these at read time.
-    // Viewing requires slt_view, slt_edit, or cfo; adding/updating/deleting
-    // requires slt_edit or cfo.
-    `CREATE TABLE IF NOT EXISTS slt_action_items (
-      id SERIAL PRIMARY KEY,
-      item TEXT NOT NULL,
-      owner TEXT NOT NULL,
-      due_date TEXT,
-      status TEXT NOT NULL DEFAULT 'NOT STARTED' CHECK(status IN ('NOT STARTED','ASSIGNED','IN PROGRESS','COMPLETED')),
-      priority TEXT,
-      category TEXT,
-      next_action TEXT,
-      notes TEXT,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_action_items_owner ON slt_action_items (owner)",
-    "CREATE INDEX IF NOT EXISTS idx_slt_action_items_status ON slt_action_items (status)",
-    `CREATE TABLE IF NOT EXISTS slt_calendar_events (
-      id SERIAL PRIMARY KEY,
-      title TEXT NOT NULL,
-      event_date TEXT NOT NULL,
-      owner TEXT NOT NULL,
-      category TEXT,
-      prep_deadline TEXT,
-      notes TEXT,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_calendar_events_date ON slt_calendar_events (event_date)",
-    `CREATE TABLE IF NOT EXISTS slt_decisions (
-      id SERIAL PRIMARY KEY,
-      decision TEXT NOT NULL,
-      assigned_to TEXT NOT NULL,
-      deadline TEXT,
-      status TEXT NOT NULL DEFAULT 'Not Started' CHECK(status IN ('Not Started','In Progress','Pending','Deferred','Completed')),
-      workstream TEXT,
-      decision_type TEXT,
-      recommendation TEXT,
-      source TEXT,
-      notes TEXT,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_decisions_assigned_to ON slt_decisions (assigned_to)",
 
-    // SLT Tracker v2 — full rebuild per the Oct 2026 AGC SLT brief. See the
-    // matching block in sqlite.js for the field-mapping rationale; this is
-    // the same schema in Postgres types (SERIAL / TIMESTAMPTZ).
-    `CREATE TABLE IF NOT EXISTS slt_import_batches (
-      id SERIAL PRIMARY KEY,
-      source_label TEXT NOT NULL,
-      original_filename TEXT NOT NULL,
-      checksum_sha256 TEXT NOT NULL,
-      imported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      imported_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      mode TEXT NOT NULL DEFAULT 'commit' CHECK(mode IN ('dry_run','commit')),
-      summary_json TEXT
-    )`,
-    `CREATE TABLE IF NOT EXISTS slt_import_raw_rows (
-      id SERIAL PRIMARY KEY,
-      batch_id INTEGER NOT NULL REFERENCES slt_import_batches(id) ON DELETE CASCADE,
-      sheet_name TEXT NOT NULL,
-      source_row INTEGER NOT NULL,
-      raw_json TEXT NOT NULL,
-      formula_json TEXT,
-      entity_type TEXT,
-      entity_id INTEGER,
-      disposition TEXT NOT NULL DEFAULT 'pending_review'
-        CHECK(disposition IN ('inserted','updated','unchanged','history_only','pending_review','skipped_template')),
-      notes TEXT,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_import_raw_rows_batch ON slt_import_raw_rows (batch_id)",
+    // slt_action_items / slt_calendar_events / slt_decisions (legacy v1
+    // SLT report tables) and slt_actions / slt_action_status_history /
+    // slt_decision_queue / slt_decision_register / slt_commitments /
+    // slt_commitment_checkins / slt_import_batches / slt_import_raw_rows
+    // (the Action Tracker Executive Board's v2 tables) used to be created
+    // here. The whole Action Tracker Executive Board feature — UI, routes,
+    // services, and these tables — was removed entirely by explicit
+    // request ("completely remove this... delete everything related to
+    // this"); see the DROP TABLE migration further down in this same
+    // array. slt_audit_log and slt_links, below, are shared infrastructure
+    // (sltAudit.service.js) still used by Master Calendar, so they stay —
+    // only their now-orphaned action/decision/commitment rows are purged.
     `CREATE TABLE IF NOT EXISTS slt_audit_log (
       id SERIAL PRIMARY KEY,
       entity_type TEXT NOT NULL,
@@ -819,176 +751,6 @@ async function migrateColumns(client) {
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(from_type, from_id, to_type, to_id)
     )`,
-    `CREATE TABLE IF NOT EXISTS slt_actions (
-      id SERIAL PRIMARY KEY,
-      legacy_item_id TEXT,
-      item TEXT NOT NULL,
-      category TEXT,
-      owner TEXT NOT NULL,
-      next_action TEXT,
-      due_date TEXT,
-      status TEXT NOT NULL DEFAULT 'Assigned',
-      priority TEXT,
-      flag TEXT,
-      risk_impact TEXT,
-      strategic_objective TEXT,
-      escalation_required TEXT,
-      financial_impact TEXT,
-      asp_readiness_stream TEXT,
-      blocker_waiting_on TEXT,
-      notes TEXT,
-      date_added TEXT,
-      last_updated TEXT,
-      immutable_key TEXT UNIQUE,
-      active_record TEXT,
-      archived INTEGER NOT NULL DEFAULT 0,
-      attachments TEXT,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_actions_owner ON slt_actions (owner)",
-    "CREATE INDEX IF NOT EXISTS idx_slt_actions_status ON slt_actions (status)",
-    "CREATE INDEX IF NOT EXISTS idx_slt_actions_archived ON slt_actions (archived)",
-    `CREATE TABLE IF NOT EXISTS slt_action_status_history (
-      id SERIAL PRIMARY KEY,
-      action_id INTEGER NOT NULL REFERENCES slt_actions(id) ON DELETE CASCADE,
-      old_status TEXT,
-      new_status TEXT NOT NULL,
-      old_due_date TEXT,
-      new_due_date TEXT,
-      changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      changed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_action_status_history_action ON slt_action_status_history (action_id)",
-    `CREATE TABLE IF NOT EXISTS slt_decision_queue (
-      id SERIAL PRIMARY KEY,
-      legacy_decision_id TEXT,
-      decision_required TEXT NOT NULL,
-      workstream TEXT,
-      assigned_to TEXT,
-      decision_deadline TEXT,
-      recommendation TEXT,
-      status TEXT,
-      decision_type TEXT,
-      ceo_cfo_attention TEXT,
-      financial_impact TEXT,
-      risk_impact TEXT,
-      strategic_objective TEXT,
-      decision_date TEXT,
-      further_action_required TEXT,
-      context_input_required TEXT,
-      owned_by TEXT,
-      requested_by TEXT,
-      date_raised TEXT,
-      delay_impact_risk TEXT,
-      blocker_waiting_on TEXT,
-      notes TEXT,
-      queue_immutable_key TEXT UNIQUE,
-      active_record TEXT,
-      archived INTEGER NOT NULL DEFAULT 0,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_decision_queue_assigned_to ON slt_decision_queue (assigned_to)",
-    "CREATE INDEX IF NOT EXISTS idx_slt_decision_queue_archived ON slt_decision_queue (archived)",
-    `CREATE TABLE IF NOT EXISTS slt_decision_register (
-      id SERIAL PRIMARY KEY,
-      legacy_decision_log_id TEXT,
-      legacy_decision_id TEXT,
-      source_decision_id TEXT,
-      parent_decision_id INTEGER REFERENCES slt_decision_queue(id) ON DELETE SET NULL,
-      link_status TEXT NOT NULL DEFAULT 'historical_no_parent'
-        CHECK(link_status IN ('linked','unresolved','historical_no_parent')),
-      decision_required TEXT NOT NULL,
-      decision_summary TEXT,
-      workstream TEXT,
-      assigned_to TEXT,
-      decision_deadline TEXT,
-      recommendation TEXT,
-      status TEXT,
-      decision_type TEXT,
-      ceo_cfo_attention TEXT,
-      financial_impact TEXT,
-      risk_impact TEXT,
-      strategic_objective TEXT,
-      decision_date TEXT,
-      decision_maker TEXT,
-      further_action_required TEXT,
-      context_input_required TEXT,
-      owned_by TEXT,
-      requested_by TEXT,
-      requester TEXT,
-      date_raised TEXT,
-      logged_date TEXT,
-      delay_impact_risk TEXT,
-      blocker_waiting_on TEXT,
-      next_action TEXT,
-      original_issue TEXT,
-      rationale TEXT,
-      follow_up_status TEXT,
-      due_date TEXT,
-      notes TEXT,
-      queue_immutable_key TEXT,
-      decision_log_immutable_key TEXT UNIQUE,
-      queue_source_key TEXT,
-      consistency_check TEXT,
-      id_origin TEXT,
-      id_check TEXT,
-      active_record TEXT,
-      archived INTEGER NOT NULL DEFAULT 0,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_decision_register_parent ON slt_decision_register (parent_decision_id)",
-    "CREATE INDEX IF NOT EXISTS idx_slt_decision_register_follow_up ON slt_decision_register (follow_up_status)",
-    "CREATE INDEX IF NOT EXISTS idx_slt_decision_register_archived ON slt_decision_register (archived)",
-    `CREATE TABLE IF NOT EXISTS slt_commitments (
-      id SERIAL PRIMARY KEY,
-      legacy_id TEXT,
-      commitment_deliverable TEXT NOT NULL,
-      success_measure TEXT,
-      owner TEXT NOT NULL,
-      rag_status TEXT,
-      status1_raw TEXT,
-      date_record_entered TEXT,
-      date_assigned TEXT,
-      original_due TEXT,
-      checkin_30_due TEXT,
-      checkin_30_notes TEXT,
-      checkin_60_due TEXT,
-      checkin_60_notes TEXT,
-      checkin_90_notes TEXT,
-      extension_approved_by TEXT,
-      ext_approval_date TEXT,
-      revised_due TEXT,
-      delivered_on TEXT,
-      current_due TEXT,
-      status2 TEXT NOT NULL DEFAULT 'Open',
-      report_cue_raw TEXT,
-      change_risk_next_step TEXT,
-      extension_flagged INTEGER NOT NULL DEFAULT 0,
-      immutable_key TEXT UNIQUE,
-      archived INTEGER NOT NULL DEFAULT 0,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_commitments_owner ON slt_commitments (owner)",
-    "CREATE INDEX IF NOT EXISTS idx_slt_commitments_archived ON slt_commitments (archived)",
-    `CREATE TABLE IF NOT EXISTS slt_commitment_checkins (
-      id SERIAL PRIMARY KEY,
-      commitment_id INTEGER NOT NULL REFERENCES slt_commitments(id) ON DELETE CASCADE,
-      checkin_type TEXT NOT NULL CHECK(checkin_type IN ('30','60','90')),
-      due_date TEXT,
-      completed_at TEXT,
-      notes TEXT,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
-    "CREATE INDEX IF NOT EXISTS idx_slt_commitment_checkins_commitment ON slt_commitment_checkins (commitment_id)",
     `CREATE TABLE IF NOT EXISTS slt_calendar (
       id SERIAL PRIMARY KEY,
       event_id TEXT UNIQUE,
@@ -1029,6 +791,31 @@ async function migrateColumns(client) {
     "ALTER TABLE slt_calendar DROP COLUMN IF EXISTS prep_deadline",
     "ALTER TABLE slt_calendar DROP COLUMN IF EXISTS materials_needed",
     "ALTER TABLE slt_calendar DROP COLUMN IF EXISTS notes",
+
+    // Action Tracker Executive Board — removed entirely by explicit request
+    // ("completely remove this... everything about this... all the tables
+    // and whatever you have for this under administration delete
+    // everything related to this"). These are its 11 tables: the legacy v1
+    // trio (already dead code, unused by any live route) plus the v2
+    // Action Register / Decision Queue / Decision Register / 90-Day
+    // Commitments / import-tracking tables. slt_calendar, slt_audit_log,
+    // and slt_links are untouched — Master Calendar still uses them.
+    "DROP TABLE IF EXISTS slt_action_items",
+    "DROP TABLE IF EXISTS slt_calendar_events",
+    "DROP TABLE IF EXISTS slt_decisions",
+    "DROP TABLE IF EXISTS slt_action_status_history",
+    "DROP TABLE IF EXISTS slt_actions",
+    "DROP TABLE IF EXISTS slt_decision_register",
+    "DROP TABLE IF EXISTS slt_decision_queue",
+    "DROP TABLE IF EXISTS slt_commitment_checkins",
+    "DROP TABLE IF EXISTS slt_commitments",
+    "DROP TABLE IF EXISTS slt_import_raw_rows",
+    "DROP TABLE IF EXISTS slt_import_batches",
+    // slt_audit_log/slt_links are shared infrastructure (sltAudit.service.js)
+    // that Master Calendar still uses, so the tables stay — only the rows
+    // belonging to the now-gone entity types are purged.
+    "DELETE FROM slt_audit_log WHERE entity_type <> 'calendar'",
+    "DELETE FROM slt_links WHERE from_type <> 'calendar' OR to_type <> 'calendar'",
 
     "CREATE INDEX IF NOT EXISTS idx_users_manager_id ON users (manager_id)",
     "CREATE INDEX IF NOT EXISTS idx_lessons_course_id ON lessons (course_id)",
