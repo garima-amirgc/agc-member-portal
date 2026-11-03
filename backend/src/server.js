@@ -101,6 +101,7 @@ async function start() {
   const adpTimeOffEvents = require("./services/adpTimeOffEvents.service");
   adpTimeOffEvents.startPolling(); // start background ADP event-notification polling (pending/approved/cancelled)
   const sltCalendar = require("./services/sltCalendar.service");
+  await sltCalendar.backfillTextDateRangeDates(); // one-time (idempotent) fix for text-range events with no computable start/end date
   sltCalendar.startCalendarDigestScheduler(); // start background Master Calendar subscription-email scheduler
   const { authRequired } = require("./middleware/auth");
   const leaveSvc = require("./services/leaveRequests.service");

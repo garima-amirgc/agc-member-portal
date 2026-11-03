@@ -120,6 +120,48 @@ function parseTextDateRange(raw) {
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
 }
 
+// A second shape — month+day on BOTH sides, same or different month, year
+// optional: "Nov 9 - Nov 23", "Nov 23 - Dec 4". Mirrors
+// CROSS_MONTH_TEXT_DATE_RANGE_RE in sltCalendar.service.js, added there by
+// explicit request after events typed this way directly in the portal
+// turned out to have no computable start date at all.
+const CROSS_MONTH_TEXT_DATE_RANGE_RE =
+  /^([A-Za-z]{3,})\s+(\d{1,2})\s*-\s*([A-Za-z]{3,})\s+(\d{1,2})(?:,\s*(\d{4}))?$/;
+
+function resolveAmbiguousYear(startMonthIdx, startDay, endMonthIdx, endDay, referenceDate) {
+  const refYear = referenceDate.getFullYear();
+  let best = null;
+  for (const y of [refYear - 1, refYear, refYear + 1]) {
+    const start = new Date(y, startMonthIdx, startDay);
+    const endYear = endMonthIdx < startMonthIdx ? y + 1 : y;
+    const end = new Date(endYear, endMonthIdx, endDay);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+    const diff = Math.abs(start.getTime() - referenceDate.getTime());
+    if (!best || diff < best.diff) best = { start, end, diff };
+  }
+  return best;
+}
+
+function parseCrossMonthDateRange(raw, referenceDate) {
+  const m = CROSS_MONTH_TEXT_DATE_RANGE_RE.exec(String(raw).trim());
+  if (!m) return null;
+  const [, startMonthName, startDay, endMonthName, endDay, year] = m;
+  const startMonthIdx = new Date(`${startMonthName} 1, 2000`).getMonth();
+  const endMonthIdx = new Date(`${endMonthName} 1, 2000`).getMonth();
+  if (Number.isNaN(startMonthIdx) || Number.isNaN(endMonthIdx)) return null;
+  if (year) {
+    const endYear = Number(year);
+    const startYear = endMonthIdx < startMonthIdx ? endYear - 1 : endYear;
+    const start = new Date(startYear, startMonthIdx, Number(startDay));
+    const end = new Date(endYear, endMonthIdx, Number(endDay));
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+  }
+  const resolved = resolveAmbiguousYear(startMonthIdx, Number(startDay), endMonthIdx, Number(endDay), referenceDate || new Date());
+  if (!resolved) return null;
+  return { start: resolved.start.toISOString().slice(0, 10), end: resolved.end.toISOString().slice(0, 10) };
+}
+
 async function main() {
   const args = parseArgs();
   console.log(`Master Calendar import — ${args.dryRun ? "DRY RUN (no writes)" : "COMMIT"}`);
@@ -169,7 +211,7 @@ async function main() {
       endDate = startDate;
     } else if (!isBlank(eventDateRaw)) {
       isTextDateRange = 1;
-      const parsed = parseTextDateRange(eventDateRaw);
+      const parsed = parseTextDateRange(eventDateRaw) || parseCrossMonthDateRange(eventDateRaw, new Date());
       if (parsed) {
         startDate = parsed.start;
         endDate = parsed.end;

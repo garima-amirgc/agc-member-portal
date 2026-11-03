@@ -65,6 +65,17 @@ function normalizeText(raw, { required = false, label = "This field", max = MAX_
 // the Event Date column: "Oct 17-21, 2026" / "Oct 17 - 21, 2026".
 const TEXT_DATE_RANGE_RE = /^([A-Za-z]{3,})\s+(\d{1,2})\s*-\s*(\d{1,2}),\s*(\d{4})$/;
 
+// A second shape, typed directly into the portal rather than the source
+// workbook: a month+day on BOTH sides, same or different month, year
+// optional — "Nov 9 - Nov 23", "Nov 23 - Dec 4", "Dec 7 - Dec 18, 2026".
+// Added by explicit request ("fix this without losing any data") after
+// events typed this way turned out to have no computable start date at
+// all, which silently made them disappear under any From/To filter (see
+// eventInDateRange in SltTrackerV2.jsx) even though a person reading them
+// can plainly see which month/day they fall on.
+const CROSS_MONTH_TEXT_DATE_RANGE_RE =
+  /^([A-Za-z]{3,})\s+(\d{1,2})\s*-\s*([A-Za-z]{3,})\s+(\d{1,2})(?:,\s*(\d{4}))?$/;
+
 function parseTextDateRange(raw) {
   const m = TEXT_DATE_RANGE_RE.exec(String(raw).trim());
   if (!m) return null;
@@ -77,11 +88,56 @@ function parseTextDateRange(raw) {
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
 }
 
-// Accepts a real date ("2026-08-19") or a text range ("Oct 17-21, 2026"),
+// When CROSS_MONTH_TEXT_DATE_RANGE_RE has no year, picks whichever of
+// {referenceYear - 1, referenceYear, referenceYear + 1} puts the range's
+// start date closest to `referenceDate` — the same "nearest occurrence"
+// reading a person gives an undated range (an event typed in Nov 2026
+// titled "Dec 7 - Dec 18" means Dec 2026, not Dec 2025 or Dec 2027).
+function resolveAmbiguousYear(startMonthIdx, startDay, endMonthIdx, endDay, referenceDate) {
+  const refYear = referenceDate.getFullYear();
+  let best = null;
+  for (const y of [refYear - 1, refYear, refYear + 1]) {
+    const start = new Date(y, startMonthIdx, startDay);
+    // A range that wraps past New Year's ("Dec 28 - Jan 3") ends in the
+    // following calendar year.
+    const endYear = endMonthIdx < startMonthIdx ? y + 1 : y;
+    const end = new Date(endYear, endMonthIdx, endDay);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+    const diff = Math.abs(start.getTime() - referenceDate.getTime());
+    if (!best || diff < best.diff) best = { start, end, diff };
+  }
+  return best;
+}
+
+function parseCrossMonthDateRange(raw, referenceDate) {
+  const m = CROSS_MONTH_TEXT_DATE_RANGE_RE.exec(String(raw).trim());
+  if (!m) return null;
+  const [, startMonthName, startDay, endMonthName, endDay, year] = m;
+  const startMonthIdx = new Date(`${startMonthName} 1, 2000`).getMonth();
+  const endMonthIdx = new Date(`${endMonthName} 1, 2000`).getMonth();
+  if (Number.isNaN(startMonthIdx) || Number.isNaN(endMonthIdx)) return null;
+  if (year) {
+    const endYear = Number(year);
+    const startYear = endMonthIdx < startMonthIdx ? endYear - 1 : endYear;
+    const start = new Date(startYear, startMonthIdx, Number(startDay));
+    const end = new Date(endYear, endMonthIdx, Number(endDay));
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+  }
+  const resolved = resolveAmbiguousYear(startMonthIdx, Number(startDay), endMonthIdx, Number(endDay), referenceDate || new Date());
+  if (!resolved) return null;
+  return { start: resolved.start.toISOString().slice(0, 10), end: resolved.end.toISOString().slice(0, 10) };
+}
+
+// Accepts a real date ("2026-08-19") or a text range ("Oct 17-21, 2026", or
+// "Nov 9 - Nov 23" / "Nov 23 - Dec 4" — see CROSS_MONTH_TEXT_DATE_RANGE_RE),
 // exactly like the Event Date column in the source sheet. Returns the raw
 // text as typed (event_date_raw) plus, when parseable, start_date/end_date
-// for sorting and the Days Until Event calculation.
-function normalizeEventDate(raw, { required = false } = {}) {
+// for sorting and the Days Until Event calculation. `referenceDate` anchors
+// the ambiguous-year guess for a cross-month range with no year typed —
+// pass the event's own created_at when backfilling an older row; defaults
+// to now, which is correct for every live create/update/import.
+function normalizeEventDate(raw, { required = false, referenceDate } = {}) {
   const s = raw == null ? "" : String(raw).trim();
   if (!s) {
     if (required) throw badRequest("Event date is required.");
@@ -90,12 +146,13 @@ function normalizeEventDate(raw, { required = false } = {}) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
     return { raw: s, startDate: s, endDate: s, isTextDateRange: 0 };
   }
+  const isKnownTextRangeShape = TEXT_DATE_RANGE_RE.test(s) || CROSS_MONTH_TEXT_DATE_RANGE_RE.test(s);
   const asDate = new Date(s);
-  if (!Number.isNaN(asDate.getTime()) && !TEXT_DATE_RANGE_RE.test(s)) {
+  if (!Number.isNaN(asDate.getTime()) && !isKnownTextRangeShape) {
     const iso = asDate.toISOString().slice(0, 10);
     return { raw: s, startDate: iso, endDate: iso, isTextDateRange: 0 };
   }
-  const range = parseTextDateRange(s);
+  const range = parseTextDateRange(s) || parseCrossMonthDateRange(s, referenceDate);
   if (range) {
     return { raw: s, startDate: range.start, endDate: range.end, isTextDateRange: 1 };
   }
@@ -583,7 +640,7 @@ function parseCalendarDateCell(eventDateRaw) {
     return { startDate: iso, endDate: iso, isTextDateRange: 0 };
   }
   if (!isBlankCell(eventDateRaw)) {
-    const range = parseTextDateRange(eventDateRaw);
+    const range = parseTextDateRange(eventDateRaw) || parseCrossMonthDateRange(eventDateRaw, new Date());
     if (range) return { startDate: range.start, endDate: range.end, isTextDateRange: 1 };
     return { startDate: null, endDate: null, isTextDateRange: 1 };
   }
@@ -1034,6 +1091,62 @@ function startCalendarDigestScheduler() {
   );
 }
 
+// One-time (but safely re-runnable) backfill: events whose Event Date was
+// typed as "Nov 9 - Nov 23" / "Nov 23 - Dec 4" style text got stored with
+// is_text_date_range=1 but start_date/end_date left NULL, because
+// CROSS_MONTH_TEXT_DATE_RANGE_RE didn't exist yet when they were created —
+// see that regex's comment. With it now in place, every such row can be
+// re-parsed from the event_date_raw text that's already stored (never
+// touched, nothing lost) to fill in start_date/end_date, using the row's
+// own created_at as the reference date for the ambiguous-year guess (more
+// accurate than "now" for a row created weeks or months ago). Only rows
+// still missing a start_date are touched, and only start_date/end_date are
+// ever written — event_title/category/executives/owner_lead/
+// executive_action_required/event_date_raw are untouched — so this is safe
+// to run on every backend startup: once a row is fixed, the WHERE clause
+// skips it on every later run. Called once from server.js at startup,
+// same as startCalendarDigestScheduler().
+async function backfillTextDateRangeDates() {
+  let rows;
+  try {
+    rows = await db
+      .prepare(
+        `SELECT id, event_date_raw, created_at FROM slt_calendar
+         WHERE is_text_date_range = 1 AND start_date IS NULL AND event_date_raw IS NOT NULL`
+      )
+      .all();
+  } catch (e) {
+    console.error("[SLT_CALENDAR] backfillTextDateRangeDates: could not read slt_calendar", e);
+    return;
+  }
+  if (!rows || !rows.length) return;
+
+  let fixed = 0;
+  let stillUnresolved = 0;
+  for (const row of rows) {
+    const referenceDate = row.created_at ? new Date(row.created_at) : new Date();
+    const range =
+      parseTextDateRange(row.event_date_raw) ||
+      parseCrossMonthDateRange(row.event_date_raw, Number.isNaN(referenceDate.getTime()) ? new Date() : referenceDate);
+    if (!range) {
+      stillUnresolved += 1;
+      continue;
+    }
+    try {
+      await db
+        .prepare(`UPDATE slt_calendar SET start_date = ?, end_date = ? WHERE id = ?`)
+        .run(range.start, range.end, row.id);
+      fixed += 1;
+    } catch (e) {
+      console.error(`[SLT_CALENDAR] backfillTextDateRangeDates: failed to update event ${row.id}`, e);
+    }
+  }
+  console.log(
+    `[SLT_CALENDAR] Backfilled start/end dates for ${fixed} text-range event(s)` +
+      (stillUnresolved ? ` — ${stillUnresolved} still have an Event Date the parser can't make sense of.` : ".")
+  );
+}
+
 module.exports = {
   listCalendar,
   getCalendarEventById,
@@ -1046,4 +1159,5 @@ module.exports = {
   updateCalendarSubscriptionSettings,
   sendCalendarDigestTestEmail,
   startCalendarDigestScheduler,
+  backfillTextDateRangeDates,
 };
