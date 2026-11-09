@@ -46,10 +46,13 @@ import { computeKpis, computeBoardSummary, computeOwnerBreakdown, computeObjecti
  * second time into that file for the same "no shared UI kit" reason.
  */
 
+// Order here is the literal left-to-right tab order AND the default tab on
+// load (see useState(SUB_TABS[0].key) below) — Action Register placed first
+// per explicit request, ahead of Board Summary and Executive Dashboard.
 const SUB_TABS = [
+  { key: "action_register", label: "Action Register" },
   { key: "board_summary", label: "Board Summary" },
   { key: "executive_dashboard", label: "Executive Dashboard" },
-  { key: "action_register", label: "Action Register" },
 ];
 
 const ACTION_FIELDS = [
@@ -136,7 +139,7 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger = fals
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
       <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h3>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{message}</p>
+        <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{message}</div>
         <div className="mt-5 flex justify-end gap-2">
           <GhostButton onClick={onCancel} disabled={busy}>
             Cancel
@@ -155,6 +158,32 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger = fals
       </div>
     </div>,
     document.body
+  );
+}
+
+function truncateForConfirm(s, n = 90) {
+  const str = String(s || "").trim();
+  return str.length > n ? `${str.slice(0, n).trimEnd()}…` : str;
+}
+
+// Archive confirmation body — leads with the plain-language reassurance
+// (not deleted, hidden only, restorable) since that's the part people
+// actually need before clicking Archive; the item itself is identified
+// second, in muted/truncated form, since it's secondary context (the user
+// just clicked Archive on this exact row, so it's still visible behind the
+// dialog) rather than something that needs repeating back in full. A full
+// multi-sentence item (this board's "item" field can run to a paragraph)
+// used to be quoted in full ahead of the reassurance, which buried the one
+// thing people actually wanted to know at the bottom of a wall of text —
+// fixed by explicit request after seeing it in practice.
+function ArchiveConfirmMessage({ itemText, scopeText }) {
+  return (
+    <div>
+      <p className="font-medium text-slate-900 dark:text-white">
+        It won't be deleted — it'll just be hidden from {scopeText}, and you can restore it later if needed.
+      </p>
+      <p className="mt-2 text-xs italic text-slate-500 dark:text-slate-400">"{truncateForConfirm(itemText)}"</p>
+    </div>
   );
 }
 
@@ -660,9 +689,9 @@ function BoardHeader({ title, subtitle, pills, right }) {
           </h2>
           {subtitle ? <p className="mt-0.5 text-xs text-white/75">{subtitle}</p> : null}
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex flex-wrap gap-2">{pills}</div>
-          {right}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">{pills}</div>
+          {right ? <div className="flex flex-wrap justify-end gap-2">{right}</div> : null}
         </div>
       </div>
     </div>
@@ -1013,14 +1042,45 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
   const [riskFilter, setRiskFilter] = useState(() => new Set());
   const [escalationFilter, setEscalationFilter] = useState(() => new Set());
 
-  const kpis = useMemo(() => computeKpis(items), [items]);
+  // "Show archived" toggle — scoped to this sub-tab only (Board Summary and
+  // Executive Dashboard are KPI rollups that only make sense over the live,
+  // non-archived list, so they keep using the parent-loaded `items` as-is).
+  // Archived items are fetched separately on demand rather than lifted into
+  // the parent's load(), since the parent's list is shared with those other
+  // two views and must never include archived rows.
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedItems, setArchivedItems] = useState([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [archivedError, setArchivedError] = useState("");
+  const [restoringId, setRestoringId] = useState(null);
 
-  const categoryOptions = useMemo(() => dynamicOptionsWithCounts(items, "category"), [items]);
-  const ownerOptions = useMemo(() => dynamicOptionsWithCounts(items, "owner"), [items]);
-  const statusOptions = useMemo(() => fixedOptionsWithCounts(items, "status", STATUS_OPTIONS), [items]);
-  const priorityOptions = useMemo(() => fixedOptionsWithCounts(items, "priority", PRIORITY_OPTIONS), [items]);
-  const riskOptions = useMemo(() => fixedOptionsWithCounts(items, "risk_impact", RISK_IMPACT_OPTIONS), [items]);
-  const escalationOptions = useMemo(() => fixedOptionsWithCounts(items, "escalation_required", ESCALATION_OPTIONS), [items]);
+  const loadArchived = useCallback(async () => {
+    setArchivedLoading(true);
+    setArchivedError("");
+    try {
+      const { data } = await api.get("/cfo/slt/v2/action-items", { params: { archived: "true" } });
+      setArchivedItems(data.items || []);
+    } catch (e) {
+      setArchivedError(friendlyErrorMessage(e, "Could not load archived action items."));
+    } finally {
+      setArchivedLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showArchived) loadArchived();
+  }, [showArchived, loadArchived]);
+
+  const baseItems = showArchived ? archivedItems : items;
+
+  const kpis = useMemo(() => computeKpis(baseItems), [baseItems]);
+
+  const categoryOptions = useMemo(() => dynamicOptionsWithCounts(baseItems, "category"), [baseItems]);
+  const ownerOptions = useMemo(() => dynamicOptionsWithCounts(baseItems, "owner"), [baseItems]);
+  const statusOptions = useMemo(() => fixedOptionsWithCounts(baseItems, "status", STATUS_OPTIONS), [baseItems]);
+  const priorityOptions = useMemo(() => fixedOptionsWithCounts(baseItems, "priority", PRIORITY_OPTIONS), [baseItems]);
+  const riskOptions = useMemo(() => fixedOptionsWithCounts(baseItems, "risk_impact", RISK_IMPACT_OPTIONS), [baseItems]);
+  const escalationOptions = useMemo(() => fixedOptionsWithCounts(baseItems, "escalation_required", ESCALATION_OPTIONS), [baseItems]);
 
   const activeFilterCount = [
     itemQuery.trim() !== "",
@@ -1045,7 +1105,7 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
   };
 
   const filtered = useMemo(() => {
-    let list = items.filter((i) => {
+    let list = baseItems.filter((i) => {
       if (itemQuery.trim() && !String(i.item || "").toLowerCase().includes(itemQuery.trim().toLowerCase())) return false;
       if (categoryFilter.size > 0 && !categoryFilter.has((i.category || "").trim())) return false;
       if (ownerFilter.size > 0 && !ownerFilter.has((i.owner || "").trim())) return false;
@@ -1058,7 +1118,7 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
     });
     list = [...list].sort((a, b) => (idSortDir === "asc" ? a.id - b.id : b.id - a.id));
     return list;
-  }, [items, itemQuery, categoryFilter, ownerFilter, dueFilter, statusFilter, priorityFilter, riskFilter, escalationFilter, idSortDir]);
+  }, [baseItems, itemQuery, categoryFilter, ownerFilter, dueFilter, statusFilter, priorityFilter, riskFilter, escalationFilter, idSortDir]);
 
   const handleCreate = async (values) => {
     await api.post("/cfo/slt/v2/action-items", values);
@@ -1086,13 +1146,37 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
     }
   };
 
+  const handleRestore = async (item) => {
+    setRestoringId(item.id);
+    try {
+      await api.post(`/cfo/slt/v2/action-items/${item.id}/restore`);
+      await loadArchived();
+    } catch (e) {
+      window.alert(friendlyErrorMessage(e, "Could not restore this action item."));
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
   return (
     <div>
       <BoardHeader
-        title="Action Register"
-        subtitle={`${items.length} item${items.length === 1 ? "" : "s"}`}
-        pills={[<StatPill key="total" label="Total" value={items.length} accent="bg-white/15 ring-1 ring-white/20" />, ...kpiPills(kpis)]}
-        right={canEdit ? <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Action Item</PrimaryButton> : null}
+        title={showArchived ? "Action Register — Archived" : "Action Register"}
+        subtitle={`${baseItems.length} item${baseItems.length === 1 ? "" : "s"}`}
+        pills={[<StatPill key="total" label="Total" value={baseItems.length} accent="bg-white/15 ring-1 ring-white/20" />, ...kpiPills(kpis)]}
+        right={
+          <div className="flex items-center gap-2">
+            {canEdit ? (
+              <GhostButton
+                onClick={() => setShowArchived((v) => !v)}
+                className={showArchived ? "!border-white/60 !text-white hover:!bg-white/10" : "!border-white/40 !text-white/90 hover:!bg-white/10"}
+              >
+                {showArchived ? "← Back to Action Register" : "Show Archived"}
+              </GhostButton>
+            ) : null}
+            {canEdit && !showArchived ? <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Action Item</PrimaryButton> : null}
+          </div>
+        }
       />
 
       {activeFilterCount > 0 ? (
@@ -1110,18 +1194,18 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
         </div>
       ) : null}
 
-      {error ? (
+      {(showArchived ? archivedError : error) ? (
         <div className="mb-3 rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-          {error}
+          {showArchived ? archivedError : error}
         </div>
       ) : null}
 
-      <h4 className="mb-2 text-sm font-bold text-slate-800 dark:text-slate-100">Action Register</h4>
-      {loading ? (
+      <h4 className="mb-2 text-sm font-bold text-slate-800 dark:text-slate-100">{showArchived ? "Archived Action Items" : "Action Register"}</h4>
+      {(showArchived ? archivedLoading : loading) ? (
         <p className="text-sm text-slate-400">Loading…</p>
-      ) : items.length === 0 ? (
+      ) : baseItems.length === 0 ? (
         <div className="rounded-lg border border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
-          No action items yet{canEdit ? " — click \"Add Action Item\" to create the first one." : "."}
+          {showArchived ? "No archived action items." : `No action items yet${canEdit ? " — click \"Add Action Item\" to create the first one." : "."}`}
         </div>
       ) : (
         <div className="rounded-lg border border-slate-200 dark:border-slate-600/50">
@@ -1187,7 +1271,7 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
                     <CheckboxFilterContent options={escalationOptions} selected={escalationFilter} onChange={setEscalationFilter} />
                   </ColumnFilterHeader>
                 </th>
-                {canEdit ? <th className={thClass("actions", "w-[8%]", true)}>Actions</th> : null}
+                {canEdit ? <th className={thClass("actions", "w-[8%]", true)}>{showArchived ? "Restore" : "Actions"}</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
@@ -1224,22 +1308,33 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
                     </td>
                     {canEdit ? (
                       <td className={tdClass("actions", rowIdx, "", true)}>
-                        <div className="flex flex-col gap-1">
+                        {showArchived ? (
                           <button
                             type="button"
-                            onClick={() => setModal({ mode: "edit", item: i })}
-                            className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            onClick={() => handleRestore(i)}
+                            disabled={restoringId === i.id}
+                            className="w-full rounded-full border border-[#0B3EAF]/40 py-0.5 text-center text-[10px] font-semibold text-[#0B3EAF] transition hover:bg-[#0B3EAF]/10 disabled:opacity-50 dark:border-[#A7D344]/40 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/10"
                           >
-                            Edit
+                            {restoringId === i.id ? "Restoring…" : "Restore"}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setArchiveTarget(i)}
-                            className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                          >
-                            Archive
-                          </button>
-                        </div>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setModal({ mode: "edit", item: i })}
+                              className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setArchiveTarget(i)}
+                              className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            >
+                              Archive
+                            </button>
+                          </div>
+                        )}
                       </td>
                     ) : null}
                   </tr>
@@ -1263,7 +1358,12 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
       {archiveTarget ? (
         <ConfirmDialog
           title="Archive this action item?"
-          message={`"${archiveTarget.item}" will be hidden from the Action Register, Board Summary, and Executive Dashboard. It isn't deleted and can be restored later if needed.`}
+          message={
+            <ArchiveConfirmMessage
+              itemText={archiveTarget.item}
+              scopeText="the Action Register, Board Summary, and Executive Dashboard"
+            />
+          }
           confirmLabel="Archive"
           busy={archiving}
           onConfirm={confirmArchive}

@@ -137,7 +137,7 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger = fals
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
       <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h3>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{message}</p>
+        <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{message}</div>
         <div className="mt-5 flex justify-end gap-2">
           <GhostButton onClick={onCancel} disabled={busy}>
             Cancel
@@ -156,6 +156,26 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger = fals
       </div>
     </div>,
     document.body
+  );
+}
+
+function truncateForConfirm(s, n = 90) {
+  const str = String(s || "").trim();
+  return str.length > n ? `${str.slice(0, n).trimEnd()}…` : str;
+}
+
+// Archive confirmation body — see the matching comment in
+// SltActionTrackerBoard.jsx's own copy of this component for why the
+// reassurance leads and the (possibly long) item text is truncated and
+// demoted to a muted second line instead of being quoted in full up top.
+function ArchiveConfirmMessage({ itemText, scopeText }) {
+  return (
+    <div>
+      <p className="font-medium text-slate-900 dark:text-white">
+        It won't be deleted — it'll just be hidden from {scopeText}, and you can restore it later if needed.
+      </p>
+      <p className="mt-2 text-xs italic text-slate-500 dark:text-slate-400">"{truncateForConfirm(itemText)}"</p>
+    </div>
   );
 }
 
@@ -573,6 +593,14 @@ const DATE_RANGE_OPTIONS_BY_MODE = {
     { key: "this_month", label: "Decided this month" },
     { key: "no_date", label: "No decision date" },
   ],
+  // Archived items can be pending or decided (archiving doesn't care which),
+  // so this is a plain catch-all rather than either mode's own framing.
+  archived: [
+    { key: "all", label: "All" },
+    { key: "this_week", label: "This week" },
+    { key: "this_month", label: "This month" },
+    { key: "no_date", label: "No date" },
+  ],
 };
 
 // ── Column tinting — same keys/colors as SltActionTrackerBoard.jsx's
@@ -645,9 +673,9 @@ function BoardHeader({ title, pills, right }) {
             {title}
           </h2>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex flex-wrap gap-2">{pills}</div>
-          {right}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">{pills}</div>
+          {right ? <div className="flex flex-wrap justify-end gap-2">{right}</div> : null}
         </div>
       </div>
     </div>
@@ -722,11 +750,18 @@ function kpiPills(kpis) {
 // "person" column (Assigned To vs. Owned By) and "date" column (Decision
 // Deadline vs. Decision Date) swap meaning by mode, same real-world split
 // the source workbook's own two sheets had.
-function DecisionTable({ mode, items, canEdit, onEdit, onArchive }) {
-  const personField = mode === "queue" ? "assigned_to" : "owned_by";
-  const personLabel = mode === "queue" ? "Assigned To" : "Owned By";
-  const dateField = mode === "queue" ? "decision_deadline" : "decision_date";
-  const dateLabel = mode === "queue" ? "Deadline" : "Decision Date";
+function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode = false, onRestore, restoringId }) {
+  // "archived" shows a flat mixed list of pending-when-archived and
+  // decided-when-archived items together, so there's no single right
+  // person/date field the way Queue vs. Register has — each archived item
+  // is read individually, falling back to whichever of the pair it has.
+  const personField = mode === "queue" ? "assigned_to" : mode === "register" ? "owned_by" : null;
+  const personLabel = mode === "queue" ? "Assigned To" : mode === "register" ? "Owned By" : "Assigned / Owned";
+  const dateField = mode === "queue" ? "decision_deadline" : mode === "register" ? "decision_date" : null;
+  const dateLabel = mode === "queue" ? "Deadline" : mode === "register" ? "Decision Date" : "Deadline / Decided";
+
+  const personOf = (i) => (personField ? i[personField] : i.assigned_to || i.owned_by);
+  const dateOf = (i) => (dateField ? i[dateField] : i.decision_deadline || i.decision_date);
 
   const [decisionQuery, setDecisionQuery] = useState("");
   const [workstreamFilter, setWorkstreamFilter] = useState(() => new Set());
@@ -739,7 +774,17 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive }) {
   const [idSortDir, setIdSortDir] = useState(mode === "queue" ? "asc" : "desc");
 
   const workstreamOptions = useMemo(() => dynamicOptionsWithCounts(items, "workstream"), [items]);
-  const personOptions = useMemo(() => dynamicOptionsWithCounts(items, personField), [items, personField]);
+  const personOptions = useMemo(() => {
+    const counts = new Map();
+    for (const i of items) {
+      const v = (personOf(i) || "").trim();
+      if (!v) continue;
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({ value, label: value, count }))
+      .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+  }, [items, personField]);
   const statusOptions = useMemo(() => fixedOptionsWithCounts(items, "status", STATUS_OPTIONS), [items]);
   const decisionTypeOptions = useMemo(() => fixedOptionsWithCounts(items, "decision_type", DECISION_TYPE_OPTIONS), [items]);
   const ceoCfoOptions = useMemo(() => fixedOptionsWithCounts(items, "ceo_cfo_attention", CEO_CFO_ATTENTION_OPTIONS), [items]);
@@ -772,8 +817,8 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive }) {
     let list = items.filter((i) => {
       if (decisionQuery.trim() && !String(i.decision_required || "").toLowerCase().includes(decisionQuery.trim().toLowerCase())) return false;
       if (workstreamFilter.size > 0 && !workstreamFilter.has((i.workstream || "").trim())) return false;
-      if (personFilter.size > 0 && !personFilter.has((i[personField] || "").trim())) return false;
-      if (!dateMatchesRange(i[dateField], dateFilter)) return false;
+      if (personFilter.size > 0 && !personFilter.has((personOf(i) || "").trim())) return false;
+      if (!dateMatchesRange(dateOf(i), dateFilter)) return false;
       if (statusFilter.size > 0 && !statusFilter.has(i.status)) return false;
       if (decisionTypeFilter.size > 0 && !decisionTypeFilter.has(i.decision_type)) return false;
       if (ceoCfoFilter.size > 0 && !ceoCfoFilter.has(i.ceo_cfo_attention)) return false;
@@ -803,7 +848,7 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive }) {
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
-          {mode === "queue" ? "No pending decisions right now." : "No decided items yet."}
+          {mode === "queue" ? "No pending decisions right now." : mode === "register" ? "No decided items yet." : "No archived decisions."}
         </div>
       ) : (
         <div className="rounded-lg border border-slate-200 dark:border-slate-600/50">
@@ -869,7 +914,7 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive }) {
                     <CheckboxFilterContent options={riskOptions} selected={riskFilter} onChange={setRiskFilter} />
                   </ColumnFilterHeader>
                 </th>
-                {canEdit ? <th className={thClass("actions", "w-[8%]", true)}>Actions</th> : null}
+                {canEdit ? <th className={thClass("actions", "w-[8%]", true)}>{archivedMode ? "Restore" : "Actions"}</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
@@ -885,9 +930,9 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive }) {
                     <td className={tdClass("id", rowIdx, "font-mono text-slate-500 dark:text-slate-400")}>{i.display_id}</td>
                     <td className={tdClass("decision", rowIdx, "font-semibold text-slate-900 dark:text-slate-100")}>{i.decision_required}</td>
                     <td className={tdClass("workstream", rowIdx, "text-slate-600 dark:text-slate-300")}>{i.workstream || "—"}</td>
-                    <td className={tdClass("person", rowIdx, "text-slate-600 dark:text-slate-300")}>{i[personField] || "—"}</td>
+                    <td className={tdClass("person", rowIdx, "text-slate-600 dark:text-slate-300")}>{personOf(i) || "—"}</td>
                     <td className={tdClass("date", rowIdx)}>
-                      <DateBadge item={i} field={dateField} />
+                      {dateField ? <DateBadge item={i} field={dateField} /> : <span className="text-slate-600 dark:text-slate-300">{fmtDate(dateOf(i))}</span>}
                     </td>
                     <td className={tdClass("status", rowIdx)}>
                       <StatusBadge status={i.status} />
@@ -903,22 +948,33 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive }) {
                     </td>
                     {canEdit ? (
                       <td className={tdClass("actions", rowIdx, "", true)}>
-                        <div className="flex flex-col gap-1">
+                        {archivedMode ? (
                           <button
                             type="button"
-                            onClick={() => onEdit(i)}
-                            className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            onClick={() => onRestore(i)}
+                            disabled={restoringId === i.id}
+                            className="w-full rounded-full border border-[#0B3EAF]/40 py-0.5 text-center text-[10px] font-semibold text-[#0B3EAF] transition hover:bg-[#0B3EAF]/10 disabled:opacity-50 dark:border-[#A7D344]/40 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/10"
                           >
-                            Edit
+                            {restoringId === i.id ? "Restoring…" : "Restore"}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => onArchive(i)}
-                            className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                          >
-                            Archive
-                          </button>
-                        </div>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <button
+                              type="button"
+                              onClick={() => onEdit(i)}
+                              className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onArchive(i)}
+                              className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            >
+                              Archive
+                            </button>
+                          </div>
+                        )}
                       </td>
                     ) : null}
                   </tr>
@@ -940,6 +996,47 @@ export default function SltDecisionBoard({ canEdit }) {
   const [modal, setModal] = useState(null); // null | { mode: "add" } | { mode: "edit", item }
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [archiving, setArchiving] = useState(false);
+
+  // "Show archived" toggle — unlike Action Tracker's version of this (scoped
+  // to one sub-tab), Decisions' toggle bypasses the Queue/Register split
+  // entirely and shows one flat archived list instead, since an archived
+  // item isn't meaningfully "pending" or "decided" anymore — it's just
+  // hidden. Fetched separately on demand, same reasoning as the other two
+  // boards' restore features.
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedItems, setArchivedItems] = useState([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [archivedError, setArchivedError] = useState("");
+  const [restoringId, setRestoringId] = useState(null);
+
+  const loadArchived = useCallback(async () => {
+    setArchivedLoading(true);
+    setArchivedError("");
+    try {
+      const { data } = await api.get("/cfo/slt/v2/decisions", { params: { archived: "true" } });
+      setArchivedItems(data.decisions || []);
+    } catch (e) {
+      setArchivedError(friendlyErrorMessage(e, "Could not load archived decisions."));
+    } finally {
+      setArchivedLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showArchived) loadArchived();
+  }, [showArchived, loadArchived]);
+
+  const handleRestore = async (item) => {
+    setRestoringId(item.id);
+    try {
+      await api.post(`/cfo/slt/v2/decisions/${item.id}/restore`);
+      await loadArchived();
+    } catch (e) {
+      window.alert(friendlyErrorMessage(e, "Could not restore this decision."));
+    } finally {
+      setRestoringId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -990,18 +1087,53 @@ export default function SltDecisionBoard({ canEdit }) {
 
   return (
     <div>
-      <SubTabBar tabs={SUB_TABS} active={subTab} onChange={setSubTab} />
+      {!showArchived ? <SubTabBar tabs={SUB_TABS} active={subTab} onChange={setSubTab} /> : null}
 
       <BoardHeader
-        title={subTab === "decision_queue" ? "Decision Queue" : "Decision Register"}
-        pills={[
-          <StatPill key="total" label="Total" value={kpis.total} accent="bg-white/15 ring-1 ring-white/20" />,
-          ...kpiPills(kpis),
-        ]}
-        right={canEdit ? <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Decision</PrimaryButton> : null}
+        title={showArchived ? "Decisions — Archived" : subTab === "decision_queue" ? "Decision Queue" : "Decision Register"}
+        pills={
+          showArchived
+            ? [<StatPill key="total" label="Total" value={archivedItems.length} accent="bg-white/15 ring-1 ring-white/20" />]
+            : [<StatPill key="total" label="Total" value={kpis.total} accent="bg-white/15 ring-1 ring-white/20" />, ...kpiPills(kpis)]
+        }
+        right={
+          <div className="flex items-center gap-2">
+            {canEdit ? (
+              <GhostButton
+                onClick={() => setShowArchived((v) => !v)}
+                className={showArchived ? "!border-white/60 !text-white hover:!bg-white/10" : "!border-white/40 !text-white/90 hover:!bg-white/10"}
+              >
+                {showArchived ? "← Back to Decisions" : "Show Archived"}
+              </GhostButton>
+            ) : null}
+            {canEdit && !showArchived ? <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Decision</PrimaryButton> : null}
+          </div>
+        }
       />
 
-      {loading ? (
+      {showArchived ? (
+        archivedLoading ? (
+          <div className="flex items-center justify-center gap-3 px-6 py-16">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
+            <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading…</p>
+          </div>
+        ) : archivedError ? (
+          <div className="rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+            {archivedError}
+          </div>
+        ) : (
+          <DecisionTable
+            mode="archived"
+            items={archivedItems}
+            canEdit={canEdit}
+            archivedMode
+            onRestore={handleRestore}
+            restoringId={restoringId}
+          />
+        )
+      ) : loading ? (
         <div className="flex items-center justify-center gap-3 px-6 py-16">
           <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
           <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
@@ -1043,7 +1175,9 @@ export default function SltDecisionBoard({ canEdit }) {
       {archiveTarget ? (
         <ConfirmDialog
           title="Archive this decision?"
-          message={`"${archiveTarget.decision_required}" will be hidden from both Decision Queue and Decision Register. It isn't deleted and can be restored later if needed.`}
+          message={
+            <ArchiveConfirmMessage itemText={archiveTarget.decision_required} scopeText="both Decision Queue and Decision Register" />
+          }
           confirmLabel="Archive"
           busy={archiving}
           onConfirm={confirmArchive}

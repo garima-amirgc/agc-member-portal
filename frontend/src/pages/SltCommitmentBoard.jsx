@@ -126,7 +126,7 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger = fals
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
       <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h3>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{message}</p>
+        <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{message}</div>
         <div className="mt-5 flex justify-end gap-2">
           <GhostButton onClick={onCancel} disabled={busy}>
             Cancel
@@ -145,6 +145,26 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger = fals
       </div>
     </div>,
     document.body
+  );
+}
+
+function truncateForConfirm(s, n = 90) {
+  const str = String(s || "").trim();
+  return str.length > n ? `${str.slice(0, n).trimEnd()}…` : str;
+}
+
+// Archive confirmation body — see the matching comment in
+// SltActionTrackerBoard.jsx's own copy of this component for why the
+// reassurance leads and the (possibly long) item text is truncated and
+// demoted to a muted second line instead of being quoted in full up top.
+function ArchiveConfirmMessage({ itemText, scopeText }) {
+  return (
+    <div>
+      <p className="font-medium text-slate-900 dark:text-white">
+        It won't be deleted — it'll just be hidden from {scopeText}, and you can restore it later if needed.
+      </p>
+      <p className="mt-2 text-xs italic text-slate-500 dark:text-slate-400">"{truncateForConfirm(itemText)}"</p>
+    </div>
   );
 }
 
@@ -595,9 +615,9 @@ function BoardHeader({ title, pills, right }) {
             {title}
           </h2>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex flex-wrap gap-2">{pills}</div>
-          {right}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">{pills}</div>
+          {right ? <div className="flex flex-wrap justify-end gap-2">{right}</div> : null}
         </div>
       </div>
     </div>
@@ -670,7 +690,7 @@ function kpiPills(kpis) {
   return Object.keys(KPI_LABELS).map((k) => <StatPill key={k} label={KPI_LABELS[k]} value={kpis[k]} accent={KPI_PILL_ACCENTS[k]} />);
 }
 
-function CommitmentTable({ items, canEdit, onEdit, onArchive }) {
+function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = false, onRestore, restoringId }) {
   const [commitmentQuery, setCommitmentQuery] = useState("");
   const [ownerFilter, setOwnerFilter] = useState(() => new Set());
   const [ragFilter, setRagFilter] = useState(() => new Set());
@@ -730,7 +750,7 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive }) {
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
-          No 90-day commitments yet.
+          {archivedMode ? "No archived commitments." : "No 90-day commitments yet."}
         </div>
       ) : (
         <div className="rounded-lg border border-slate-200 dark:border-slate-600/50">
@@ -782,7 +802,7 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive }) {
                   </ColumnFilterHeader>
                 </th>
                 <th className={thClass("report", "w-[10%]")}>Report Cue</th>
-                {canEdit ? <th className={thClass("actions", "w-[10%]", true)}>Actions</th> : null}
+                {canEdit ? <th className={thClass("actions", "w-[10%]", true)}>{archivedMode ? "Restore" : "Actions"}</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
@@ -812,22 +832,33 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive }) {
                     </td>
                     {canEdit ? (
                       <td className={tdClass("actions", rowIdx, "", true)}>
-                        <div className="flex flex-col gap-1">
+                        {archivedMode ? (
                           <button
                             type="button"
-                            onClick={() => onEdit(i)}
-                            className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            onClick={() => onRestore(i)}
+                            disabled={restoringId === i.id}
+                            className="w-full rounded-full border border-[#0B3EAF]/40 py-0.5 text-center text-[10px] font-semibold text-[#0B3EAF] transition hover:bg-[#0B3EAF]/10 disabled:opacity-50 dark:border-[#A7D344]/40 dark:text-[#A7D344] dark:hover:bg-[#A7D344]/10"
                           >
-                            Edit
+                            {restoringId === i.id ? "Restoring…" : "Restore"}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => onArchive(i)}
-                            className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                          >
-                            Archive
-                          </button>
-                        </div>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <button
+                              type="button"
+                              onClick={() => onEdit(i)}
+                              className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onArchive(i)}
+                              className="w-full rounded-full border border-slate-300 py-0.5 text-center text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            >
+                              Archive
+                            </button>
+                          </div>
+                        )}
                       </td>
                     ) : null}
                   </tr>
@@ -848,19 +879,28 @@ export default function SltCommitmentBoard({ canEdit }) {
   const [modal, setModal] = useState(null); // null | { mode: "add" } | { mode: "edit", item }
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [archiving, setArchiving] = useState(false);
+  // "Show archived" toggle — flips the whole board between the live list
+  // and the archived one, same query param the backend already supported
+  // (listCommitments(query) in sltCommitmentRegister.service.js) but that
+  // nothing in the UI exposed until now. Archiving something promises it
+  // "can be restored later if needed" (see ArchiveConfirmMessage) — this is
+  // what makes that actually true instead of only being a backend capability
+  // with no way to reach it.
+  const [showArchived, setShowArchived] = useState(false);
+  const [restoringId, setRestoringId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const { data } = await api.get("/cfo/slt/v2/commitments");
+      const { data } = await api.get("/cfo/slt/v2/commitments", { params: { archived: showArchived ? "true" : "false" } });
       setItems(data.commitments || []);
     } catch (e) {
-      setError(friendlyErrorMessage(e, "Could not load 90 Day Commitments."));
+      setError(friendlyErrorMessage(e, showArchived ? "Could not load archived commitments." : "Could not load 90 Day Commitments."));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => {
     load();
@@ -894,12 +934,36 @@ export default function SltCommitmentBoard({ canEdit }) {
     }
   };
 
+  const handleRestore = async (item) => {
+    setRestoringId(item.id);
+    try {
+      await api.post(`/cfo/slt/v2/commitments/${item.id}/restore`);
+      await load();
+    } catch (e) {
+      window.alert(friendlyErrorMessage(e, "Could not restore this commitment."));
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
   return (
     <div>
       <BoardHeader
-        title="90 Day Commitments"
+        title={showArchived ? "90 Day Commitments — Archived" : "90 Day Commitments"}
         pills={[<StatPill key="total" label="Total" value={kpis.total} accent="bg-white/15 ring-1 ring-white/20" />, ...kpiPills(kpis)]}
-        right={canEdit ? <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Commitment</PrimaryButton> : null}
+        right={
+          <div className="flex items-center gap-2">
+            {canEdit ? (
+              <GhostButton
+                onClick={() => setShowArchived((v) => !v)}
+                className={showArchived ? "!border-white/60 !text-white hover:!bg-white/10" : "!border-white/40 !text-white/90 hover:!bg-white/10"}
+              >
+                {showArchived ? "← Back to Commitments" : "Show Archived"}
+              </GhostButton>
+            ) : null}
+            {canEdit && !showArchived ? <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Commitment</PrimaryButton> : null}
+          </div>
+        }
       />
 
       {loading ? (
@@ -914,7 +978,15 @@ export default function SltCommitmentBoard({ canEdit }) {
           {error}
         </div>
       ) : (
-        <CommitmentTable items={items} canEdit={canEdit} onEdit={(item) => setModal({ mode: "edit", item })} onArchive={(item) => setArchiveTarget(item)} />
+        <CommitmentTable
+          items={items}
+          canEdit={canEdit}
+          onEdit={(item) => setModal({ mode: "edit", item })}
+          onArchive={(item) => setArchiveTarget(item)}
+          archivedMode={showArchived}
+          onRestore={handleRestore}
+          restoringId={restoringId}
+        />
       )}
 
       {modal ? (
@@ -930,7 +1002,7 @@ export default function SltCommitmentBoard({ canEdit }) {
       {archiveTarget ? (
         <ConfirmDialog
           title="Archive this commitment?"
-          message={`"${archiveTarget.commitment}" will be hidden from the 90 Day Commitments board. It isn't deleted and can be restored later if needed.`}
+          message={<ArchiveConfirmMessage itemText={archiveTarget.commitment} scopeText="the 90 Day Commitments board" />}
           confirmLabel="Archive"
           busy={archiving}
           onConfirm={confirmArchive}
