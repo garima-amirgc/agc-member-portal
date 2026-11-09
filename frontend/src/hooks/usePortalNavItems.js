@@ -7,6 +7,7 @@ import {
   IconCog,
   IconDocument,
   IconHome,
+  IconShield,
   IconSparkle,
   IconTeam,
   IconTicket,
@@ -100,19 +101,29 @@ export function usePortalNavItems(user) {
       });
     }
 
+    // Previously one combined nav item ("SLT and Incident Tracker") whose
+    // page had an internal tab bar for both areas. Split into two separate
+    // nav items/pages at the user's request, each gated by its own grants —
+    // CFO still sees both, same as before.
+    if (hasAnyAdminGrant(user, [ADMIN_GRANT_KEYS.CFO, ADMIN_GRANT_KEYS.SLT_VIEW, ADMIN_GRANT_KEYS.SLT_EDIT])) {
+      main.push({
+        to: "/cfo",
+        icon: IconDocument,
+        label: "SLT Master Calendar & Tracker",
+      });
+    }
+
     if (
       hasAnyAdminGrant(user, [
         ADMIN_GRANT_KEYS.CFO,
         ADMIN_GRANT_KEYS.INCIDENT_REPORT_VIEW,
         ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT,
-        ADMIN_GRANT_KEYS.SLT_VIEW,
-        ADMIN_GRANT_KEYS.SLT_EDIT,
       ])
     ) {
       main.push({
-        to: "/cfo",
-        icon: IconDocument,
-        label: "SLT and Incident Tracker",
+        to: "/incident-tracker",
+        icon: IconShield,
+        label: "Incident Tracker",
       });
     }
 
@@ -228,7 +239,7 @@ export function usePortalNavItems(user) {
           to: "/npd/admin",
           icon: IconSparkle,
           label: "New Product Development",
-          desc: "Approvers & access",
+          desc: "Access & delete permissions",
           end: true,
           grantKey: ADMIN_GRANT_KEYS.NPD,
           group: "npd",

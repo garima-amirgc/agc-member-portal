@@ -17,10 +17,25 @@ const { db } = require("../config/db");
  * this... delete everything related to this") — their rows were purged
  * from slt_audit_log/slt_links (see the migration in
  * config/database/postgres.js / sqlite.js) and those types dropped from
- * the list below. "calendar" is the only entity type left.
+ * the list below, leaving only "calendar" for a while.
+ *
+ * "action" was added back when the new SLT Tracker → Action Register board
+ * was built (sltActionRegister.service.js) — a brand-new feature/table,
+ * unrelated to the old removed one, just reusing the same entity-type slot
+ * (and the slt_links CHECK constraint value that was already left in place
+ * for it).
+ *
+ * "decision" was added the same way for the new SLT Tracker → Decisions tab
+ * (sltDecisionRegister.service.js) — another brand-new feature/table, not
+ * the old removed decision_queue/decision_register pair. Deliberately
+ * singular ("decision", not "decision_queue"/"decision_register" like the
+ * old removed feature's slt_links CHECK values) since this feature uses one
+ * table for both — see the comment above slt_decision_register's migration
+ * in config/database/postgres.js. slt_links isn't used here at all, same
+ * as the Action Register board.
  */
 
-const ENTITY_TYPES = ["calendar"];
+const ENTITY_TYPES = ["calendar", "action", "decision", "commitment"];
 
 function isValidEntityType(t) {
   return ENTITY_TYPES.includes(t);

@@ -15,10 +15,9 @@ import NpdRequestBoardTable from "../components/npd/NpdRequestBoardTable";
 // loads, so this needs no new backend endpoint.
 function ScorecardKpis({ requests }) {
   const stats = useMemo(() => {
-    const active = requests.filter((r) => !["completed", "cancelled", "rejected", "customer_rejected"].includes(r.status));
-    const priority1 = active.filter((r) => r.priority_tier === "Priority 1").length;
-    const totalGp = active.reduce((sum, r) => sum + (Number(r.annual_gp_dollars) || 0), 0);
-    return { activeCount: active.length, priority1, totalGp };
+    const priority1 = requests.filter((r) => r.priority_tier === "Priority 1").length;
+    const totalGp = requests.reduce((sum, r) => sum + (Number(r.annual_gp_dollars) || 0), 0);
+    return { activeCount: requests.length, priority1, totalGp };
   }, [requests]);
 
   if (requests.length === 0) return null;
@@ -29,7 +28,7 @@ function ScorecardKpis({ requests }) {
   const tiles = [
     { label: "Active Projects", value: stats.activeCount },
     { label: "Priority 1", value: stats.priority1 },
-    { label: "Total Annual GP$ (scored, active)", value: fmtMoney(stats.totalGp) },
+    { label: "Total Annual GP$ (scored)", value: fmtMoney(stats.totalGp) },
   ];
 
   return (
@@ -44,19 +43,36 @@ function ScorecardKpis({ requests }) {
   );
 }
 
-function IconClipboard({ className = "h-5 w-5" }) {
+// "Needs my decision" — mirrors the IT Ticket "assigned to me" pattern.
+// Only renders for people who actually have something pending; nobody else
+// ever sees this section.
+function PendingDecisionsPanel({ pending }) {
+  if (pending.length === 0) return null;
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 7h6m-6 4h6" />
-    </svg>
-  );
-}
-
-function IconCheckCircle({ className = "h-5 w-5" }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
+    <section className="card border-2 border-[#0B3EAF]/30 p-4 sm:p-6 dark:border-[#A7D344]/30">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-[#000000] dark:text-white">Needs my decision</h2>
+        <span className="rounded-full bg-[#E02B20] px-2.5 py-0.5 text-xs font-bold text-white">{pending.length}</span>
+      </div>
+      <ul className="space-y-2">
+        {pending.map((r) => (
+          <li key={r.id}>
+            <Link
+              to={`/npd/requests/${r.id}`}
+              className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 p-3 text-sm hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+            >
+              <span>
+                <span className="font-semibold text-[#0B3EAF] dark:text-[#A7D344]">{r.request_number}</span>{" "}
+                {r.product_name} — {r.customer_name}
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Sent by {r.created_by_name || "—"} · Score {r.weighted_score ?? "—"}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -65,8 +81,7 @@ export default function NpdDashboardPage() {
   const isAdmin = hasAdminGrant(user, ADMIN_GRANT_KEYS.NPD);
 
   const [requests, setRequests] = useState([]);
-  const [myTasks, setMyTasks] = useState([]);
-  const [myApprovals, setMyApprovals] = useState([]);
+  const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
@@ -74,14 +89,8 @@ export default function NpdDashboardPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [reqRes, tasksRes, approvalsRes] = await Promise.all([
-        api.get("/npd/requests"),
-        api.get("/npd/my-tasks"),
-        api.get("/npd/my-approvals"),
-      ]);
-      setRequests(Array.isArray(reqRes.data) ? reqRes.data : []);
-      setMyTasks(Array.isArray(tasksRes.data) ? tasksRes.data : []);
-      setMyApprovals(Array.isArray(approvalsRes.data) ? approvalsRes.data : []);
+      const { data } = await api.get("/npd/requests");
+      setRequests(Array.isArray(data) ? data : []);
     } catch {
       setRequests([]);
     } finally {
@@ -89,8 +98,27 @@ export default function NpdDashboardPage() {
     }
   };
 
+  const loadPending = async () => {
+    try {
+      const { data } = await api.get("/npd/my-pending-decisions");
+      setPending(Array.isArray(data) ? data : []);
+    } catch {
+      setPending([]);
+    }
+  };
+
   useEffect(() => {
     void load();
+    void loadPending();
+  }, []);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      void load();
+      void loadPending();
+    };
+    window.addEventListener("agc-npd-changed", onRefresh);
+    return () => window.removeEventListener("agc-npd-changed", onRefresh);
   }, []);
 
   const deleteRequest = async (r) => {
@@ -113,12 +141,12 @@ export default function NpdDashboardPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title="New Product Development"
-          subtitle="Track new-product and customer-modification requests from request to first shipment."
+          subtitle="Gate 1 — score and prioritize new-product launch requests."
         />
         <div className="flex flex-wrap gap-2">
           {isAdmin ? (
             <Link to="/npd/admin" className="btn-outline">
-              Manage access &amp; approvers
+              Manage access
             </Link>
           ) : null}
           <Link to="/npd/new" className="btn-primary">
@@ -133,71 +161,9 @@ export default function NpdDashboardPage() {
         </div>
       ) : null}
 
-      <ScorecardKpis requests={requests} />
+      <PendingDecisionsPanel pending={pending} />
 
-      {(myTasks.length > 0 || myApprovals.length > 0) && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {myTasks.length > 0 ? (
-            <section className="card no-title-underline overflow-hidden border-l-4 border-l-[#0B3EAF] p-0 dark:border-l-[#A7D344]">
-              <div className="flex items-center gap-2 px-4 pt-4 sm:px-6 sm:pt-6">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[rgba(11,62,175,0.08)] text-[#0B3EAF] dark:bg-[rgba(167,211,68,0.12)] dark:text-[#A7D344]">
-                  <IconClipboard className="h-4 w-4" />
-                </span>
-                <h2 className="text-lg font-semibold text-[#000000] dark:text-white">My tasks</h2>
-                <span className="ml-auto rounded-full bg-[#0B3EAF] px-2.5 py-0.5 text-xs font-bold text-white dark:bg-[#A7D344] dark:text-[#0B3EAF]">
-                  {myTasks.length}
-                </span>
-              </div>
-              <ul className="space-y-2 p-4 sm:p-6">
-                {myTasks.map((t) => (
-                  <li key={t.id}>
-                    <Link
-                      to={`/npd/requests/${t.request_id}`}
-                      className="block rounded-xl border border-slate-200 p-3 text-sm transition hover:border-[#0B3EAF] hover:bg-[rgba(11,62,175,0.03)] dark:border-slate-800 dark:hover:border-[#A7D344] dark:hover:bg-[rgba(167,211,68,0.05)]"
-                    >
-                      <span className="font-medium text-slate-800 dark:text-slate-100">{t.request_number}</span> —{" "}
-                      {t.product_name} ({t.customer_name})
-                      <br />
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Step {t.step_number}: {t.step_name}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-          {myApprovals.length > 0 ? (
-            <section className="card no-title-underline overflow-hidden border-l-4 border-l-[#A7D344] p-0">
-              <div className="flex items-center gap-2 px-4 pt-4 sm:px-6 sm:pt-6">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[rgba(167,211,68,0.18)] text-[#5c7a1c] dark:bg-[rgba(167,211,68,0.15)] dark:text-[#A7D344]">
-                  <IconCheckCircle className="h-4 w-4" />
-                </span>
-                <h2 className="text-lg font-semibold text-[#000000] dark:text-white">Waiting for my approval</h2>
-                <span className="ml-auto rounded-full bg-[#A7D344] px-2.5 py-0.5 text-xs font-bold text-[#1a3d00]">
-                  {myApprovals.length}
-                </span>
-              </div>
-              <ul className="space-y-2 p-4 sm:p-6">
-                {myApprovals.map((t) => (
-                  <li key={`${t.id}-${t.confirmation_area || ""}`}>
-                    <Link
-                      to={`/npd/requests/${t.request_id}`}
-                      className="block rounded-xl border border-slate-200 p-3 text-sm transition hover:border-[#0B3EAF] hover:bg-[rgba(11,62,175,0.03)] dark:border-slate-800 dark:hover:border-[#A7D344] dark:hover:bg-[rgba(167,211,68,0.05)]"
-                    >
-                      <span className="font-medium text-slate-800 dark:text-slate-100">{t.request_number}</span> —{" "}
-                      {t.product_name} ({t.customer_name})
-                      <br />
-                      <span className="text-xs text-slate-500 dark:text-slate-400">
-                        Step {t.step_number}: {t.step_name}
-                        {t.confirmation_area ? ` (${t.confirmation_area})` : ""}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </div>
-      )}
+      <ScorecardKpis requests={requests} />
 
       <NpdRequestBoardTable
         requests={requests}

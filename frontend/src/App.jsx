@@ -67,6 +67,7 @@ const NpdRequestDetailPage = lazy(() => import("./pages/NpdRequestDetailPage"));
 const NpdAdminPage = lazy(() => import("./pages/NpdAdminPage"));
 const SharePointPage = lazy(() => import("./pages/SharePointPage"));
 const CfoReportsPage = lazy(() => import("./pages/CfoReportsPage"));
+const IncidentTrackerPage = lazy(() => import("./pages/IncidentTrackerPage"));
 
 function pickFacilityForLegacyResources(me) {
   try {
@@ -205,15 +206,23 @@ export default function App() {
           path="cfo"
           element={
             <ProtectedRoute
+              adminGrants={[ADMIN_GRANT_KEYS.CFO, ADMIN_GRANT_KEYS.SLT_VIEW, ADMIN_GRANT_KEYS.SLT_EDIT]}
+            >
+              <CfoReportsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="incident-tracker"
+          element={
+            <ProtectedRoute
               adminGrants={[
                 ADMIN_GRANT_KEYS.CFO,
                 ADMIN_GRANT_KEYS.INCIDENT_REPORT_VIEW,
                 ADMIN_GRANT_KEYS.INCIDENT_REPORT_EDIT,
-                ADMIN_GRANT_KEYS.SLT_VIEW,
-                ADMIN_GRANT_KEYS.SLT_EDIT,
               ]}
             >
-              <CfoReportsPage />
+              <IncidentTrackerPage />
             </ProtectedRoute>
           }
         />

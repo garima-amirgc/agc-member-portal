@@ -279,9 +279,14 @@ export default function AdminSystemStatusPage() {
                         <div className="truncate text-xs text-slate-500 dark:text-slate-400">{u.email || ""}</div>
                       </div>
                     </div>
-                    <div className="shrink-0 flex items-center gap-1.5 rounded-lg bg-[#0B3EAF]/10 px-3 py-1.5 dark:bg-white/10">
-                      <span className="text-sm font-extrabold text-[#0B3EAF] dark:text-[#A7D344]">{Number(u.visit_count) || 0}</span>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">visits</span>
+                    <div className="shrink-0 flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1.5 rounded-lg bg-[#0B3EAF]/10 px-3 py-1.5 dark:bg-white/10">
+                        <span className="text-sm font-extrabold text-[#0B3EAF] dark:text-[#A7D344]">{Number(u.visit_count) || 0}</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">visits</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        Last visit: {fmtDateTime(u.last_visit_at)}
+                      </span>
                     </div>
                   </div>
                 );

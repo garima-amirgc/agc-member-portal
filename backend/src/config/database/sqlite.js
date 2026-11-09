@@ -1277,6 +1277,118 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_slt_calendar_archived ON slt_calendar (archived);
   `);
 
+  // SLT Tracker — Action Register. See the matching migration (same name,
+  // same comment) in config/database/postgres.js for the full rationale —
+  // column set mirrors the source workbook minus its computed columns,
+  // archive-only soft delete, shared audit log with entityType "action".
+  rawDb.exec(`
+    CREATE TABLE IF NOT EXISTS slt_action_register (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item TEXT NOT NULL,
+      category TEXT,
+      owner TEXT,
+      next_action TEXT,
+      due_date TEXT,
+      status TEXT NOT NULL DEFAULT 'Not Started',
+      priority TEXT NOT NULL DEFAULT 'Medium',
+      risk_impact TEXT,
+      strategic_objective TEXT,
+      escalation_required TEXT NOT NULL DEFAULT 'No',
+      financial_impact TEXT,
+      asp_readiness_stream TEXT,
+      blocker TEXT,
+      notes TEXT,
+      immutable_key TEXT UNIQUE,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_action_register_archived ON slt_action_register (archived);
+    CREATE INDEX IF NOT EXISTS idx_slt_action_register_due_date ON slt_action_register (due_date);
+  `);
+
+  // SLT Tracker — "Decisions" tab — Decision Queue / Decision Register. See
+  // the matching migration (same name, same comment) in
+  // config/database/postgres.js for the full rationale — one table
+  // replaces the source workbook's manual copy-between-two-sheets
+  // workflow; a decision moves from Decision Queue to Decision Register
+  // automatically once Status is Completed/Cancelled. Archive-only soft
+  // delete, shared audit log with entityType "decision".
+  rawDb.exec(`
+    CREATE TABLE IF NOT EXISTS slt_decision_register (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      decision_required TEXT NOT NULL,
+      workstream TEXT,
+      assigned_to TEXT,
+      decision_deadline TEXT,
+      recommendation TEXT,
+      status TEXT NOT NULL DEFAULT 'Not Started',
+      decision_type TEXT,
+      ceo_cfo_attention TEXT,
+      financial_impact TEXT,
+      risk_impact TEXT,
+      strategic_objective TEXT,
+      decision_date TEXT,
+      further_action_required TEXT NOT NULL DEFAULT 'No',
+      context_input_required TEXT,
+      owned_by TEXT,
+      requested_by TEXT,
+      date_raised TEXT,
+      delay_impact_risk TEXT,
+      blocker TEXT,
+      notes TEXT,
+      immutable_key TEXT UNIQUE,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_decision_register_archived ON slt_decision_register (archived);
+    CREATE INDEX IF NOT EXISTS idx_slt_decision_register_deadline ON slt_decision_register (decision_deadline);
+    CREATE INDEX IF NOT EXISTS idx_slt_decision_register_status ON slt_decision_register (status);
+  `);
+
+  // SLT Tracker — "90 Day Commitments" radio choice. See the matching
+  // migration (same name, same comment) in config/database/postgres.js for
+  // the full rationale, in particular why this table is deliberately named
+  // slt_commitment_register rather than slt_commitments or
+  // slt_commitment_checkins (both still in this file's own DROP-TABLE
+  // cleanup list further below — reusing either name would reproduce the
+  // exact silent-data-wipe-on-every-restart bug slt_decision_register hit).
+  // Computed columns (Original/30-Day/60-Day/Current Due, Report Cue) are
+  // derived server-side in sltCommitmentRegister.service.js's
+  // mapCommitment(), not persisted. Archive-only soft delete, shared audit
+  // log with entityType "commitment".
+  rawDb.exec(`
+    CREATE TABLE IF NOT EXISTS slt_commitment_register (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      commitment TEXT NOT NULL,
+      success_measure TEXT,
+      owner TEXT,
+      rag_status TEXT NOT NULL DEFAULT 'Not Started / At Risk',
+      status_note TEXT,
+      date_entered TEXT,
+      date_assigned TEXT,
+      checkin_30_notes TEXT,
+      checkin_60_notes TEXT,
+      checkin_90_update_dates TEXT,
+      extension_approved_by TEXT,
+      ext_approval_date TEXT,
+      revised_due TEXT,
+      delivered_on TEXT,
+      completion_status TEXT NOT NULL DEFAULT 'Open',
+      change_risk_next_step TEXT,
+      immutable_key TEXT UNIQUE,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_slt_commitment_register_archived ON slt_commitment_register (archived);
+    CREATE INDEX IF NOT EXISTS idx_slt_commitment_register_completion ON slt_commitment_register (completion_status);
+  `);
+
   try {
     rawDb.exec("ALTER TABLE courses ADD COLUMN resource_category TEXT");
   } catch {
@@ -1639,62 +1751,17 @@ async function initDb() {
     console.log("[sqlite] npd_requests: OK");
   } catch (e) { console.error("[sqlite] npd_requests table:", e.message); }
 
-  try {
-    rawDb.exec(
-      `CREATE TABLE IF NOT EXISTS npd_steps (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-        step_number INTEGER NOT NULL,
-        step_key TEXT NOT NULL,
-        step_name TEXT NOT NULL,
-        responsible_department TEXT,
-        assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        status TEXT NOT NULL DEFAULT 'locked' CHECK(status IN (
-          'locked','not_started','in_progress','submitted','waiting_approval',
-          'approved','rejected','changes_requested','completed'
-        )),
-        data_json TEXT,
-        due_date TEXT,
-        started_at TEXT,
-        submitted_at TEXT,
-        completed_at TEXT,
-        UNIQUE(request_id, step_number)
-      )`
-    );
-    console.log("[sqlite] npd_steps: OK");
-  } catch (e) { console.error("[sqlite] npd_steps table:", e.message); }
-
-  // "Skip for now" — tracked alongside status (not as a new status value) so
-  // this stays a plain additive column migration with no CHECK-constraint
-  // rebuild. A step is "skipped" whenever skipped_at is set and completed_at
-  // isn't; the service layer folds that into a display_status for the UI.
-  try { rawDb.exec("ALTER TABLE npd_steps ADD COLUMN skipped_at TEXT"); } catch {}
-  try { rawDb.exec("ALTER TABLE npd_steps ADD COLUMN skipped_by INTEGER"); } catch {}
-  try { rawDb.exec("ALTER TABLE npd_steps ADD COLUMN skip_reason TEXT"); } catch {}
-
-  try {
-    rawDb.exec(
-      `CREATE TABLE IF NOT EXISTS npd_approvals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-        step_id INTEGER REFERENCES npd_steps(id) ON DELETE CASCADE,
-        approval_type TEXT NOT NULL,
-        approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        approver_name TEXT,
-        action TEXT NOT NULL CHECK(action IN ('submitted','approved','rejected','changes_requested','authorized')),
-        comments TEXT,
-        action_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )`
-    );
-    console.log("[sqlite] npd_approvals: OK");
-  } catch (e) { console.error("[sqlite] npd_approvals table:", e.message); }
+  // npd_steps and npd_approvals — the 13-step pipeline's own tables — were
+  // removed on 2026-11-07 along with the pipeline itself; see the DROP TABLE
+  // loop further below (next to the Action Tracker removal) for the full
+  // explanation and the complete list of 5 dropped tables.
 
   try {
     rawDb.exec(
       `CREATE TABLE IF NOT EXISTS npd_attachments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-        step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+        step_id INTEGER, -- historical; npd_steps table removed 2026-11-07, column kept for old rows
         file_name TEXT NOT NULL,
         original_file_name TEXT NOT NULL,
         file_url TEXT NOT NULL,
@@ -1711,7 +1778,7 @@ async function initDb() {
       `CREATE TABLE IF NOT EXISTS npd_comments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-        step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+        step_id INTEGER, -- historical; npd_steps table removed 2026-11-07, column kept for old rows
         comment TEXT NOT NULL,
         created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -1725,7 +1792,7 @@ async function initDb() {
       `CREATE TABLE IF NOT EXISTS npd_activity_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-        step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+        step_id INTEGER, -- historical; npd_steps table removed 2026-11-07, column kept for old rows
         user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         user_name TEXT,
         action TEXT NOT NULL,
@@ -1807,59 +1874,61 @@ async function initDb() {
   // Hold need more details). Additive/nullable, same pattern as above.
   try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN decision TEXT"); } catch {}
 
-  // Configurable named approvers per approval type (e.g. management_approval
-  // = Adam/Tony/Tom today) so admins can change who approves without a code
-  // change.
+  // npd_approver_config, npd_notifications and npd_step_assignees were
+  // removed on 2026-11-07 along with the 13-step pipeline they supported;
+  // see the DROP TABLE loop further below (next to the Action Tracker
+  // removal) for the full explanation.
+
+  // SLT review (2026-11-07) — a requester submits a completed Gate 1
+  // scorecard to one or more specific SLT members (picked from the
+  // npd_slt_users roster below); any ONE of the people it was sent to
+  // approving/rejecting/holding settles it (first response wins, not a
+  // unanimous vote). review_status is the machine-checkable field Gate 2
+  // will key off of; `decision` above stays as the free-text display
+  // column but is now also set from the fixed Approved/Rejected/Hold
+  // wording going forward. All additive/nullable.
   try {
     rawDb.exec(
-      `CREATE TABLE IF NOT EXISTS npd_approver_config (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        approval_type TEXT NOT NULL,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        UNIQUE(approval_type, user_id)
+      "ALTER TABLE npd_requests ADD COLUMN review_status TEXT CHECK(review_status IS NULL OR review_status IN ('pending_review','approved','rejected','hold'))"
+    );
+  } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN submitted_for_review_at TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN decision_by INTEGER REFERENCES users(id) ON DELETE SET NULL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN decision_at TEXT"); } catch {}
+
+  // Roster of people who can be picked as an SLT approver when a request is
+  // submitted for review. Admin-managed, same "allowlist" shape as
+  // npd_access_users/npd_delete_access_users — being on this list doesn't
+  // grant module access by itself, it just makes someone selectable.
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_slt_users (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`
     );
-    console.log("[sqlite] npd_approver_config: OK");
-  } catch (e) { console.error("[sqlite] npd_approver_config table:", e.message); }
+    console.log("[sqlite] npd_slt_users: OK");
+  } catch (e) { console.error("[sqlite] npd_slt_users table:", e.message); }
 
-  // Lightweight in-app notifications ("you have a new NPD task/approval").
-  // Same shape as employee_notifications elsewhere in the app.
+  // Who a specific request was actually sent to for decision (a subset of
+  // npd_slt_users, chosen per-request by whoever submitted it). decided_at
+  // is set on whichever row belongs to the person who actually acted — the
+  // other assigned rows for that request are left as-is (still "pending")
+  // since the OR rule means they were simply never needed.
   try {
     rawDb.exec(
-      `CREATE TABLE IF NOT EXISTS npd_notifications (
+      `CREATE TABLE IF NOT EXISTS npd_request_approvers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-        step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
-        kind TEXT NOT NULL DEFAULT 'task_assigned' CHECK(kind IN (
-          'task_assigned','approval_needed','step_completed','request_rejected',
-          'changes_requested','request_completed'
-        )),
-        title TEXT NOT NULL,
-        message TEXT,
-        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        dismissed_at TEXT
-      )`
-    );
-    console.log("[sqlite] npd_notifications: OK");
-  } catch (e) { console.error("[sqlite] npd_notifications table:", e.message); }
-
-  // Optional per-step access list. Empty for a step = fall back to
-  // department gating; non-empty = only these people (plus admins) can
-  // act on that step. Mirrors the report_access_users / npd_access_users
-  // "allowlist narrows it" pattern.
-  try {
-    rawDb.exec(
-      `CREATE TABLE IF NOT EXISTS npd_step_assignees (
-        step_key TEXT NOT NULL,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        PRIMARY KEY (step_key, user_id)
+        assigned_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        decided_at TEXT,
+        UNIQUE(request_id, user_id)
       )`
     );
-    console.log("[sqlite] npd_step_assignees: OK");
-  } catch (e) { console.error("[sqlite] npd_step_assignees table:", e.message); }
+    console.log("[sqlite] npd_request_approvers: OK");
+  } catch (e) { console.error("[sqlite] npd_request_approvers table:", e.message); }
 
   // Master Calendar email subscription — one admin-configured row (always
   // id=1) controlling an automatic "send the whole calendar as an Excel
@@ -1915,13 +1984,19 @@ async function initDb() {
   // slt_links are untouched — Master Calendar still uses them; only the
   // now-orphaned action/decision/commitment rows in the latter two are
   // purged, not the tables themselves.
+  // slt_decision_register is deliberately NOT in this cleanup list any
+  // more — see the matching comment in config/database/postgres.js. It was
+  // one of the old Action Tracker Executive Board's tables, dropped here
+  // along with the rest of that feature, but the name was later reused for
+  // the new, currently-live Decisions feature. Since this loop re-runs on
+  // every initDb() call, leaving it here wiped every decision on every
+  // restart.
   for (const table of [
     "slt_action_items",
     "slt_calendar_events",
     "slt_decisions",
     "slt_action_status_history",
     "slt_actions",
-    "slt_decision_register",
     "slt_decision_queue",
     "slt_commitment_checkins",
     "slt_commitments",
@@ -1941,48 +2016,36 @@ async function initDb() {
     console.error("[sqlite] purging non-calendar slt_audit_log/slt_links rows:", e.message);
   }
 
+  // New Product Development's 13-step approval-to-shipment pipeline — removed
+  // entirely by explicit request on 2026-11-07, leaving New Product
+  // Development as just Gate 1 (the Launch Scorecard). These 5 tables were
+  // only ever used by that pipeline (steps, approvals, notifications,
+  // per-step approver/assignee configuration) and are dropped here. Gate 1's
+  // own data is untouched: npd_requests (the scorecard itself),
+  // npd_attachments, npd_comments, npd_activity_log, npd_access_users, and
+  // npd_delete_access_users all stay exactly as they are — only their
+  // step_id columns (on attachments/comments/activity_log) stop pointing at
+  // a real table, which SQLite never enforced structurally anyway.
+  for (const table of ["npd_approvals", "npd_notifications", "npd_step_assignees", "npd_approver_config", "npd_steps"]) {
+    try {
+      rawDb.exec(`DROP TABLE IF EXISTS ${table}`);
+    } catch (e) {
+      console.error(`[sqlite] DROP TABLE ${table}:`, e.message);
+    }
+  }
+
   try {
     rawDb.exec(`
       CREATE INDEX IF NOT EXISTS idx_npd_requests_status ON npd_requests (status);
       CREATE INDEX IF NOT EXISTS idx_npd_requests_created_by ON npd_requests (created_by);
-      CREATE INDEX IF NOT EXISTS idx_npd_steps_request ON npd_steps (request_id);
-      CREATE INDEX IF NOT EXISTS idx_npd_steps_assigned_to ON npd_steps (assigned_to);
-      CREATE INDEX IF NOT EXISTS idx_npd_approvals_request ON npd_approvals (request_id);
-      CREATE INDEX IF NOT EXISTS idx_npd_approvals_step ON npd_approvals (step_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_requests_review_status ON npd_requests (review_status);
       CREATE INDEX IF NOT EXISTS idx_npd_attachments_request ON npd_attachments (request_id);
       CREATE INDEX IF NOT EXISTS idx_npd_comments_request ON npd_comments (request_id);
       CREATE INDEX IF NOT EXISTS idx_npd_activity_log_request ON npd_activity_log (request_id);
-      CREATE INDEX IF NOT EXISTS idx_npd_approver_config_type ON npd_approver_config (approval_type);
-      CREATE INDEX IF NOT EXISTS idx_npd_notifications_user ON npd_notifications (user_id, status);
-      CREATE INDEX IF NOT EXISTS idx_npd_step_assignees_key ON npd_step_assignees (step_key);
+      CREATE INDEX IF NOT EXISTS idx_npd_request_approvers_request ON npd_request_approvers (request_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_request_approvers_user ON npd_request_approvers (user_id);
     `);
   } catch {}
-
-  // One-time default for the Management Approval step (stands in for
-  // Adam/Tony/Tom from the spec until an NPD admin configures real
-  // approvers). Only seeds while the list is still empty, so it never
-  // overwrites changes made later via Manage access & approvers.
-  try {
-    const cntRow = await db
-      .prepare("SELECT COUNT(*) AS c FROM npd_approver_config WHERE approval_type = 'management_approval'")
-      .get();
-    if (!Number(cntRow?.c ?? 0)) {
-      const defaultEmails = ["garima.singh@amirgc.com", "syed.afroz@amirgc.com"];
-      let order = 0;
-      for (const email of defaultEmails) {
-        const u = await db.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(email);
-        if (u) {
-          await db
-            .prepare("INSERT INTO npd_approver_config (approval_type, user_id, sort_order) VALUES (?, ?, ?)")
-            .run("management_approval", u.id, order++);
-        } else {
-          console.warn(`[db] npd management_approval seed: no user found for ${email}`);
-        }
-      }
-    }
-  } catch (e) {
-    console.error("[db] npd_approver_config seed:", e.message || e);
-  }
 
   persist();
 }

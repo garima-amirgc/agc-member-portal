@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import api from "../services/api";
 import { hasNpdAccess } from "../utils/adminAccess";
 
-// Counts everything sitting in the current user's "My tasks" +
-// "Waiting for my approval" lists on the NPD dashboard — i.e. submit steps
-// assigned to them, approval steps they're a configured approver for, and
-// multi_confirm slots they can confirm. Mirrors useMyOpenTicketCount's
+// Counts how many NPD requests are sitting in the current user's "Needs my
+// decision" list — i.e. they were picked as an SLT approver for a request
+// that's still pending_review. Used to be "My tasks" + "Waiting for my
+// approval" from the old 13-step pipeline; those endpoints were removed
+// when that pipeline was, on 2026-11-07. Mirrors useMyOpenTicketCount's
 // pattern (same refresh triggers) so the NPD nav badge behaves exactly like
 // the IT Ticket one.
 export function useMyNpdActionCount(user) {
@@ -18,13 +19,9 @@ export function useMyNpdActionCount(user) {
       return;
     }
     try {
-      const [tasksRes, approvalsRes] = await Promise.all([
-        api.get("/npd/my-tasks"),
-        api.get("/npd/my-approvals"),
-      ]);
-      const tasks = Array.isArray(tasksRes.data) ? tasksRes.data : [];
-      const approvals = Array.isArray(approvalsRes.data) ? approvalsRes.data : [];
-      setCount(tasks.length + approvals.length);
+      const { data } = await api.get("/npd/my-pending-decisions");
+      const pending = Array.isArray(data) ? data : [];
+      setCount(pending.length);
     } catch {
       setCount(0);
     }

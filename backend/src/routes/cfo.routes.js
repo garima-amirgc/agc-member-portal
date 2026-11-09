@@ -6,6 +6,9 @@ const { ADMIN_GRANT_KEYS, hasAnyAdminGrant } = require("../config/adminGrants");
 const cfoReports = require("../services/cfoReports.service");
 const cfoIncidents = require("../services/cfoIncidents.service");
 const sltCalendar = require("../services/sltCalendar.service");
+const sltActionRegister = require("../services/sltActionRegister.service");
+const sltDecisionRegister = require("../services/sltDecisionRegister.service");
+const sltCommitmentRegister = require("../services/sltCommitmentRegister.service");
 const sltAudit = require("../services/sltAudit.service");
 const sp = require("../services/sharepoint.service");
 
@@ -275,12 +278,190 @@ router.post("/slt/v2/calendar/subscription/test", requireAdminGrantAny(...SLT_ED
   }
 });
 
-// Action Tracker Executive Board routes (Action Register, Decision
+// The OLD Action Tracker Executive Board routes (Action Register, Decision
 // Queue/Register, 90-Day Commitments, Dashboard, Weekly Review — formerly
 // here, backed by sltActions/sltDecisions/sltCommitments/sltOverview.
 // service.js) were removed entirely by explicit request ("completely
 // remove this... delete everything related to this"). The generic audit
-// trail route below is unaffected — it still serves calendar entries.
+// trail route below was unaffected by that removal — it still serves
+// calendar entries, and now also serves the brand-new Action Register
+// below (entityType "action").
+
+// ── SLT Tracker — Action Register ───────────────────────────────────────
+// Native table (slt_action_register) backing the "Action Register" radio
+// choice under the new "SLT Tracker" view in CfoReportsPage.jsx (sibling to
+// "SLT Master Calendar") — see sltActionRegister.service.js. "Board
+// Summary" and "Executive Dashboard" (the other two radio choices in that
+// same view) have no routes of their own: the frontend computes both from
+// this same GET list, client-side (sltActionAnalytics.js). Unlike Master
+// Calendar, there's no per-row creator/delegate edit restriction here —
+// anyone with the full slt_edit grant (or cfo) can edit or archive any
+// item, same flat check both ways.
+router.get("/slt/v2/action-items", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
+  try {
+    const items = await sltActionRegister.listActionItems(req.query);
+    res.json({ items });
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.get("/slt/v2/action-items/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltActionRegister.getActionItemById(req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.post("/slt/v2/action-items", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.status(201).json(await sltActionRegister.createActionItem(req.user.id, req.body));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.patch("/slt/v2/action-items/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltActionRegister.updateActionItem(req.user.id, req.params.id, req.body));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+// Archive-only soft delete (see sltActionRegister.service.js) — the row is
+// never actually removed, just hidden from the default list.
+router.post("/slt/v2/action-items/:id/archive", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltActionRegister.archiveActionItem(req.user.id, req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.post("/slt/v2/action-items/:id/restore", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltActionRegister.restoreActionItem(req.user.id, req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+// SLT Tracker → "Decisions" tab (Decision Queue / Decision Register) — see
+// sltDecisionRegister.service.js for the full design, in particular why
+// this is one table/one list endpoint behind two frontend tabs rather than
+// two separate routes: SltDecisionBoard.jsx splits this same GET list into
+// "queue" (active) vs "register" (decided) client-side, same pattern as
+// Action Register's Board Summary/Executive Dashboard. Same flat
+// view/edit grant check as Action Register — no per-row creator/delegate
+// restriction.
+router.get("/slt/v2/decisions", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
+  try {
+    const decisions = await sltDecisionRegister.listDecisions(req.query);
+    res.json({ decisions });
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.get("/slt/v2/decisions/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltDecisionRegister.getDecisionById(req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.post("/slt/v2/decisions", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.status(201).json(await sltDecisionRegister.createDecision(req.user.id, req.body));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.patch("/slt/v2/decisions/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltDecisionRegister.updateDecision(req.user.id, req.params.id, req.body));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+// Archive-only soft delete (see sltDecisionRegister.service.js) — the row
+// is never actually removed, just hidden from both the Queue and Register
+// tabs. Independent of the automatic Queue→Register move on Status change.
+router.post("/slt/v2/decisions/:id/archive", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltDecisionRegister.archiveDecision(req.user.id, req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.post("/slt/v2/decisions/:id/restore", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltDecisionRegister.restoreDecision(req.user.id, req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+// SLT Tracker → "90 Day Commitments" radio choice — see
+// sltCommitmentRegister.service.js for the full design. Same flat
+// view/edit grant check as Action Register/Decisions — no per-row
+// creator/delegate restriction.
+router.get("/slt/v2/commitments", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
+  try {
+    const commitments = await sltCommitmentRegister.listCommitments(req.query);
+    res.json({ commitments });
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.get("/slt/v2/commitments/:id", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltCommitmentRegister.getCommitmentById(req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.post("/slt/v2/commitments", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.status(201).json(await sltCommitmentRegister.createCommitment(req.user.id, req.body));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.patch("/slt/v2/commitments/:id", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltCommitmentRegister.updateCommitment(req.user.id, req.params.id, req.body));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+// Archive-only soft delete (see sltCommitmentRegister.service.js) — the row
+// is never actually removed, just hidden from the board.
+router.post("/slt/v2/commitments/:id/archive", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltCommitmentRegister.archiveCommitment(req.user.id, req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
+
+router.post("/slt/v2/commitments/:id/restore", requireAdminGrantAny(...SLT_EDIT_GRANTS), async (req, res) => {
+  try {
+    res.json(await sltCommitmentRegister.restoreCommitment(req.user.id, req.params.id));
+  } catch (e) {
+    sltErrorHandler(res, e);
+  }
+});
 
 // Shared audit trail (any entity type)
 router.get("/slt/v2/audit/:entityType/:entityId", requireAdminGrantAny(...SLT_VIEW_GRANTS), async (req, res) => {

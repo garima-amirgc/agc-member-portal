@@ -3,7 +3,6 @@ const { db } = require("../config/db");
 const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
-const { DEPARTMENTS } = require("../config/constants");
 const npd = require("../services/npdWorkflow.service");
 
 const router = express.Router();
@@ -27,30 +26,11 @@ async function requireNpdAccess(req, res, next) {
 
 router.use(authRequired, requireNpdAccess);
 
-// ─── Meta ───────────────────────────────────────────────────────────────────
-
-router.get("/meta", (req, res) => {
-  res.json({
-    steps: npd.STEP_DEFS.map((s) => ({
-      number: s.number,
-      key: s.key,
-      name: s.name,
-      department: s.department || null,
-      type: s.type,
-      approvalType: s.approvalType || null,
-      confirmations: s.confirmations || null,
-      skippable: !npd.NON_SKIPPABLE_STEP_NUMBERS.has(s.number),
-    })),
-    departments: DEPARTMENTS,
-  });
-});
-
-// ─── Requests ───────────────────────────────────────────────────────────────
+// ─── Requests — Gate 1 launch scorecard ────────────────────────────────────
 
 router.get("/requests", async (req, res) => {
   try {
-    const rows = await npd.listRequests({ status: req.query.status || undefined });
-    res.json(rows);
+    res.json(await npd.listRequests());
   } catch (e) {
     handleError(res, e, "Could not load requests.");
   }
@@ -69,7 +49,7 @@ router.get("/requests/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "Invalid id." });
-    const request = await npd.getRequestDetail(id, req.user);
+    const request = await npd.getRequestDetail(id);
     if (!request) return res.status(404).json({ message: "Request not found." });
     res.json(request);
   } catch (e) {
@@ -77,13 +57,14 @@ router.get("/requests/:id", async (req, res) => {
   }
 });
 
-router.post("/requests/:id/cancel", async (req, res) => {
+router.put("/requests/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const request = await npd.cancelRequest({ requestId: id, user: req.user, reason: req.body?.reason });
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "Invalid id." });
+    const request = await npd.updateRequest({ requestId: id, user: req.user, body: req.body });
     res.json(request);
   } catch (e) {
-    handleError(res, e, "Could not cancel request.");
+    handleError(res, e, "Could not update request.");
   }
 });
 
@@ -97,73 +78,50 @@ router.delete("/requests/:id", async (req, res) => {
   }
 });
 
-// ─── Step actions ───────────────────────────────────────────────────────────
+// ─── SLT review ─────────────────────────────────────────────────────────────
 
-router.post("/requests/:id/steps/:stepNumber/submit", async (req, res) => {
+// Anyone with module access can see who's on the SLT roster, to pick from
+// when submitting a request for review (listing it is not the same as
+// managing it — that's the admin-gated /admin/slt-users below).
+router.get("/slt-users", async (_req, res) => {
   try {
-    const id = Number(req.params.id);
-    const stepNumber = Number(req.params.stepNumber);
-    const request = await npd.submitStep({ requestId: id, stepNumber, user: req.user, data: req.body?.data || {} });
-    res.json(request);
+    res.json(await npd.listSltUsers());
   } catch (e) {
-    handleError(res, e, "Could not submit step.");
+    handleError(res, e, "Could not load SLT list.");
   }
 });
 
-router.post("/requests/:id/steps/:stepNumber/decision", async (req, res) => {
+router.get("/my-pending-decisions", async (req, res) => {
+  try {
+    res.json(await npd.listMyPendingDecisions(req.user));
+  } catch (e) {
+    handleError(res, e, "Could not load pending decisions.");
+  }
+});
+
+router.post("/requests/:id/submit-for-review", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const stepNumber = Number(req.params.stepNumber);
-    const request = await npd.recordApproval({
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "Invalid id." });
+    const request = await npd.submitForReview({
       requestId: id,
-      stepNumber,
       user: req.user,
-      action: req.body?.action,
-      comments: req.body?.comments,
+      approverUserIds: req.body?.approver_user_ids,
     });
+    res.json(request);
+  } catch (e) {
+    handleError(res, e, "Could not submit for review.");
+  }
+});
+
+router.post("/requests/:id/decision", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: "Invalid id." });
+    const request = await npd.recordDecision({ requestId: id, user: req.user, decision: req.body?.decision });
     res.json(request);
   } catch (e) {
     handleError(res, e, "Could not record decision.");
-  }
-});
-
-router.post("/requests/:id/steps/:stepNumber/verify", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const stepNumber = Number(req.params.stepNumber);
-    const request = await npd.recordVerification({
-      requestId: id,
-      stepNumber,
-      user: req.user,
-      confirmationKey: req.body?.confirmation_area,
-      action: req.body?.action,
-      comments: req.body?.comments,
-    });
-    res.json(request);
-  } catch (e) {
-    handleError(res, e, "Could not record verification.");
-  }
-});
-
-router.post("/requests/:id/steps/:stepNumber/skip", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const stepNumber = Number(req.params.stepNumber);
-    const request = await npd.skipStep({ requestId: id, stepNumber, user: req.user, reason: req.body?.reason });
-    res.json(request);
-  } catch (e) {
-    handleError(res, e, "Could not skip step.");
-  }
-});
-
-router.post("/requests/:id/steps/:stepNumber/reopen", requireAdminGrant(ADMIN_GRANT_KEYS.NPD), async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const stepNumber = Number(req.params.stepNumber);
-    const request = await npd.reopenStep({ requestId: id, stepNumber, user: req.user, reason: req.body?.reason });
-    res.json(request);
-  } catch (e) {
-    handleError(res, e, "Could not reopen step.");
   }
 });
 
@@ -172,12 +130,7 @@ router.post("/requests/:id/steps/:stepNumber/reopen", requireAdminGrant(ADMIN_GR
 router.post("/requests/:id/comments", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const comment = await npd.addComment({
-      requestId: id,
-      stepId: req.body?.step_id ? Number(req.body.step_id) : null,
-      user: req.user,
-      comment: req.body?.comment,
-    });
+    const comment = await npd.addComment({ requestId: id, user: req.user, comment: req.body?.comment });
     res.status(201).json(comment);
   } catch (e) {
     handleError(res, e, "Could not add comment.");
@@ -187,11 +140,10 @@ router.post("/requests/:id/comments", async (req, res) => {
 router.post("/requests/:id/attachments", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { file_name, original_name, file_url, file_type, step_id } = req.body || {};
+    const { file_name, original_name, file_url, file_type } = req.body || {};
     if (!file_name || !file_url) return res.status(400).json({ message: "file_name and file_url are required." });
     const attachment = await npd.addAttachment({
       requestId: id,
-      stepId: step_id ? Number(step_id) : null,
       user: req.user,
       fileName: file_name,
       originalFileName: original_name || file_name,
@@ -201,41 +153,6 @@ router.post("/requests/:id/attachments", async (req, res) => {
     res.status(201).json(attachment);
   } catch (e) {
     handleError(res, e, "Could not save attachment.");
-  }
-});
-
-// ─── My Tasks / My Approvals / notifications ───────────────────────────────
-
-router.get("/my-tasks", async (req, res) => {
-  try {
-    res.json(await npd.listMyTasks(req.user));
-  } catch (e) {
-    handleError(res, e, "Could not load your tasks.");
-  }
-});
-
-router.get("/my-approvals", async (req, res) => {
-  try {
-    res.json(await npd.listMyApprovals(req.user));
-  } catch (e) {
-    handleError(res, e, "Could not load your approvals.");
-  }
-});
-
-router.get("/notifications", async (req, res) => {
-  try {
-    res.json(await npd.listNotifications(req.user.id, { status: req.query.status || "active" }));
-  } catch (e) {
-    handleError(res, e, "Could not load notifications.");
-  }
-});
-
-router.post("/notifications/:id/dismiss", async (req, res) => {
-  try {
-    await npd.dismissNotification(req.params.id, req.user.id);
-    res.json({ ok: true });
-  } catch (e) {
-    handleError(res, e, "Could not dismiss notification.");
   }
 });
 
@@ -289,35 +206,27 @@ router.delete("/admin/delete-access-users/:userId", requireAdminGrant(ADMIN_GRAN
   }
 });
 
-router.get("/admin/approvers", requireAdminGrant(ADMIN_GRANT_KEYS.NPD), async (req, res) => {
+router.get("/admin/slt-users", requireAdminGrant(ADMIN_GRANT_KEYS.NPD), async (req, res) => {
   try {
-    res.json(await npd.listAllApproverConfig());
+    res.json(await npd.listSltUsers());
   } catch (e) {
-    handleError(res, e, "Could not load approver configuration.");
+    handleError(res, e, "Could not load SLT list.");
   }
 });
 
-router.get("/admin/step-assignees", requireAdminGrant(ADMIN_GRANT_KEYS.NPD), async (req, res) => {
+router.post("/admin/slt-users", requireAdminGrant(ADMIN_GRANT_KEYS.NPD), async (req, res) => {
   try {
-    res.json(await npd.listAllStepAssignees());
+    res.json(await npd.addSltUser(req.body?.user_id));
   } catch (e) {
-    handleError(res, e, "Could not load step access configuration.");
+    handleError(res, e, "Could not add SLT member.");
   }
 });
 
-router.put("/admin/step-assignees/:stepKey", requireAdminGrant(ADMIN_GRANT_KEYS.NPD), async (req, res) => {
+router.delete("/admin/slt-users/:userId", requireAdminGrant(ADMIN_GRANT_KEYS.NPD), async (req, res) => {
   try {
-    res.json(await npd.setStepAssignees(req.params.stepKey, req.body?.user_ids || []));
+    res.json(await npd.removeSltUser(req.params.userId));
   } catch (e) {
-    handleError(res, e, "Could not save step access.");
-  }
-});
-
-router.put("/admin/approvers/:approvalType", requireAdminGrant(ADMIN_GRANT_KEYS.NPD), async (req, res) => {
-  try {
-    res.json(await npd.setApprovers(req.params.approvalType, req.body?.user_ids || []));
-  } catch (e) {
-    handleError(res, e, "Could not save approvers.");
+    handleError(res, e, "Could not remove SLT member.");
   }
 });
 

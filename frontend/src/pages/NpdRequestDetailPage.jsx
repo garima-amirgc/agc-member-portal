@@ -1,22 +1,17 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import { PAGE_SHELL } from "../constants/pageLayout";
 import api, { postNpdAttachment } from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
-import { useAuth } from "../context/AuthContext";
-import { hasAdminGrant } from "../utils/adminAccess";
-import { ADMIN_GRANT_KEYS } from "../constants/adminGrants";
-import NpdStepper from "../components/npd/NpdStepper";
-import NpdStepActionPanel from "../components/npd/NpdStepActionPanel";
-import { NPD_REQUEST_STATUS_LABELS, npdRequestStatusBadgeClass } from "../constants/npd";
+import NpdScorecardForm, { npdRequestToForm } from "../components/npd/NpdScorecardForm";
 import { npdPriorityBadgeClass } from "../utils/npdScoring";
+import { useAuth } from "../context/AuthContext";
 
 const FIELD = "rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900";
 
 const TABS = [
   { key: "overview", label: "Overview" },
-  { key: "workflow", label: "Workflow" },
   { key: "documents", label: "Documents" },
   { key: "comments", label: "Comments" },
   { key: "activity", label: "Activity History" },
@@ -24,19 +19,27 @@ const TABS = [
 
 export default function NpdRequestDetailPage() {
   const { id } = useParams();
-  const { user } = useAuth();
-  const isAdmin = hasAdminGrant(user, ADMIN_GRANT_KEYS.NPD);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [request, setRequest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState("workflow");
-  // Which step's card the "Workflow" tab is showing on the right. null =
-  // follow the workflow's actual current step. Clicking any step in the
-  // left-hand list (including a skipped one) pins the view to that step,
-  // so a skipped step's form only ever shows up when someone deliberately
-  // selects it — never tacked onto whatever step is currently active.
-  const [selectedStep, setSelectedStep] = useState(null);
+  // Picks up the one-time "could not send it for SLT review" reason carried
+  // over from NpdNewRequestPage when creating + submitting for review in one
+  // step only partly succeeds (request created, but the review submission
+  // itself failed — e.g. an incomplete scorecard). Kept separate from the
+  // load/delete `error` above (which load() resets on every fetch) so it
+  // isn't wiped out the moment this page's data finishes loading.
+  const [sltError, setSltError] = useState(() => location.state?.sltError || "");
+  const [tab, setTab] = useState("overview");
+
+  useEffect(() => {
+    if (location.state?.sltError) {
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -53,18 +56,18 @@ export default function NpdRequestDetailPage() {
 
   useEffect(() => {
     void load();
-    setSelectedStep(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const cancelRequest = async () => {
-    if (!window.confirm("Cancel this NPD request? This stops the workflow.")) return;
+  const deleteRequest = async () => {
+    if (!window.confirm(`Delete ${request.request_number}? This cannot be undone from here.`)) return;
+    setError("");
     try {
-      const { data } = await api.post(`/npd/requests/${id}/cancel`, {});
-      setRequest(data);
+      await api.delete(`/npd/requests/${id}`);
       window.dispatchEvent(new Event("agc-npd-changed"));
+      window.location.href = "/npd";
     } catch (err) {
-      setError(friendlyErrorMessage(err, "Could not cancel this request."));
+      setError(friendlyErrorMessage(err, "Could not delete this request."));
     }
   };
 
@@ -96,23 +99,40 @@ export default function NpdRequestDetailPage() {
               {request.priority_tier} ({request.weighted_score})
             </span>
           ) : null}
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${npdRequestStatusBadgeClass(request.status)}`}>
-            {NPD_REQUEST_STATUS_LABELS[request.status] || request.status}
-          </span>
-          {isAdmin && !["completed", "cancelled"].includes(request.status) ? (
-            <button
-              type="button"
-              onClick={cancelRequest}
-              className="rounded border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:text-red-300"
-            >
-              Cancel request
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={deleteRequest}
+            className="rounded border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:text-red-300"
+          >
+            Delete
+          </button>
           <Link to="/npd" className="text-sm text-[#0B3EAF] underline dark:text-[#A7D344]">
             ← All requests
           </Link>
         </div>
       </div>
+
+      {error ? (
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+          {error}
+        </div>
+      ) : null}
+
+      {sltError ? (
+        <div className="flex items-start justify-between gap-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          <span>
+            Request created, but it wasn't sent for SLT review: {sltError} Click Edit below, re-pick the SLT approver(s), and save to try
+            again.
+          </span>
+          <button
+            type="button"
+            onClick={() => setSltError("")}
+            className="shrink-0 font-semibold text-amber-900 underline dark:text-amber-200"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800">
         {TABS.map((t) => (
@@ -131,43 +151,7 @@ export default function NpdRequestDetailPage() {
         ))}
       </div>
 
-      {tab === "overview" ? <OverviewTab request={request} /> : null}
-      {tab === "workflow" ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-          <section className="card p-4 sm:p-6 lg:col-span-2">
-            <h2 className="mb-3 text-lg font-semibold text-[#000000] dark:text-white">All 13 steps</h2>
-            <p className="mb-3 -mt-2 text-xs text-slate-500 dark:text-slate-400">Click any step to view or work on it.</p>
-            <NpdStepper
-              steps={request.steps}
-              currentStep={request.current_step}
-              selectedStep={selectedStep ?? request.current_step}
-              onSelectStep={setSelectedStep}
-            />
-          </section>
-          <section className="card p-4 sm:p-6 lg:col-span-3">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-[#000000] dark:text-white">
-                {(selectedStep ?? request.current_step) === request.current_step ? "Current step action" : "Step details"}
-              </h2>
-              {selectedStep != null && selectedStep !== request.current_step ? (
-                <button
-                  type="button"
-                  onClick={() => setSelectedStep(null)}
-                  className="text-xs font-semibold text-[#0B3EAF] underline dark:text-[#A7D344]"
-                >
-                  Back to current step ({request.current_step})
-                </button>
-              ) : null}
-            </div>
-            <NpdStepActionPanel
-              request={request}
-              user={user}
-              onUpdated={setRequest}
-              viewStepNumber={selectedStep ?? request.current_step}
-            />
-          </section>
-        </div>
-      ) : null}
+      {tab === "overview" ? <OverviewTab request={request} onUpdated={setRequest} /> : null}
       {tab === "documents" ? <DocumentsTab request={request} onUpdated={setRequest} /> : null}
       {tab === "comments" ? <CommentsTab request={request} onUpdated={setRequest} /> : null}
       {tab === "activity" ? <ActivityTab request={request} /> : null}
@@ -175,17 +159,117 @@ export default function NpdRequestDetailPage() {
   );
 }
 
-function OverviewTab({ request }) {
+// Overview tab shows the Gate 1 scorecard. "Edit" swaps in the same form
+// NpdNewRequestPage uses (live weighted-score preview included) and saves
+// with PUT /npd/requests/:id, which recomputes the Weighted Score/Priority
+// server-side exactly as creation does.
+function OverviewTab({ request, onUpdated }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(() => npdRequestToForm(request));
+  const [sltOptions, setSltOptions] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const startEdit = () => {
+    setForm(npdRequestToForm(request));
+    setError("");
+    setEditing(true);
+    api
+      .get("/npd/slt-users")
+      .then(({ data }) => setSltOptions(Array.isArray(data) ? data : []))
+      .catch(() => setSltOptions([]));
+  };
+
+  const update = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  // Previously-pending approver(s) this request was already sent to, before
+  // whatever the form's SLT dropdown currently has selected.
+  const previouslyPendingIds = (request.approvers || [])
+    .filter((a) => !a.decided_at)
+    .map((a) => String(a.user_id));
+
+  const save = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!form.customer_name.trim() || !form.product_name.trim()) {
+      setError("Customer and Product / SKU are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data } = await api.put(`/npd/requests/${request.id}`, form);
+      let finalData = data;
+      // Only re-submit when the SLT selection actually changed from what
+      // was already pending — otherwise saving unrelated fields would spam
+      // a fresh "sent for review" every time.
+      const selectionChanged =
+        form.slt_approver_ids.length !== previouslyPendingIds.length ||
+        form.slt_approver_ids.some((id) => !previouslyPendingIds.includes(id));
+      if (form.slt_approver_ids.length > 0 && selectionChanged) {
+        try {
+          const resubmitRes = await api.post(`/npd/requests/${request.id}/submit-for-review`, {
+            approver_user_ids: form.slt_approver_ids.map(Number),
+          });
+          finalData = resubmitRes.data;
+        } catch (reviewErr) {
+          setError(friendlyErrorMessage(reviewErr, "Saved, but could not send this to SLT."));
+        }
+      }
+      onUpdated(finalData);
+      window.dispatchEvent(new Event("agc-npd-changed"));
+      setEditing(false);
+    } catch (err) {
+      setError(friendlyErrorMessage(err, "Could not save changes."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <form onSubmit={save} className="space-y-4">
+        {error ? (
+          <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+            {error}
+          </div>
+        ) : null}
+        <NpdScorecardForm form={form} onChange={update} submitting={saving} sltOptions={sltOptions} />
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded bg-[#0B3EAF] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            disabled={saving}
+            className="rounded border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   const rows = [
     ["Channel", request.channel || "—"],
     ["Plant", request.plant || "—"],
     ["Start date", request.start_date || "—"],
     ["Target launch date", request.requested_launch_date || "—"],
     ["Created by", `${request.created_by_name || "—"} on ${new Date(request.created_at).toLocaleDateString()}`],
-    ["Current step", `${request.current_step} of 13`],
   ];
+
   return (
     <div className="space-y-4">
+      {error ? (
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+          {error}
+        </div>
+      ) : null}
       <section className="card p-4 sm:p-6">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
           {rows.map(([label, value]) => (
@@ -196,18 +280,141 @@ function OverviewTab({ request }) {
           ))}
         </dl>
       </section>
-      <ScorecardSummary request={request} />
+      <ScorecardSummary request={request} onEdit={startEdit} />
+      <SltReviewPanel request={request} onUpdated={onUpdated} onEdit={startEdit} />
     </div>
   );
 }
 
-// Gate 1 launch scorecard — shown on every request's Overview tab so
-// Management Approval (and anyone else looking at the request) sees the
-// objective weighted score/priority alongside the economics and qualitative
-// scores that produced it, not just a bare number. Shows a "not yet scored"
-// state rather than hiding itself, as a nudge that step 1 can be edited to
-// fill this in.
-function ScorecardSummary({ request }) {
+// SLT review — the actual submit/resubmit control lives in the scorecard
+// form itself (pick SLT approver(s) from the dropdown there and save); this
+// panel just shows where things stand and, for whoever it's pending on
+// right now, the Approve/Hold/Reject buttons. Any one of the people it was
+// sent to deciding settles it (first response wins). Once Approved this
+// just sits as "awaiting Gate 2" until that gate is built.
+function SltReviewPanel({ request, onUpdated, onEdit }) {
+  const { user } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const approvers = request.approvers || [];
+  const myPendingAssignment = approvers.find((a) => !a.decided_at && Number(a.user_id) === Number(user?.id));
+
+  const decide = async (decision) => {
+    setBusy(true);
+    setError("");
+    try {
+      const { data } = await api.post(`/npd/requests/${request.id}/decision`, { decision });
+      onUpdated(data);
+      window.dispatchEvent(new Event("agc-npd-changed"));
+    } catch (err) {
+      setError(friendlyErrorMessage(err, "Could not record that decision."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const statusBadge = {
+    approved: (
+      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+        Gate 1 Approved — awaiting Gate 2
+      </span>
+    ),
+    rejected: (
+      <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800 dark:bg-red-900/40 dark:text-red-300">
+        Rejected
+      </span>
+    ),
+    hold: (
+      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+        Hold — Need More Details
+      </span>
+    ),
+    pending_review: (
+      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+        Pending SLT review
+      </span>
+    ),
+  }[request.review_status] || (
+    <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+      Not submitted for SLT review
+    </span>
+  );
+
+  return (
+    <section className="card p-4 sm:p-6">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-[#000000] dark:text-white">SLT Review</h2>
+        {statusBadge}
+      </div>
+
+      {error ? (
+        <div className="mb-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+          {error}
+        </div>
+      ) : null}
+
+      {approvers.length > 0 ? (
+        <ul className="mb-3 space-y-1 text-sm">
+          {approvers.map((a) => (
+            <li
+              key={a.user_id}
+              className="flex items-center justify-between rounded border border-slate-200 px-3 py-1.5 dark:border-slate-800"
+            >
+              <span>
+                {a.name} <span className="text-slate-500 dark:text-slate-400">({a.email})</span>
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {a.decided_at ? "Responded" : "Awaiting response"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {myPendingAssignment ? (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => decide("approved")}
+            className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => decide("hold")}
+            className="rounded bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+          >
+            Hold — Need More Info
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => decide("rejected")}
+            className="rounded border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/60 dark:text-red-300"
+          >
+            Reject
+          </button>
+        </div>
+      ) : null}
+
+      <p className="text-sm text-slate-500 dark:text-slate-400">
+        To {request.review_status ? "resubmit this to SLT" : "send this to SLT"}, click{" "}
+        <button type="button" onClick={onEdit} className="font-semibold text-[#0B3EAF] underline dark:text-[#A7D344]">
+          Edit
+        </button>{" "}
+        above, pick SLT approver(s) at the bottom of the form, and save.
+      </p>
+    </section>
+  );
+}
+
+// Gate 1 launch scorecard — read-only summary, with an Edit button that
+// switches the tab to the same form used to create a request.
+function ScorecardSummary({ request, onEdit }) {
   const economics = [
     ["Annual Volume (kg)", request.annual_volume_kg],
     ["Annual Revenue ($)", request.annual_revenue],
@@ -223,23 +430,31 @@ function ScorecardSummary({ request }) {
   const commercial = [
     ["CapEx Required ($)", request.capex_required],
     ["Customer Commitment", request.customer_commitment],
-    ["SLT Decision", request.decision],
   ];
 
   return (
     <section className="card p-4 sm:p-6">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-[#000000] dark:text-white">Gate 1 — Launch Scorecard</h2>
-        {request.weighted_score != null ? (
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{request.weighted_score}</span>
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${npdPriorityBadgeClass(request.priority_tier)}`}>{request.priority_tier}</span>
-          </div>
-        ) : (
-          <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            Not yet scored — edit step 1 to fill this in
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {request.weighted_score != null ? (
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{request.weighted_score}</span>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${npdPriorityBadgeClass(request.priority_tier)}`}>{request.priority_tier}</span>
+            </div>
+          ) : (
+            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              Not yet scored
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded border border-[#0B3EAF] px-3 py-1.5 text-xs font-semibold text-[#0B3EAF] hover:bg-[#0B3EAF]/5 dark:border-[#A7D344] dark:text-[#A7D344]"
+          >
+            Edit
+          </button>
+        </div>
       </div>
       <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
         {[...economics, ...qualitative, ...commercial].map(([label, value]) => (

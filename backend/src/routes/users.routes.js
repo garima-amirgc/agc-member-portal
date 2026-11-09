@@ -967,6 +967,14 @@ async function deleteAdminUserCascade(userId, actingAdminId) {
     const pool = getPool();
     if (!pool) throw new Error("PostgreSQL pool unavailable");
     const client = await pool.connect();
+    // Same reasoning as the startup-migration client in
+    // config/database/postgres.js: a client checked out directly via
+    // pool.connect() isn't covered by pool.on("error", ...) (that only
+    // catches idle pooled clients), so it needs its own listener or a
+    // transient connection reset mid-transaction crashes the whole server.
+    client.on("error", (err) => {
+      console.error("[DB] Unexpected error on the user-delete client (connection recovered, server stays up):", err?.message || err);
+    });
     try {
       await client.query("BEGIN");
       const uid = Number(userId);

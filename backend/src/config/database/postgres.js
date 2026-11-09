@@ -805,7 +805,18 @@ async function migrateColumns(client) {
     "DROP TABLE IF EXISTS slt_decisions",
     "DROP TABLE IF EXISTS slt_action_status_history",
     "DROP TABLE IF EXISTS slt_actions",
-    "DROP TABLE IF EXISTS slt_decision_register",
+    // slt_decision_register is deliberately NOT in this cleanup list any
+    // more. It WAS one of the old Action Tracker Executive Board's 11
+    // tables, dropped here along with the rest of that feature — but the
+    // name was later reused for the new, currently-live Decisions feature
+    // (see its CREATE TABLE IF NOT EXISTS further down this same array,
+    // and sltDecisionRegister.service.js). Since this whole alters array
+    // re-runs on every single server start/initDb() call, leaving the drop
+    // here wiped every imported/entered decision on every restart — the
+    // table got recreated empty right after. Found via: Action Tracker
+    // (slt_action_register, a different, never-dropped table name) kept
+    // its data across restarts fine, while Decisions kept coming back
+    // empty even right after a successful, verified import.
     "DROP TABLE IF EXISTS slt_decision_queue",
     "DROP TABLE IF EXISTS slt_commitment_checkins",
     "DROP TABLE IF EXISTS slt_commitments",
@@ -1002,40 +1013,26 @@ async function migrateColumns(client) {
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       completed_at TIMESTAMPTZ
     )`,
-    `CREATE TABLE IF NOT EXISTS npd_steps (
-      id SERIAL PRIMARY KEY,
-      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-      step_number INTEGER NOT NULL,
-      step_key TEXT NOT NULL,
-      step_name TEXT NOT NULL,
-      responsible_department TEXT,
-      assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      status TEXT NOT NULL DEFAULT 'locked' CHECK(status IN (
-        'locked','not_started','in_progress','submitted','waiting_approval',
-        'approved','rejected','changes_requested','completed'
-      )),
-      data_json TEXT,
-      due_date TEXT,
-      started_at TIMESTAMPTZ,
-      submitted_at TIMESTAMPTZ,
-      completed_at TIMESTAMPTZ,
-      UNIQUE(request_id, step_number)
-    )`,
-    `CREATE TABLE IF NOT EXISTS npd_approvals (
-      id SERIAL PRIMARY KEY,
-      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-      step_id INTEGER REFERENCES npd_steps(id) ON DELETE CASCADE,
-      approval_type TEXT NOT NULL,
-      approver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      approver_name TEXT,
-      action TEXT NOT NULL CHECK(action IN ('submitted','approved','rejected','changes_requested','authorized')),
-      comments TEXT,
-      action_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-    )`,
+    // Gate 1 (New Product Development) used to be embedded as step 1 of a
+    // 13-step approval-to-shipment pipeline. That pipeline was removed by
+    // explicit request on 2026-11-07, and (by further explicit request) the
+    // 5 tables only it ever used are dropped here on next boot: npd_steps,
+    // npd_approvals, npd_approver_config, npd_notifications,
+    // npd_step_assignees. Gate 1's own data — npd_requests, npd_attachments,
+    // npd_comments, npd_activity_log, npd_access_users,
+    // npd_delete_access_users — is untouched. CASCADE on npd_steps clears
+    // the now-dead step_id foreign keys still declared (as of this
+    // migration) on npd_attachments/npd_comments/npd_activity_log below;
+    // those columns stay, just unconstrained historical data going forward.
+    "DROP TABLE IF EXISTS npd_approvals",
+    "DROP TABLE IF EXISTS npd_notifications",
+    "DROP TABLE IF EXISTS npd_step_assignees",
+    "DROP TABLE IF EXISTS npd_approver_config",
+    "DROP TABLE IF EXISTS npd_steps CASCADE",
     `CREATE TABLE IF NOT EXISTS npd_attachments (
       id SERIAL PRIMARY KEY,
       request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-      step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+      step_id INTEGER, -- historical; npd_steps table removed 2026-11-07, column kept for old rows
       file_name TEXT NOT NULL,
       original_file_name TEXT NOT NULL,
       file_url TEXT NOT NULL,
@@ -1046,7 +1043,7 @@ async function migrateColumns(client) {
     `CREATE TABLE IF NOT EXISTS npd_comments (
       id SERIAL PRIMARY KEY,
       request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-      step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+      step_id INTEGER, -- historical; npd_steps table removed 2026-11-07, column kept for old rows
       comment TEXT NOT NULL,
       created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -1054,7 +1051,7 @@ async function migrateColumns(client) {
     `CREATE TABLE IF NOT EXISTS npd_activity_log (
       id SERIAL PRIMARY KEY,
       request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-      step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
+      step_id INTEGER, -- historical; npd_steps table removed 2026-11-07, column kept for old rows
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       user_name TEXT,
       action TEXT NOT NULL,
@@ -1115,52 +1112,51 @@ async function migrateColumns(client) {
     // sheet, no dropdown there either; real values seen: SLT Approved, Hold,
     // Hold need more details). Additive/nullable, same pattern as above.
     "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS decision TEXT",
-    `CREATE TABLE IF NOT EXISTS npd_approver_config (
-      id SERIAL PRIMARY KEY,
-      approval_type TEXT NOT NULL,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      UNIQUE(approval_type, user_id)
+    // SLT review (2026-11-07) — a requester submits a completed Gate 1
+    // scorecard to one or more specific SLT members (picked from the
+    // npd_slt_users roster below, not a department/role check); any ONE of
+    // the people it was sent to approving/rejecting/holding settles it
+    // (first response wins — not a unanimous vote). review_status is the
+    // machine-checkable field Gate 2 will key off of; `decision` above stays
+    // as the free-text display column for backward compatibility but is now
+    // also set from the fixed Approved/Rejected/Hold wording going forward.
+    // All four columns are additive/nullable — existing requests just read
+    // as "not submitted for review" until someone submits them.
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS review_status TEXT CHECK (review_status IS NULL OR review_status IN ('pending_review','approved','rejected','hold'))",
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS submitted_for_review_at TIMESTAMPTZ",
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS decision_by INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS decision_at TIMESTAMPTZ",
+    // Roster of people who can be picked as an SLT approver when a request
+    // is submitted for review. Admin-managed, same "allowlist" shape as
+    // npd_access_users/npd_delete_access_users — being on this list doesn't
+    // grant module access by itself, it just makes someone selectable.
+    `CREATE TABLE IF NOT EXISTS npd_slt_users (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )`,
-    `CREATE TABLE IF NOT EXISTS npd_notifications (
+    // Who a specific request was actually sent to for decision (a subset of
+    // npd_slt_users, chosen per-request by whoever submitted it). decided_at
+    // is set on whichever row belongs to the person who actually acted —
+    // the other assigned rows for that request are left as-is (still
+    // "pending") since the OR rule means they were simply never needed, not
+    // that anything was overturned.
+    `CREATE TABLE IF NOT EXISTS npd_request_approvers (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
-      step_id INTEGER REFERENCES npd_steps(id) ON DELETE SET NULL,
-      kind TEXT NOT NULL DEFAULT 'task_assigned' CHECK(kind IN (
-        'task_assigned','approval_needed','step_completed','request_rejected',
-        'changes_requested','request_completed'
-      )),
-      title TEXT NOT NULL,
-      message TEXT,
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      dismissed_at TIMESTAMPTZ
-    )`,
-    `CREATE TABLE IF NOT EXISTS npd_step_assignees (
-      step_key TEXT NOT NULL,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      PRIMARY KEY (step_key, user_id)
+      assigned_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      decided_at TIMESTAMPTZ,
+      UNIQUE(request_id, user_id)
     )`,
-    // "Skip for now" — tracked alongside status (not as a new status value)
-    // so this stays a plain additive column, no CHECK-constraint rebuild. A
-    // step is "skipped" whenever skipped_at is set and completed_at isn't;
-    // the service layer folds that into a display_status for the UI.
-    "ALTER TABLE npd_steps ADD COLUMN IF NOT EXISTS skipped_at TIMESTAMPTZ",
-    "ALTER TABLE npd_steps ADD COLUMN IF NOT EXISTS skipped_by INTEGER",
-    "ALTER TABLE npd_steps ADD COLUMN IF NOT EXISTS skip_reason TEXT",
     "CREATE INDEX IF NOT EXISTS idx_npd_requests_status ON npd_requests (status)",
     "CREATE INDEX IF NOT EXISTS idx_npd_requests_created_by ON npd_requests (created_by)",
-    "CREATE INDEX IF NOT EXISTS idx_npd_steps_request ON npd_steps (request_id)",
-    "CREATE INDEX IF NOT EXISTS idx_npd_steps_assigned_to ON npd_steps (assigned_to)",
-    "CREATE INDEX IF NOT EXISTS idx_npd_approvals_request ON npd_approvals (request_id)",
-    "CREATE INDEX IF NOT EXISTS idx_npd_approvals_step ON npd_approvals (step_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_requests_review_status ON npd_requests (review_status)",
     "CREATE INDEX IF NOT EXISTS idx_npd_attachments_request ON npd_attachments (request_id)",
     "CREATE INDEX IF NOT EXISTS idx_npd_comments_request ON npd_comments (request_id)",
     "CREATE INDEX IF NOT EXISTS idx_npd_activity_log_request ON npd_activity_log (request_id)",
-    "CREATE INDEX IF NOT EXISTS idx_npd_approver_config_type ON npd_approver_config (approval_type)",
-    "CREATE INDEX IF NOT EXISTS idx_npd_notifications_user ON npd_notifications (user_id, status)",
-    "CREATE INDEX IF NOT EXISTS idx_npd_step_assignees_key ON npd_step_assignees (step_key)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_request_approvers_request ON npd_request_approvers (request_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_request_approvers_user ON npd_request_approvers (user_id)",
     // Master Calendar email subscription — one admin-configured row (always
     // id=1) controlling an automatic "send the whole calendar as an Excel
     // attachment" digest email. See sltCalendar.service.js's
@@ -1170,6 +1166,164 @@ async function migrateColumns(client) {
     // (e.g. "2026-10-28" for daily/weekly, "2026-10" for monthly) is what
     // keeps the scheduler from sending the same period's digest twice, not
     // a raw timestamp comparison.
+    // SLT Tracker — Action Register (the first of the "3 boards" under the
+    // new "SLT Tracker" radio view in CfoReportsPage.jsx — Board Summary and
+    // Executive Dashboard are both computed client-side from this table's
+    // rows, not stored separately; see sltActionAnalytics.js). Column set
+    // mirrors the uploaded source workbook's "Action Register" sheet
+    // (SLT_Action_Tracker_Board_Ready_Executive_v4_2026_Master_1.xlsx) minus
+    // its computed columns (SLT Item ID, Flag, Active Record), which are
+    // derived here instead — see mapActionItem() in
+    // sltActionRegister.service.js: display_id from id, flag from priority,
+    // active/overdue from status+due_date. Uses the archive-only soft-delete
+    // pattern ("Action Register, Decisions, 90-Day Commitments" — see the
+    // comment on slt_calendar's DROP TABLE migration above), unlike
+    // slt_calendar's true delete. Reuses the shared slt_audit_log/slt_links
+    // infrastructure with entityType "action" (added to ENTITY_TYPES in
+    // sltAudit.service.js — slt_links' CHECK constraint above already
+    // allowed 'action', left over from the removed v2 feature).
+    `CREATE TABLE IF NOT EXISTS slt_action_register (
+      id SERIAL PRIMARY KEY,
+      item TEXT NOT NULL,
+      category TEXT,
+      owner TEXT,
+      next_action TEXT,
+      due_date TEXT,
+      status TEXT NOT NULL DEFAULT 'Not Started',
+      priority TEXT NOT NULL DEFAULT 'Medium',
+      risk_impact TEXT,
+      strategic_objective TEXT,
+      escalation_required TEXT NOT NULL DEFAULT 'No',
+      financial_impact TEXT,
+      asp_readiness_stream TEXT,
+      blocker TEXT,
+      notes TEXT,
+      immutable_key TEXT UNIQUE,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_slt_action_register_archived ON slt_action_register (archived)",
+    "CREATE INDEX IF NOT EXISTS idx_slt_action_register_due_date ON slt_action_register (due_date)",
+
+    // SLT Tracker → "Decisions" tab → Decision Queue / Decision Register.
+    // Same build approach as slt_action_register just above: column set
+    // mirrors the uploaded source workbook's "Decision Queue" /
+    // "Decision Register" sheets (SLT_Action_Tracker_Board_Ready_Executive_
+    // v4_2026_Master_1.xlsx), minus their computed "Active Record" column,
+    // derived here instead (see mapDecision() in
+    // sltDecisionRegister.service.js).
+    //
+    // In the source workbook, Decision Queue and Decision Register are two
+    // SEPARATE sheets with an identical column layout: a decision lives in
+    // Decision Queue while pending, and once Status becomes "Completed" or
+    // "Cancelled" someone manually copies the whole row into Decision
+    // Register and clears it from the Queue (see the workbook's own
+    // instructions in Decision Queue!A3). One table here replaces that
+    // manual copy/clear step: a decision simply moves from the Decision
+    // Queue tab to the Decision Register tab automatically the moment its
+    // Status is set to Completed/Cancelled (the exact same condition the
+    // sheet's own Active Record formula used —
+    // =IF(OR(Status="Completed",Status="Cancelled"),"INACTIVE","ACTIVE")).
+    // Note this INACTIVE set is Completed/Cancelled only, NOT also
+    // "Deferred" like slt_action_register's — a deferred decision hasn't
+    // been decided yet, so the workbook's own formula (and this table's
+    // mapDecision()) keeps it ACTIVE / in the Queue.
+    //
+    // Same archive-only soft-delete convention as Action Register (see the
+    // comment above slt_action_register) for a separate "hide without
+    // deciding it" case, independent of the Queue/Register status split.
+    // Reuses the shared slt_audit_log infrastructure with entityType
+    // "decision" (added to ENTITY_TYPES in sltAudit.service.js). Does NOT
+    // use slt_links — its from_type/to_type CHECK constraint's
+    // 'decision_queue'/'decision_register' values are leftover from the
+    // old, fully-removed two-table Action Tracker Executive Board feature
+    // and aren't used here, same as slt_action_register doesn't use it.
+    `CREATE TABLE IF NOT EXISTS slt_decision_register (
+      id SERIAL PRIMARY KEY,
+      decision_required TEXT NOT NULL,
+      workstream TEXT,
+      assigned_to TEXT,
+      decision_deadline TEXT,
+      recommendation TEXT,
+      status TEXT NOT NULL DEFAULT 'Not Started',
+      decision_type TEXT,
+      ceo_cfo_attention TEXT,
+      financial_impact TEXT,
+      risk_impact TEXT,
+      strategic_objective TEXT,
+      decision_date TEXT,
+      further_action_required TEXT NOT NULL DEFAULT 'No',
+      context_input_required TEXT,
+      owned_by TEXT,
+      requested_by TEXT,
+      date_raised TEXT,
+      delay_impact_risk TEXT,
+      blocker TEXT,
+      notes TEXT,
+      immutable_key TEXT UNIQUE,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_slt_decision_register_archived ON slt_decision_register (archived)",
+    "CREATE INDEX IF NOT EXISTS idx_slt_decision_register_deadline ON slt_decision_register (decision_deadline)",
+    "CREATE INDEX IF NOT EXISTS idx_slt_decision_register_status ON slt_decision_register (status)",
+
+    // SLT Tracker → "90 Day Commitments" radio choice (see
+    // SltCommitmentBoard.jsx). Column set mirrors the uploaded source
+    // workbook's "90-Commitments" sheet (SLT_Action_Tracker_Board_Ready_
+    // Executive_v4_2026_Master_1.xlsx), specifically its "CommitmentsTable"
+    // Excel Table (header row 12, columns A:W) — minus that table's five
+    // computed columns (Original Due, 30-Day Due, 60-Day Due, Current Due,
+    // Report Cue), which are derived here instead, exactly mirroring the
+    // sheet's own formulas, in mapCommitment() in
+    // sltCommitmentRegister.service.js (original_due = (date_assigned ||
+    // date_entered) + 90 days, 30/60-day check-in dues = same start + 30/60
+    // days, current_due = revised_due if set else original_due).
+    //
+    // NOTE ON THE TABLE NAME: deliberately named slt_commitment_register,
+    // NOT slt_commitments or slt_commitment_checkins — those two names are
+    // still in both files' old DROP-TABLE cleanup lists (leftover from the
+    // old, fully-removed Action Tracker Executive Board feature) and
+    // reusing either would reproduce the exact silent-data-wipe-on-every-
+    // restart bug that slt_decision_register hit and had fixed (see the
+    // comment a few lines below explaining why slt_decision_register was
+    // removed from that list).
+    //
+    // Same archive-only soft-delete convention as Action Register and
+    // Decisions. Reuses the shared slt_audit_log infrastructure with
+    // entityType "commitment" (added to ENTITY_TYPES in
+    // sltAudit.service.js).
+    `CREATE TABLE IF NOT EXISTS slt_commitment_register (
+      id SERIAL PRIMARY KEY,
+      commitment TEXT NOT NULL,
+      success_measure TEXT,
+      owner TEXT,
+      rag_status TEXT NOT NULL DEFAULT 'Not Started / At Risk',
+      status_note TEXT,
+      date_entered TEXT,
+      date_assigned TEXT,
+      checkin_30_notes TEXT,
+      checkin_60_notes TEXT,
+      checkin_90_update_dates TEXT,
+      extension_approved_by TEXT,
+      ext_approval_date TEXT,
+      revised_due TEXT,
+      delivered_on TEXT,
+      completion_status TEXT NOT NULL DEFAULT 'Open',
+      change_risk_next_step TEXT,
+      immutable_key TEXT UNIQUE,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_slt_commitment_register_archived ON slt_commitment_register (archived)",
+    "CREATE INDEX IF NOT EXISTS idx_slt_commitment_register_completion ON slt_commitment_register (completion_status)",
+
     `CREATE TABLE IF NOT EXISTS slt_calendar_subscription (
       id SERIAL PRIMARY KEY,
       enabled INTEGER NOT NULL DEFAULT 0,
@@ -1395,6 +1549,16 @@ async function initDb() {
   db = createDbInterface(pool);
 
   const client = await pool.connect();
+  // pool.on("error", ...) above only catches errors on IDLE clients sitting
+  // in the pool. This client is actively checked out for the whole startup
+  // migration sequence below — a different code path in node-postgres — so
+  // it needs its own listener too, or a reset on this exact connection
+  // (e.g. the startup DDL run hitting the same transient ECONNRESET the
+  // comment above describes) throws unhandled and crashes the process
+  // exactly like the idle case was supposed to be guarded against.
+  client.on("error", (err) => {
+    console.error("[DB] Unexpected error on the startup-migration client (connection recovered, server stays up):", err?.message || err);
+  });
   try {
     await runDDL(client);
     await migrateColumns(client);
@@ -1464,31 +1628,9 @@ async function initDb() {
     const { migrateLegacyUpcomingGrantKey } = require("../../config/adminGrants");
     await migrateLegacyUpcomingGrantKey(db);
 
-    // One-time default for the Management Approval step (stands in for
-    // Adam/Tony/Tom from the spec until an NPD admin configures real
-    // approvers). Only seeds while the list is still empty, so it never
-    // overwrites changes made later via Manage access & approvers.
-    try {
-      const cntRow = await db
-        .prepare("SELECT COUNT(*) AS c FROM npd_approver_config WHERE approval_type = 'management_approval'")
-        .get();
-      if (!Number(cntRow?.c ?? 0)) {
-        const defaultEmails = ["garima.singh@amirgc.com", "syed.afroz@amirgc.com"];
-        let order = 0;
-        for (const email of defaultEmails) {
-          const u = await db.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(email);
-          if (u) {
-            await db
-              .prepare("INSERT INTO npd_approver_config (approval_type, user_id, sort_order) VALUES (?, ?, ?)")
-              .run("management_approval", u.id, order++);
-          } else {
-            console.warn(`[db] npd management_approval seed: no user found for ${email}`);
-          }
-        }
-      }
-    } catch (e) {
-      console.error("[db] npd_approver_config seed:", e.message || e);
-    }
+    // The one-time Management Approval approver seed (npd_approver_config)
+    // was removed on 2026-11-07 along with the 13-step pipeline it fed —
+    // that table no longer exists.
   } finally {
     client.release();
   }
