@@ -1106,7 +1106,14 @@ export default function SltDecisionBoard({ canEdit }) {
                 {showArchived ? "← Back to Decisions" : "Show Archived"}
               </GhostButton>
             ) : null}
-            {canEdit && !showArchived ? <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Decision</PrimaryButton> : null}
+            {/* Only shown on Decision Queue — a new decision defaults to a
+                pending status, so it always lands in the Queue regardless
+                of which tab was active when Add was clicked. Showing this
+                on Decision Register too would mean clicking Add there and
+                not seeing the new item appear on the tab you were on. */}
+            {canEdit && !showArchived && subTab === "decision_queue" ? (
+              <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Decision</PrimaryButton>
+            ) : null}
           </div>
         }
       />
