@@ -37,10 +37,16 @@ function normalizeImageUrl(v) {
 }
 
 // GET /hr-newsfeed/current — published items, all authenticated users
+//
+// Ordered newest-first. `sort_order` is just an auto-incrementing counter
+// set at creation time (see POST below, which assigns MAX(sort_order)+1) —
+// there's no admin drag/reorder UI for this feed, so it's effectively a
+// second created_at. Previously this sorted ASC, which put the OLDEST post
+// first; DESC puts the most recently added post at the top instead.
 router.get("/current", authRequired, async (req, res) => {
   const rows = await db
     .prepare(
-      "SELECT * FROM hr_newsfeed WHERE COALESCE(published, 1) = 1 ORDER BY sort_order ASC, created_at DESC"
+      "SELECT * FROM hr_newsfeed WHERE COALESCE(published, 1) = 1 ORDER BY sort_order DESC, created_at DESC"
     )
     .all();
   return res.json(rows.map(shapeRow));
@@ -49,7 +55,7 @@ router.get("/current", authRequired, async (req, res) => {
 // GET /hr-newsfeed/ — admin list (all, including drafts)
 router.get("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.HR_NEWSFEED), async (req, res) => {
   const rows = await db
-    .prepare("SELECT * FROM hr_newsfeed ORDER BY sort_order ASC, created_at DESC")
+    .prepare("SELECT * FROM hr_newsfeed ORDER BY sort_order DESC, created_at DESC")
     .all();
   return res.json(rows.map(shapeRow));
 });

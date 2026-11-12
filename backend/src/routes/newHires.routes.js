@@ -3,12 +3,32 @@ const { db } = require("../config/db");
 const { authRequired } = require("../middleware/auth");
 const { requireAdminGrant } = require("../middleware/adminGrants");
 const { ADMIN_GRANT_KEYS } = require("../config/adminGrants");
-const { moveSpotlightEntry, nextSortOrder } = require("../utils/spotlightFeedDb");
+const { moveSpotlightEntry } = require("../utils/spotlightFeedDb");
 
 const TABLE = "new_hires";
 const PUBLISHED_ORDER = "sort_order ASC, created_at DESC, id DESC";
 
 const router = express.Router();
+
+// New hires share the same move-up/move-down admin reordering
+// (moveSpotlightEntry) as the other spotlight widgets (Customer Wins,
+// Community Involvement), and all of those list ascending by sort_order —
+// so unlike HR Newsfeed (which has no manual reorder and could just flip to
+// DESC), we can't reverse the sort direction here without breaking the
+// up/down arrows and affecting those other widgets too, since they all
+// share spotlightFeedDb's shared nextSortOrder() helper.
+//
+// Instead, a newly added entry is placed BELOW zero — one lower than the
+// current lowest sort_order — rather than appended after the highest one.
+// Since the list still sorts sort_order ASC, that puts a brand new entry at
+// the very top by default, exactly like "recent first", while anything an
+// admin has already manually reordered (via move up/down) keeps its place
+// untouched, and Customer Wins / Community Involvement aren't affected
+// since this only changes how THIS table's rows are inserted.
+async function nextSortOrderOnTop(dbHandle, table) {
+  const row = await dbHandle.prepare(`SELECT COALESCE(MIN(sort_order), 0) AS m FROM ${table}`).get();
+  return Number(row?.m || 0) - 1;
+}
 
 function shapeRow(row) {
   if (!row) return null;
@@ -116,7 +136,7 @@ router.post("/", authRequired, requireAdminGrant(ADMIN_GRANT_KEYS.NEW_HIRES), as
     const linkUrl = parseLinkUrl(req.body) ?? null;
     const imageUrl = parseImageUrl(req.body) ?? null;
     const published = req.body?.published === false || req.body?.published === 0 ? 0 : 1;
-    const sortOrder = await nextSortOrder(db, TABLE);
+    const sortOrder = await nextSortOrderOnTop(db, TABLE);
     const now = new Date().toISOString();
 
     const result = await db
