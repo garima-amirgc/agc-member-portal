@@ -14,6 +14,7 @@ import {
   STRATEGIC_OBJECTIVE_SUGGESTIONS,
 } from "../constants/sltDecisionLists";
 import { computeDecisionKpis, isDecisionOverdue } from "../utils/sltDecisionAnalytics";
+import ExportMenu from "../components/ExportMenu";
 
 /**
  * SLT Tracker → "Decisions" tab — Decision Queue / Decision Register.
@@ -89,6 +90,23 @@ function fmtDate(d) {
   }
   return String(d);
 }
+
+// Export column set — see the matching comment in SltActionTrackerBoard.jsx
+// for why this reuses DECISION_FIELDS (the Add/Edit form's own field list)
+// rather than hand-maintaining a separate column list. This is the full
+// record per decision regardless of which tab/mode is currently being
+// exported from — Decision Queue items and Decision Register items share
+// the same fields either way, so there's no need to special-case
+// assigned_to/owned_by or decision_deadline/decision_date here.
+const DECISION_EXPORT_COLUMNS = [
+  { key: "display_id", label: "ID" },
+  ...DECISION_FIELDS.map((f) => ({
+    key: f.key,
+    label: f.label,
+    format: f.type === "date" ? (row) => fmtDate(row[f.key]) : undefined,
+  })),
+  { key: "created_at", label: "Created", format: (row) => fmtCreatedDate(row.created_at) },
+];
 
 // ── Small shared presentational bits — see SltActionTrackerBoard.jsx's
 // header comment for why these are duplicated rather than imported. ──
@@ -317,6 +335,67 @@ function DecisionFormModal({ title, initialValues, onClose, onSubmit, submitLabe
   );
 }
 
+// Read-only value for one field in the "view details" popup below — see
+// the matching helper in SltActionTrackerBoard.jsx for why dates go
+// through fmtDate and an empty value reads as "—".
+function fieldDisplayValue(def, item) {
+  const v = item[def.key];
+  if (def.type === "date") return fmtDate(v);
+  if (v === null || v === undefined || String(v).trim() === "") return "—";
+  return v;
+}
+
+// Clicking a row (on any of the three tabs — Queue, Register, Archived)
+// opens this read-only view of every field, since the table itself only
+// has room for a handful of columns. "Decision Required" is pulled out of
+// the grid and shown big up top; everything else, including Created,
+// follows in the same two-column layout the Add/Edit form uses, just not
+// editable. Editing from here is only offered when the row it opened
+// from has edit available — see canEdit below, passed in by the caller.
+function DecisionViewModal({ item, canEdit, onEdit, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-white p-4 shadow-xl dark:bg-slate-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{item.display_id}</p>
+            <h3 className="break-words text-sm font-semibold text-slate-900 dark:text-white">{item.decision_required}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {DECISION_FIELDS.filter((def) => def.key !== "decision_required").map((def) => (
+            <div key={def.key} className={def.type === "textarea" ? "sm:col-span-2 lg:col-span-3" : ""}>
+              <p className="mb-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">{def.label}</p>
+              <p className="whitespace-pre-wrap break-words text-xs text-slate-900 dark:text-slate-100">{fieldDisplayValue(def, item)}</p>
+            </div>
+          ))}
+          <div>
+            <p className="mb-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">Created</p>
+            <p className="text-xs text-slate-900 dark:text-slate-100">{fmtCreatedDate(item.created_at)}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <GhostButton onClick={onClose}>Close</GhostButton>
+          {canEdit ? <PrimaryButton onClick={onEdit}>Edit</PrimaryButton> : null}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function SubTabBar({ tabs, active, onChange }) {
   return (
     <div className="mb-4 inline-flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-900/40">
@@ -388,15 +467,20 @@ function ColumnFilterHeader({ label, active, align = "left", children }) {
 
   return (
     <>
+      {/* flex w-full + flex-wrap (not inline-flex): an inline-flex button
+          sizes to its content and was overflowing past its <th> into the
+          next column on narrower columns like Created/Escalation — a
+          full-width, wrappable button lets a long label drop to a second
+          line instead, which just grows the header row's height. */}
       <button
         type="button"
         ref={btnRef}
         onClick={() => (open ? setOpen(false) : openMenu())}
-        className={`inline-flex items-center gap-1 rounded px-1 py-0.5 normal-case transition hover:bg-black/5 dark:hover:bg-white/10 ${
+        className={`flex w-full flex-wrap items-center gap-1 rounded px-1 py-0.5 text-left normal-case transition hover:bg-black/5 dark:hover:bg-white/10 ${
           active ? "text-[#0B3EAF] dark:text-[#A7D344]" : ""
         }`}
       >
-        <span className="uppercase">{label}</span>
+        <span className="break-words uppercase">{label}</span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8" fill="none" className="h-2 w-2.5 shrink-0 opacity-60" aria-hidden>
           <path d="M1 1l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -537,6 +621,57 @@ function TextFilterContent({ value, onChange, placeholder }) {
   );
 }
 
+function DateRangeFilterContent({ from, to, onChange }) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">From</label>
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => onChange({ from: e.target.value, to })}
+          className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-normal outline-none focus:border-[#0B3EAF] dark:border-slate-700 dark:bg-[#141414] dark:focus:border-[#A7D344]"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">To</label>
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => onChange({ from, to: e.target.value })}
+          className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-normal outline-none focus:border-[#0B3EAF] dark:border-slate-700 dark:bg-[#141414] dark:focus:border-[#A7D344]"
+        />
+      </div>
+      {from || to ? (
+        <button type="button" onClick={() => onChange({ from: "", to: "" })} className="text-[10px] font-semibold text-[#0B3EAF] hover:underline dark:text-[#A7D344]">
+          Clear
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+// created_at is a real timestamp (unlike the plain YYYY-MM-DD business-date
+// fields like decision_deadline/decision_date), so it needs its own
+// formatter and its own range-matching logic rather than reusing
+// fmtDate/dateMatchesRange above, which assume local-midnight YYYY-MM-DD.
+function fmtCreatedDate(v) {
+  if (!v) return "—";
+  const dt = new Date(v);
+  if (Number.isNaN(dt.getTime())) return "—";
+  return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function createdAtMatchesRange(createdAt, from, to) {
+  if (!from && !to) return true;
+  if (!createdAt) return false;
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return false;
+  if (from && created < new Date(`${from}T00:00:00`)) return false;
+  if (to && created > new Date(`${to}T23:59:59.999`)) return false;
+  return true;
+}
+
 // ── Option-list builders ──
 
 function fixedOptionsWithCounts(items, field, knownOptions) {
@@ -618,6 +753,7 @@ const HEADER_COL_BG = {
   decisionType: "bg-emerald-100/55 dark:bg-emerald-950/35",
   ceoCfo: "bg-red-100/45 dark:bg-red-950/30",
   risk: "bg-rose-100/50 dark:bg-rose-950/30",
+  created: "bg-cyan-100/45 dark:bg-cyan-950/25",
   actions: "bg-slate-200/60 dark:bg-slate-800",
 };
 
@@ -633,6 +769,7 @@ function bodyColBg(col, rowIdx) {
     decisionType: alt ? "bg-emerald-50/90 dark:bg-emerald-950/20" : "bg-emerald-50/50 dark:bg-emerald-950/10",
     ceoCfo: alt ? "bg-red-50/85 dark:bg-red-950/18" : "bg-red-50/45 dark:bg-red-950/10",
     risk: alt ? "bg-rose-50/85 dark:bg-rose-950/18" : "bg-rose-50/45 dark:bg-rose-950/10",
+    created: alt ? "bg-cyan-50/90 dark:bg-cyan-950/20" : "bg-cyan-50/50 dark:bg-cyan-950/10",
     actions: alt ? "bg-[#eef3fa] dark:bg-[#1e2433]" : "bg-white dark:bg-[#141414]",
   };
   return `${map[col] || (alt ? "bg-[#eef3fa]" : "bg-white")} group-hover:brightness-[0.98] dark:group-hover:brightness-110`;
@@ -664,9 +801,14 @@ function StatPill({ label, value, accent }) {
   );
 }
 
+// No longer independently rounded/shadowed/margined — this now sits as
+// the top strip of the unified white <section> card SltDecisionBoard wraps
+// itself in (header → filter band → table all one card, same shape as the
+// Master Calendar's <section> in SltTrackerV2.jsx), instead of floating as
+// its own gradient banner above a separately-boxed table.
 function BoardHeader({ title, pills, right }) {
   return (
-    <div className="relative mb-5 overflow-hidden rounded-xl border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] text-white shadow-lg">
+    <div className="relative border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] text-white">
       <div className="relative flex flex-col gap-3 px-4 py-4 sm:px-5 sm:py-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl" style={{ color: "#ffffff" }}>
@@ -750,7 +892,7 @@ function kpiPills(kpis) {
 // "person" column (Assigned To vs. Owned By) and "date" column (Decision
 // Deadline vs. Decision Date) swap meaning by mode, same real-world split
 // the source workbook's own two sheets had.
-function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode = false, onRestore, restoringId }) {
+function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode = false, onRestore, restoringId, onView, onExportDataChange }) {
   // "archived" shows a flat mixed list of pending-when-archived and
   // decided-when-archived items together, so there's no single right
   // person/date field the way Queue vs. Register has — each archived item
@@ -771,7 +913,12 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
   const [decisionTypeFilter, setDecisionTypeFilter] = useState(() => new Set());
   const [ceoCfoFilter, setCeoCfoFilter] = useState(() => new Set());
   const [riskFilter, setRiskFilter] = useState(() => new Set());
-  const [idSortDir, setIdSortDir] = useState(mode === "queue" ? "asc" : "desc");
+  const [createdRange, setCreatedRange] = useState({ from: "", to: "" });
+  // Newest-created first by default on every tab now (Queue included —
+  // see the matching comment in SltActionTrackerBoard.jsx's
+  // ActionRegisterView), so the mode-based default this used to have is
+  // gone; the ID column header still toggles it either way.
+  const [idSortDir, setIdSortDir] = useState("desc");
 
   const workstreamOptions = useMemo(() => dynamicOptionsWithCounts(items, "workstream"), [items]);
   const personOptions = useMemo(() => {
@@ -800,6 +947,7 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
     decisionTypeFilter.size > 0,
     ceoCfoFilter.size > 0,
     riskFilter.size > 0,
+    createdRange.from !== "" || createdRange.to !== "",
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
@@ -811,6 +959,7 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
     setDecisionTypeFilter(new Set());
     setCeoCfoFilter(new Set());
     setRiskFilter(new Set());
+    setCreatedRange({ from: "", to: "" });
   };
 
   const filtered = useMemo(() => {
@@ -823,16 +972,36 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
       if (decisionTypeFilter.size > 0 && !decisionTypeFilter.has(i.decision_type)) return false;
       if (ceoCfoFilter.size > 0 && !ceoCfoFilter.has(i.ceo_cfo_attention)) return false;
       if (riskFilter.size > 0 && !riskFilter.has(i.risk_impact)) return false;
+      if (!createdAtMatchesRange(i.created_at, createdRange.from, createdRange.to)) return false;
       return true;
     });
     list = [...list].sort((a, b) => (idSortDir === "asc" ? a.id - b.id : b.id - a.id));
     return list;
-  }, [items, decisionQuery, workstreamFilter, personFilter, dateField, dateFilter, statusFilter, decisionTypeFilter, ceoCfoFilter, riskFilter, idSortDir]);
+  }, [items, decisionQuery, workstreamFilter, personFilter, dateField, dateFilter, statusFilter, decisionTypeFilter, ceoCfoFilter, riskFilter, createdRange, idSortDir]);
 
+  const exportFilenameBase = mode === "queue" ? "decision-queue" : mode === "register" ? "decision-register" : "decisions-archived";
+  const exportTitle = mode === "queue" ? "Decision Queue" : mode === "register" ? "Decision Register" : "Decisions — Archived";
+
+  // The Export button itself now lives in the page-level BoardHeader (the
+  // blue bar), alongside Show Archived / + Add Decision, not down here —
+  // but `filtered` (today's search/column filters/archived-tab selection)
+  // only exists in this component, so it's reported up on every change via
+  // this callback instead. onExportDataChange is a useCallback with an
+  // empty dep array at the call site, so this effect only re-fires when
+  // the export data itself actually changes, not on every parent render.
+  useEffect(() => {
+    onExportDataChange?.({ rows: filtered, filenameBase: exportFilenameBase, title: exportTitle });
+  }, [filtered, exportFilenameBase, exportTitle, onExportDataChange]);
+
+  // Returns the rest of the page-level <section> card (the filter band +
+  // the padded table area) as a fragment — BoardHeader (the top strip) is
+  // rendered once at the page level, above whichever of these three
+  // DecisionTable instances is currently mounted, so this component only
+  // needs to contribute the pieces that come after it.
   return (
-    <div>
+    <>
       {activeFilterCount > 0 ? (
-        <div className="mb-4 flex items-center justify-end gap-2 text-xs">
+        <div className="flex items-center justify-end gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-2.5 text-xs dark:border-slate-700 dark:bg-slate-900/40 sm:px-5">
           <span className="text-slate-500 dark:text-slate-400">
             {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active
           </span>
@@ -846,13 +1015,13 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
         </div>
       ) : null}
 
+      <div className="p-3 sm:p-4">
       {items.length === 0 ? (
         <div className="rounded-lg border border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
           {mode === "queue" ? "No pending decisions right now." : mode === "register" ? "No decided items yet." : "No archived decisions."}
         </div>
       ) : (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-600/50">
-          <table className="w-full table-fixed border-collapse text-left text-xs">
+        <table className="w-full table-fixed border-collapse border border-slate-200 text-left text-xs dark:border-slate-600/50">
             <thead className="border-b-2 border-slate-300 dark:border-slate-600">
               <tr>
                 <th className={thClass("id", "w-[6%]")}>
@@ -874,12 +1043,12 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
                     </svg>
                   </button>
                 </th>
-                <th className={thClass("decision", "w-[16%]")}>
+                <th className={thClass("decision", "w-[14%]")}>
                   <ColumnFilterHeader label="Decision" active={decisionQuery.trim() !== ""}>
                     <TextFilterContent value={decisionQuery} onChange={setDecisionQuery} placeholder="Contains…" />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("workstream", "w-[11%]")}>
+                <th className={thClass("workstream", "w-[10%]")}>
                   <ColumnFilterHeader label="Workstream" active={workstreamFilter.size > 0}>
                     <CheckboxFilterContent options={workstreamOptions} selected={workstreamFilter} onChange={setWorkstreamFilter} searchable />
                   </ColumnFilterHeader>
@@ -889,29 +1058,37 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
                     <CheckboxFilterContent options={personOptions} selected={personFilter} onChange={setPersonFilter} searchable />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("date", "w-[10%]")}>
+                <th className={thClass("date", "w-[9%]")}>
                   <ColumnFilterHeader label={dateLabel} active={dateFilter !== "all"}>
                     <RadioFilterContent name={`decision-${mode}-date`} options={dateRangeOptions} value={dateFilter} onChange={setDateFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("status", "w-[11%]")}>
+                <th className={thClass("status", "w-[10%]")}>
                   <ColumnFilterHeader label="Status" active={statusFilter.size > 0}>
                     <CheckboxFilterContent options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("decisionType", "w-[11%]")}>
+                <th className={thClass("decisionType", "w-[10%]")}>
                   <ColumnFilterHeader label="Decision Type" active={decisionTypeFilter.size > 0}>
                     <CheckboxFilterContent options={decisionTypeOptions} selected={decisionTypeFilter} onChange={setDecisionTypeFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("ceoCfo", "w-[9%]")}>
+                <th className={thClass("ceoCfo", "w-[8%]")}>
                   <ColumnFilterHeader label="CEO/CFO" active={ceoCfoFilter.size > 0}>
                     <CheckboxFilterContent options={ceoCfoOptions} selected={ceoCfoFilter} onChange={setCeoCfoFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("risk", "w-[8%]")}>
+                <th className={thClass("risk", "w-[7%]")}>
                   <ColumnFilterHeader label="Risk" active={riskFilter.size > 0}>
                     <CheckboxFilterContent options={riskOptions} selected={riskFilter} onChange={setRiskFilter} />
+                  </ColumnFilterHeader>
+                </th>
+                <th className={thClass("created", "w-[8%]")}>
+                  {/* align="right" — this column sits near the right edge of
+                      the table, so the default left-anchored 240px-wide
+                      popover would run off the edge of the screen. */}
+                  <ColumnFilterHeader label="Created" align="right" active={createdRange.from !== "" || createdRange.to !== ""}>
+                    <DateRangeFilterContent from={createdRange.from} to={createdRange.to} onChange={setCreatedRange} />
                   </ColumnFilterHeader>
                 </th>
                 {canEdit ? <th className={thClass("actions", "w-[8%]", true)}>{archivedMode ? "Restore" : "Actions"}</th> : null}
@@ -920,13 +1097,17 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
             <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit ? 10 : 9} className="px-6 py-8 text-center text-sm text-slate-400">
+                  <td colSpan={canEdit ? 11 : 10} className="px-6 py-8 text-center text-sm text-slate-400">
                     Nothing matches this filter.
                   </td>
                 </tr>
               ) : (
                 filtered.map((i, rowIdx) => (
-                  <tr key={i.id} className="group">
+                  <tr
+                    key={i.id}
+                    className="group cursor-pointer transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                    onClick={() => onView(i)}
+                  >
                     <td className={tdClass("id", rowIdx, "font-mono text-slate-500 dark:text-slate-400")}>{i.display_id}</td>
                     <td className={tdClass("decision", rowIdx, "font-semibold text-slate-900 dark:text-slate-100")}>{i.decision_required}</td>
                     <td className={tdClass("workstream", rowIdx, "text-slate-600 dark:text-slate-300")}>{i.workstream || "—"}</td>
@@ -946,8 +1127,9 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
                     <td className={tdClass("risk", rowIdx)}>
                       <RiskBadge risk={i.risk_impact} />
                     </td>
+                    <td className={tdClass("created", rowIdx, "text-slate-600 dark:text-slate-300")}>{fmtCreatedDate(i.created_at)}</td>
                     {canEdit ? (
-                      <td className={tdClass("actions", rowIdx, "", true)}>
+                      <td className={tdClass("actions", rowIdx, "", true)} onClick={(e) => e.stopPropagation()}>
                         {archivedMode ? (
                           <button
                             type="button"
@@ -982,9 +1164,9 @@ function DecisionTable({ mode, items, canEdit, onEdit, onArchive, archivedMode =
               )}
             </tbody>
           </table>
-        </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -996,6 +1178,19 @@ export default function SltDecisionBoard({ canEdit }) {
   const [modal, setModal] = useState(null); // null | { mode: "add" } | { mode: "edit", item }
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [archiving, setArchiving] = useState(false);
+  // Row click → read-only "view details" popup. canEditHere is carried
+  // alongside the item (rather than re-derived from `showArchived` at
+  // render time) since the Queue/Register tables and the Archived table
+  // set it differently — editing is only offered from the two live tabs.
+  const [viewItem, setViewItem] = useState(null); // null | { item, canEditHere }
+
+  // Export button data — reported up from whichever DecisionTable instance
+  // is currently mounted (see the matching comment in DecisionTable). The
+  // handler is wrapped in useCallback with an empty dep array so its
+  // identity never changes, which keeps DecisionTable's effect from
+  // re-firing on every render of this component.
+  const [exportData, setExportData] = useState({ rows: [], filenameBase: "decisions", title: "Decisions" });
+  const handleExportDataChange = useCallback((data) => setExportData(data), []);
 
   // "Show archived" toggle — unlike Action Tracker's version of this (scoped
   // to one sub-tab), Decisions' toggle bypasses the Queue/Register split
@@ -1085,10 +1280,20 @@ export default function SltDecisionBoard({ canEdit }) {
     }
   };
 
+  // "card p-4 sm:p-6" — the same page-level white panel wrapper
+  // SltTrackerV2's default export uses behind its own SubTabBar + content,
+  // so the Decision Queue/Register sub-tab row sits on a white background
+  // like Master Calendar's tabs do, instead of directly on the page's bare
+  // background.
   return (
-    <div>
+    <div className="card p-4 sm:p-6">
       {!showArchived ? <SubTabBar tabs={SUB_TABS} active={subTab} onChange={setSubTab} /> : null}
 
+      {/* One unified white card (header → filter band → table), same shape
+          as the Master Calendar's <section> in SltTrackerV2.jsx, instead of
+          a floating gradient banner sitting above a separately-boxed
+          table. */}
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg ring-1 ring-slate-200/80 dark:border-slate-700 dark:bg-[#141414] dark:ring-white/10">
       <BoardHeader
         title={showArchived ? "Decisions — Archived" : subTab === "decision_queue" ? "Decision Queue" : "Decision Register"}
         pills={
@@ -1114,21 +1319,29 @@ export default function SltDecisionBoard({ canEdit }) {
             {canEdit && !showArchived && subTab === "decision_queue" ? (
               <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Decision</PrimaryButton>
             ) : null}
+            {/* Exports whichever of Queue/Register/Archived is on screen —
+                see handleExportDataChange and the matching comment in
+                DecisionTable for how `exportData` gets here. */}
+            <ExportMenu columns={DECISION_EXPORT_COLUMNS} rows={exportData.rows} filenameBase={exportData.filenameBase} title={exportData.title} variant="onBlue" />
           </div>
         }
       />
 
       {showArchived ? (
         archivedLoading ? (
-          <div className="flex items-center justify-center gap-3 px-6 py-16">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
-            <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading…</p>
+          <div className="p-3 sm:p-4">
+            <div className="flex items-center justify-center gap-3 px-6 py-16">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
+              <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading…</p>
+            </div>
           </div>
         ) : archivedError ? (
-          <div className="rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-            {archivedError}
+          <div className="p-3 sm:p-4">
+            <div className="rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+              {archivedError}
+            </div>
           </div>
         ) : (
           <DecisionTable
@@ -1138,18 +1351,24 @@ export default function SltDecisionBoard({ canEdit }) {
             archivedMode
             onRestore={handleRestore}
             restoringId={restoringId}
+            onView={(item) => setViewItem({ item, canEditHere: false })}
+            onExportDataChange={handleExportDataChange}
           />
         )
       ) : loading ? (
-        <div className="flex items-center justify-center gap-3 px-6 py-16">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
-          <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading…</p>
+        <div className="p-3 sm:p-4">
+          <div className="flex items-center justify-center gap-3 px-6 py-16">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
+            <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading…</p>
+          </div>
         </div>
       ) : error ? (
-        <div className="rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-          {error}
+        <div className="p-3 sm:p-4">
+          <div className="rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+            {error}
+          </div>
         </div>
       ) : subTab === "decision_queue" ? (
         <DecisionTable
@@ -1158,6 +1377,8 @@ export default function SltDecisionBoard({ canEdit }) {
           canEdit={canEdit}
           onEdit={(item) => setModal({ mode: "edit", item })}
           onArchive={(item) => setArchiveTarget(item)}
+          onView={(item) => setViewItem({ item, canEditHere: canEdit })}
+          onExportDataChange={handleExportDataChange}
         />
       ) : (
         <DecisionTable
@@ -1166,8 +1387,11 @@ export default function SltDecisionBoard({ canEdit }) {
           canEdit={canEdit}
           onEdit={(item) => setModal({ mode: "edit", item })}
           onArchive={(item) => setArchiveTarget(item)}
+          onExportDataChange={handleExportDataChange}
+          onView={(item) => setViewItem({ item, canEditHere: canEdit })}
         />
       )}
+      </section>
 
       {modal ? (
         <DecisionFormModal
@@ -1189,6 +1413,18 @@ export default function SltDecisionBoard({ canEdit }) {
           busy={archiving}
           onConfirm={confirmArchive}
           onCancel={() => setArchiveTarget(null)}
+        />
+      ) : null}
+
+      {viewItem ? (
+        <DecisionViewModal
+          item={viewItem.item}
+          canEdit={viewItem.canEditHere}
+          onEdit={() => {
+            setModal({ mode: "edit", item: viewItem.item });
+            setViewItem(null);
+          }}
+          onClose={() => setViewItem(null)}
         />
       ) : null}
     </div>

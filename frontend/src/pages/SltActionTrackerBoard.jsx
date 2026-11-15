@@ -14,6 +14,7 @@ import {
   OWNER_SUGGESTIONS,
 } from "../constants/sltActionRegisterLists";
 import { computeKpis, computeBoardSummary, computeOwnerBreakdown, computeObjectiveBreakdown, isOverdue } from "../utils/sltActionAnalytics";
+import ExportMenu from "../components/ExportMenu";
 
 /**
  * Action Tracker — Board Summary / Executive Dashboard / Action Register.
@@ -89,6 +90,23 @@ function fmtDate(d) {
   }
   return String(d);
 }
+
+// Export column set for the Export button — reuses ACTION_FIELDS (the same
+// list the Add/Edit form uses) plus the ID, so the exported file stays in
+// sync automatically if a field is ever added to that form. This is
+// deliberately the FULL record per item, not just the narrow set of
+// columns the on-screen table has room to show (Notes/Blocker included),
+// since someone exporting a list is usually after more than what fits on
+// screen. Date fields are formatted the same way the table displays them.
+const ACTION_EXPORT_COLUMNS = [
+  { key: "display_id", label: "ID" },
+  ...ACTION_FIELDS.map((f) => ({
+    key: f.key,
+    label: f.label,
+    format: f.type === "date" ? (row) => fmtDate(row[f.key]) : undefined,
+  })),
+  { key: "created_at", label: "Created", format: (row) => fmtCreatedDate(row.created_at) },
+];
 
 // ── Small shared presentational bits (kept local to this file — this
 // codebase doesn't have a shared UI kit; SltTrackerV2.jsx and
@@ -331,6 +349,69 @@ function ActionItemFormModal({ title, initialValues, onClose, onSubmit, submitLa
   );
 }
 
+// Read-only value for one field in the "view details" popup below — date
+// fields go through the same fmtDate the table badges use, and an empty
+// value reads as "—" rather than a blank line so it's clear nothing was
+// ever entered (as opposed to a render bug).
+function fieldDisplayValue(def, item) {
+  const v = item[def.key];
+  if (def.type === "date") return fmtDate(v);
+  if (v === null || v === undefined || String(v).trim() === "") return "—";
+  return v;
+}
+
+// Clicking a row in the Action Register opens this — a plain read-only
+// view of every field on the item, since the table itself only has room
+// for a handful of columns and several (Next Action, Blocker, Notes) are
+// easy to miss or truncate on screen. "Item" is pulled out of the grid
+// and shown big up top since it's the thing someone's eye is looking for
+// first; everything else (including Created, which isn't part of the
+// editable ACTION_FIELDS list) follows in the same two-column layout the
+// Add/Edit form uses, just not editable.
+function ActionItemViewModal({ item, canEdit, onEdit, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-white p-4 shadow-xl dark:bg-slate-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{item.display_id}</p>
+            <h3 className="break-words text-sm font-semibold text-slate-900 dark:text-white">{item.item}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {ACTION_FIELDS.filter((def) => def.key !== "item").map((def) => (
+            <div key={def.key} className={def.type === "textarea" ? "sm:col-span-2 lg:col-span-3" : ""}>
+              <p className="mb-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">{def.label}</p>
+              <p className="whitespace-pre-wrap break-words text-xs text-slate-900 dark:text-slate-100">{fieldDisplayValue(def, item)}</p>
+            </div>
+          ))}
+          <div>
+            <p className="mb-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">Created</p>
+            <p className="text-xs text-slate-900 dark:text-slate-100">{fmtCreatedDate(item.created_at)}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <GhostButton onClick={onClose}>Close</GhostButton>
+          {canEdit ? <PrimaryButton onClick={onEdit}>Edit</PrimaryButton> : null}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function SubTabBar({ tabs, active, onChange }) {
   return (
     <div className="mb-4 inline-flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-900/40">
@@ -407,15 +488,20 @@ function ColumnFilterHeader({ label, active, align = "left", children }) {
 
   return (
     <>
+      {/* flex w-full + flex-wrap (not inline-flex): an inline-flex button
+          sizes to its content and was overflowing past its <th> into the
+          next column on narrower columns like Created/Escalation — a
+          full-width, wrappable button lets a long label drop to a second
+          line instead, which just grows the header row's height. */}
       <button
         type="button"
         ref={btnRef}
         onClick={() => (open ? setOpen(false) : openMenu())}
-        className={`inline-flex items-center gap-1 rounded px-1 py-0.5 normal-case transition hover:bg-black/5 dark:hover:bg-white/10 ${
+        className={`flex w-full flex-wrap items-center gap-1 rounded px-1 py-0.5 text-left normal-case transition hover:bg-black/5 dark:hover:bg-white/10 ${
           active ? "text-[#0B3EAF] dark:text-[#A7D344]" : ""
         }`}
       >
-        <span className="uppercase">{label}</span>
+        <span className="break-words uppercase">{label}</span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8" fill="none" className="h-2 w-2.5 shrink-0 opacity-60" aria-hidden>
           <path d="M1 1l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -559,6 +645,64 @@ function TextFilterContent({ value, onChange, placeholder }) {
   );
 }
 
+// From/To date-range picker — used for the "Created" column filter. Unlike
+// Due Date's preset buckets (Overdue/This week/This month), creation date
+// is naturally an audit/reporting question ("what got added between these
+// two dates"), so a literal range picker fits better than fixed buckets.
+function DateRangeFilterContent({ from, to, onChange }) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">From</label>
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => onChange({ from: e.target.value, to })}
+          className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-normal outline-none focus:border-[#0B3EAF] dark:border-slate-700 dark:bg-[#141414] dark:focus:border-[#A7D344]"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">To</label>
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => onChange({ from, to: e.target.value })}
+          className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-normal outline-none focus:border-[#0B3EAF] dark:border-slate-700 dark:bg-[#141414] dark:focus:border-[#A7D344]"
+        />
+      </div>
+      {from || to ? (
+        <button
+          type="button"
+          onClick={() => onChange({ from: "", to: "" })}
+          className="text-[10px] font-semibold text-[#0B3EAF] hover:underline dark:text-[#A7D344]"
+        >
+          Clear
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+// created_at is a real timestamp (unlike due_date/decision_date etc, which
+// are plain YYYY-MM-DD business dates), so it needs its own display
+// formatter and range check rather than reusing fmtDate/dueMatchesRange.
+function fmtCreatedDate(v) {
+  if (!v) return "—";
+  const dt = new Date(v);
+  if (Number.isNaN(dt.getTime())) return "—";
+  return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function createdAtMatchesRange(createdAt, from, to) {
+  if (!from && !to) return true;
+  if (!createdAt) return false;
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return false;
+  if (from && created < new Date(`${from}T00:00:00`)) return false;
+  if (to && created > new Date(`${to}T23:59:59.999`)) return false;
+  return true;
+}
+
 // ── Option-list builders for the column filter dropdowns ────────────────
 
 // Status/Priority/Risk Impact/Escalation Required are fixed known sets
@@ -630,6 +774,7 @@ const HEADER_COL_BG = {
   escalation: "bg-red-100/45 dark:bg-red-950/30",
   objective: "bg-fuchsia-100/45 dark:bg-fuchsia-950/25",
   note: "bg-slate-100/70 dark:bg-slate-800/50",
+  created: "bg-cyan-100/45 dark:bg-cyan-950/25",
   actions: "bg-slate-200/60 dark:bg-slate-800",
 };
 
@@ -647,6 +792,7 @@ function bodyColBg(col, rowIdx) {
     escalation: alt ? "bg-red-50/85 dark:bg-red-950/18" : "bg-red-50/45 dark:bg-red-950/10",
     objective: alt ? "bg-fuchsia-50/80 dark:bg-fuchsia-950/15" : "bg-fuchsia-50/40 dark:bg-fuchsia-950/8",
     note: alt ? "bg-slate-100 dark:bg-slate-800/55" : "bg-slate-50 dark:bg-slate-800/35",
+    created: alt ? "bg-cyan-50/90 dark:bg-cyan-950/20" : "bg-cyan-50/50 dark:bg-cyan-950/10",
     actions: alt ? "bg-[#eef3fa] dark:bg-[#1e2433]" : "bg-white dark:bg-[#141414]",
   };
   return `${map[col] || (alt ? "bg-[#eef3fa]" : "bg-white")} group-hover:brightness-[0.98] dark:group-hover:brightness-110`;
@@ -679,9 +825,14 @@ function StatPill({ label, value, accent }) {
   );
 }
 
+// No longer independently rounded/shadowed/margined — this now sits as
+// the top strip of the unified white <section> card each view below wraps
+// itself in (header → filter band → table all one card, same shape as the
+// Master Calendar's <section> in SltTrackerV2.jsx), instead of floating as
+// its own gradient banner above a separately-boxed table.
 function BoardHeader({ title, subtitle, pills, right }) {
   return (
-    <div className="relative mb-5 overflow-hidden rounded-xl border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] text-white shadow-lg">
+    <div className="relative border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] text-white">
       <div className="relative flex flex-col gap-3 px-4 py-4 sm:px-5 sm:py-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl" style={{ color: "#ffffff" }}>
@@ -809,8 +960,9 @@ function BoardSummaryView({ items }) {
   }, [attention, ownerFilter, statusFilter, priorityFilter, riskFilter, escalationFilter, objectiveFilter]);
 
   return (
-    <div>
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg ring-1 ring-slate-200/80 dark:border-slate-700 dark:bg-[#141414] dark:ring-white/10">
       <BoardHeader title="Board Summary" pills={kpiPills(kpis)} />
+      <div className="p-3 sm:p-4">
       <h4 className="mb-3 text-sm font-bold text-slate-800 dark:text-slate-100">Items Requiring Executive Attention</h4>
       {attention.length === 0 ? (
         <div className="rounded-lg border border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
@@ -896,7 +1048,8 @@ function BoardSummaryView({ items }) {
           </table>
         </div>
       )}
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -938,9 +1091,10 @@ function ExecutiveDashboardView({ items }) {
   const byObjective = useMemo(() => computeObjectiveBreakdown(items), [items]);
 
   return (
-    <div>
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg ring-1 ring-slate-200/80 dark:border-slate-700 dark:bg-[#141414] dark:ring-white/10">
       <BoardHeader title="Executive Dashboard" pills={kpiPills(kpis)} />
 
+      <div className="p-3 sm:p-4">
       <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <BarChart title="Open Actions by Owner" rows={byOwner} valueKey="open" labelKey="owner" />
         <BarChart title="Open Items by Strategic Objective" rows={byObjective} valueKey="open" labelKey="objective" />
@@ -1021,7 +1175,8 @@ function ExecutiveDashboardView({ items }) {
           </tbody>
         </table>
       </div>
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -1029,7 +1184,16 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
   const [modal, setModal] = useState(null); // null | { mode: "add" } | { mode: "edit", item }
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [archiving, setArchiving] = useState(false);
-  const [idSortDir, setIdSortDir] = useState("asc");
+  // Newest-created first by default (display_id/id is assigned at
+  // creation, so higher id = more recently added) — the ID column header
+  // still toggles this (see its "Newest first — click for oldest first"
+  // tooltip), this just changes which order it starts in.
+  const [idSortDir, setIdSortDir] = useState("desc");
+  // Row click → read-only "view details" popup (see ActionItemViewModal).
+  // Edit from inside that popup is only offered while looking at the live
+  // list — archived items open with canEdit=false below, same as their
+  // row's own Edit button being swapped out for Restore.
+  const [viewItem, setViewItem] = useState(null);
 
   // Column filter state — one per filterable column, same shape as
   // ItTicketsMonitorTable.jsx's filters.
@@ -1041,6 +1205,7 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
   const [priorityFilter, setPriorityFilter] = useState(() => new Set());
   const [riskFilter, setRiskFilter] = useState(() => new Set());
   const [escalationFilter, setEscalationFilter] = useState(() => new Set());
+  const [createdRange, setCreatedRange] = useState({ from: "", to: "" });
 
   // "Show archived" toggle — scoped to this sub-tab only (Board Summary and
   // Executive Dashboard are KPI rollups that only make sense over the live,
@@ -1091,6 +1256,7 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
     priorityFilter.size > 0,
     riskFilter.size > 0,
     escalationFilter.size > 0,
+    createdRange.from !== "" || createdRange.to !== "",
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
@@ -1102,6 +1268,7 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
     setPriorityFilter(new Set());
     setRiskFilter(new Set());
     setEscalationFilter(new Set());
+    setCreatedRange({ from: "", to: "" });
   };
 
   const filtered = useMemo(() => {
@@ -1114,11 +1281,12 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
       if (priorityFilter.size > 0 && !priorityFilter.has(i.priority)) return false;
       if (riskFilter.size > 0 && !riskFilter.has(i.risk_impact)) return false;
       if (escalationFilter.size > 0 && !escalationFilter.has(i.escalation_required)) return false;
+      if (!createdAtMatchesRange(i.created_at, createdRange.from, createdRange.to)) return false;
       return true;
     });
     list = [...list].sort((a, b) => (idSortDir === "asc" ? a.id - b.id : b.id - a.id));
     return list;
-  }, [baseItems, itemQuery, categoryFilter, ownerFilter, dueFilter, statusFilter, priorityFilter, riskFilter, escalationFilter, idSortDir]);
+  }, [baseItems, itemQuery, categoryFilter, ownerFilter, dueFilter, statusFilter, priorityFilter, riskFilter, escalationFilter, createdRange, idSortDir]);
 
   const handleCreate = async (values) => {
     await api.post("/cfo/slt/v2/action-items", values);
@@ -1160,6 +1328,11 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
 
   return (
     <div>
+      {/* One unified white card (header → filter band → table), same shape
+          as the Master Calendar's <section> in SltTrackerV2.jsx, instead of
+          a floating gradient banner sitting above a separately-boxed
+          table. */}
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg ring-1 ring-slate-200/80 dark:border-slate-700 dark:bg-[#141414] dark:ring-white/10">
       <BoardHeader
         title={showArchived ? "Action Register — Archived" : "Action Register"}
         subtitle={`${baseItems.length} item${baseItems.length === 1 ? "" : "s"}`}
@@ -1175,32 +1348,47 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
               </GhostButton>
             ) : null}
             {canEdit && !showArchived ? <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Action Item</PrimaryButton> : null}
+            {/* Exports exactly `filtered` — whatever the current
+                search/column filters/archived toggle have narrowed the
+                list down to. variant="onBlue" so it reads correctly
+                against the header's gradient instead of the light-mode
+                border/text colors it uses elsewhere. */}
+            <ExportMenu
+              columns={ACTION_EXPORT_COLUMNS}
+              rows={filtered}
+              filenameBase={showArchived ? "action-register-archived" : "action-register"}
+              title={showArchived ? "Action Register — Archived" : "Action Register"}
+              variant="onBlue"
+            />
           </div>
         }
       />
 
-      {activeFilterCount > 0 ? (
-        <div className="mb-4 flex items-center justify-end gap-2 text-xs">
-          <span className="text-slate-500 dark:text-slate-400">
-            {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active
-          </span>
-          <button
-            type="button"
-            onClick={clearAllFilters}
-            className="font-semibold text-[#0B3EAF] underline decoration-[#0B3EAF]/40 underline-offset-2 hover:decoration-[#0B3EAF] dark:text-[#A7D344] dark:decoration-[#A7D344]/40"
-          >
-            Clear all
-          </button>
-        </div>
-      ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-3 text-xs dark:border-slate-700 dark:bg-slate-900/40 sm:px-5">
+        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{showArchived ? "Archived Action Items" : "Action Register"}</h4>
+        {activeFilterCount > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 dark:text-slate-400">
+              {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active
+            </span>
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="font-semibold text-[#0B3EAF] underline decoration-[#0B3EAF]/40 underline-offset-2 hover:decoration-[#0B3EAF] dark:text-[#A7D344] dark:decoration-[#A7D344]/40"
+            >
+              Clear all
+            </button>
+          </div>
+        ) : null}
+      </div>
 
+      <div className="p-3 sm:p-4">
       {(showArchived ? archivedError : error) ? (
         <div className="mb-3 rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
           {showArchived ? archivedError : error}
         </div>
       ) : null}
 
-      <h4 className="mb-2 text-sm font-bold text-slate-800 dark:text-slate-100">{showArchived ? "Archived Action Items" : "Action Register"}</h4>
       {(showArchived ? archivedLoading : loading) ? (
         <p className="text-sm text-slate-400">Loading…</p>
       ) : baseItems.length === 0 ? (
@@ -1208,8 +1396,7 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
           {showArchived ? "No archived action items." : `No action items yet${canEdit ? " — click \"Add Action Item\" to create the first one." : "."}`}
         </div>
       ) : (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-600/50">
-          <table className="w-full table-fixed border-collapse text-left text-xs">
+        <table className="w-full table-fixed border-collapse border border-slate-200 text-left text-xs dark:border-slate-600/50">
             <thead className="border-b-2 border-slate-300 dark:border-slate-600">
               <tr>
                 <th className={thClass("id", "w-[6%]")}>
@@ -1231,12 +1418,12 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
                     </svg>
                   </button>
                 </th>
-                <th className={thClass("item", "w-[20%]")}>
+                <th className={thClass("item", "w-[17%]")}>
                   <ColumnFilterHeader label="Item" active={itemQuery.trim() !== ""}>
                     <TextFilterContent value={itemQuery} onChange={setItemQuery} placeholder="Contains…" />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("category", "w-[10%]")}>
+                <th className={thClass("category", "w-[9%]")}>
                   <ColumnFilterHeader label="Category" active={categoryFilter.size > 0}>
                     <CheckboxFilterContent options={categoryOptions} selected={categoryFilter} onChange={setCategoryFilter} searchable />
                   </ColumnFilterHeader>
@@ -1246,29 +1433,37 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
                     <CheckboxFilterContent options={ownerOptions} selected={ownerFilter} onChange={setOwnerFilter} searchable />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("due", "w-[10%]")}>
+                <th className={thClass("due", "w-[9%]")}>
                   <ColumnFilterHeader label="Due Date" active={dueFilter !== "all"}>
                     <RadioFilterContent name="action-register-due" options={DUE_RANGE_OPTIONS} value={dueFilter} onChange={setDueFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("status", "w-[11%]")}>
+                <th className={thClass("status", "w-[10%]")}>
                   <ColumnFilterHeader label="Status" active={statusFilter.size > 0}>
                     <CheckboxFilterContent options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("priority", "w-[9%]")}>
+                <th className={thClass("priority", "w-[8%]")}>
                   <ColumnFilterHeader label="Priority" active={priorityFilter.size > 0}>
                     <CheckboxFilterContent options={priorityOptions} selected={priorityFilter} onChange={setPriorityFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("risk", "w-[8%]")}>
+                <th className={thClass("risk", "w-[7%]")}>
                   <ColumnFilterHeader label="Risk" active={riskFilter.size > 0}>
                     <CheckboxFilterContent options={riskOptions} selected={riskFilter} onChange={setRiskFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("escalation", "w-[9%]")}>
+                <th className={thClass("escalation", "w-[8%]")}>
                   <ColumnFilterHeader label="Escalation" active={escalationFilter.size > 0}>
                     <CheckboxFilterContent options={escalationOptions} selected={escalationFilter} onChange={setEscalationFilter} />
+                  </ColumnFilterHeader>
+                </th>
+                <th className={thClass("created", "w-[9%]")}>
+                  {/* align="right" — this column sits near the right edge of
+                      the table, so the default left-anchored 240px-wide
+                      popover would run off the edge of the screen. */}
+                  <ColumnFilterHeader label="Created" align="right" active={createdRange.from !== "" || createdRange.to !== ""}>
+                    <DateRangeFilterContent from={createdRange.from} to={createdRange.to} onChange={setCreatedRange} />
                   </ColumnFilterHeader>
                 </th>
                 {canEdit ? <th className={thClass("actions", "w-[8%]", true)}>{showArchived ? "Restore" : "Actions"}</th> : null}
@@ -1277,13 +1472,17 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
             <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit ? 9 : 8} className="px-6 py-8 text-center text-sm text-slate-400">
+                  <td colSpan={canEdit ? 10 : 9} className="px-6 py-8 text-center text-sm text-slate-400">
                     Nothing matches this filter.
                   </td>
                 </tr>
               ) : (
                 filtered.map((i, rowIdx) => (
-                  <tr key={i.id} className="group">
+                  <tr
+                    key={i.id}
+                    className="group cursor-pointer transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                    onClick={() => setViewItem(i)}
+                  >
                     <td className={tdClass("id", rowIdx, "font-mono text-slate-500 dark:text-slate-400")}>{i.display_id}</td>
                     <td className={tdClass("item", rowIdx, "font-semibold text-slate-900 dark:text-slate-100")}>
                       {i.item}
@@ -1306,8 +1505,9 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
                     <td className={tdClass("escalation", rowIdx)}>
                       <EscalationBadge value={i.escalation_required} />
                     </td>
+                    <td className={tdClass("created", rowIdx, "text-slate-600 dark:text-slate-300")}>{fmtCreatedDate(i.created_at)}</td>
                     {canEdit ? (
-                      <td className={tdClass("actions", rowIdx, "", true)}>
+                      <td className={tdClass("actions", rowIdx, "", true)} onClick={(e) => e.stopPropagation()}>
                         {showArchived ? (
                           <button
                             type="button"
@@ -1342,8 +1542,9 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
               )}
             </tbody>
           </table>
-        </div>
       )}
+      </div>
+      </section>
 
       {modal ? (
         <ActionItemFormModal
@@ -1368,6 +1569,18 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
           busy={archiving}
           onConfirm={confirmArchive}
           onCancel={() => setArchiveTarget(null)}
+        />
+      ) : null}
+
+      {viewItem ? (
+        <ActionItemViewModal
+          item={viewItem}
+          canEdit={canEdit && !showArchived}
+          onEdit={() => {
+            setModal({ mode: "edit", item: viewItem });
+            setViewItem(null);
+          }}
+          onClose={() => setViewItem(null)}
         />
       ) : null}
     </div>
@@ -1397,8 +1610,13 @@ export default function SltActionTrackerBoard({ canEdit }) {
     load();
   }, [load]);
 
+  // "card p-4 sm:p-6" — the same page-level white panel wrapper
+  // SltTrackerV2's default export uses behind its own SubTabBar + content,
+  // so the sub-tab row above Action Register/Board Summary/Executive
+  // Dashboard sits on a white background like Master Calendar's tabs do,
+  // instead of directly on the page's bare background.
   return (
-    <div>
+    <div className="card p-4 sm:p-6">
       <SubTabBar tabs={SUB_TABS} active={subTab} onChange={setSubTab} />
       {loading && subTab !== "action_register" ? (
         <div className="flex items-center justify-center gap-3 px-6 py-16">

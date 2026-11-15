@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { isAdministrator } from "../utils/adminAccess";
 import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
+import ExportMenu from "../components/ExportMenu";
 
 /**
  * SLT Tracker — now just Master Calendar.
@@ -176,6 +177,24 @@ function fmtEventDate(raw, isTextRange) {
   }
   return s;
 }
+
+// Columns for the CSV/PDF/PowerPoint/PNG formats on the Export button —
+// same column order/labels as the desktop table (CalendarEventTableRow),
+// "Created by" included. The Excel format is deliberately NOT built from
+// this list: it stays wired to the existing backend
+// /cfo/slt/v2/calendar/export endpoint (see handleExport and the
+// ExportMenu `overrides` prop below), because that's the exact file
+// format "Import from Excel" expects back — a client-built .xlsx from
+// just these display columns would not round-trip.
+const CALENDAR_EXPORT_COLUMNS = [
+  { key: "event_date", label: "Event Date", format: (row) => fmtEventDate(row.event_date, row.is_text_date_range) },
+  { key: "event_title", label: "Event" },
+  { key: "category", label: "Category" },
+  { key: "executives", label: "Executive(s)" },
+  { key: "owner_lead", label: "Owner / Lead" },
+  { key: "executive_action_required", label: "Executive Action Required" },
+  { key: "created_by_name", label: "Created by" },
+];
 
 // Same visual language as the IT Ticket Board (ItTicketsMonitorTable.jsx):
 // colored pill badges, a gradient stat header, and expandable row-cards
@@ -1782,15 +1801,20 @@ function MasterCalendarView({ canEdit, isAdmin, deepLinkEventId }) {
               <div className="flex flex-wrap items-center gap-2">
                 <StatPill label="shown" value={eventsInRange.length} accent="bg-white/15 ring-1 ring-white/20" />
                 <StatPill label="total" value={events.length} accent="bg-[#A7D344] text-[#0a0a0a]" />
-                <button
-                  type="button"
-                  onClick={handleExport}
-                  disabled={exporting}
-                  title="Download this calendar as an Excel file — handy if the portal goes down and the team needs to keep working from a spreadsheet."
-                  className="rounded-full border border-white/40 bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 disabled:opacity-60"
-                >
-                  {exporting ? "Exporting…" : "Export to Excel"}
-                </button>
+                {/* Excel stays wired to handleExport (the backend's
+                    generated .xlsx) via the `overrides` prop, since that's
+                    the exact file "Import from Excel" below expects back
+                    — CSV/PDF/PowerPoint/PNG are the generic client-side
+                    export of whatever's currently shown (`eventsInRange`,
+                    same list the table/StatPill "shown" count use). */}
+                <ExportMenu
+                  columns={CALENDAR_EXPORT_COLUMNS}
+                  rows={eventsInRange}
+                  filenameBase="agc-slt-master-calendar"
+                  title="Master Calendar"
+                  variant="onBlue"
+                  overrides={{ xlsx: handleExport }}
+                />
                 {canEdit ? (
                   <>
                     <button

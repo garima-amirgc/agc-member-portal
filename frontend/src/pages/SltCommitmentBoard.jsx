@@ -4,6 +4,7 @@ import api from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import { RAG_STATUS_OPTIONS, COMPLETION_STATUS_OPTIONS, EXTENSION_APPROVER_OPTIONS, OWNER_SUGGESTIONS } from "../constants/sltCommitmentLists";
 import { computeCommitmentKpis } from "../utils/sltCommitmentAnalytics";
+import ExportMenu from "../components/ExportMenu";
 
 /**
  * SLT Tracker → "90 Day Commitments" radio choice.
@@ -78,6 +79,24 @@ function fmtDate(d) {
   }
   return String(d);
 }
+
+// Export column set — see the matching comment in SltActionTrackerBoard.jsx
+// for why this reuses COMMITMENT_FIELDS (the Add/Edit form's own field
+// list) rather than a separately hand-maintained column list. Current Due
+// and Report Cue are added on top since they're server-computed display
+// fields (see sltCommitmentAnalytics.js / the backend mapCommitment()) that
+// aren't part of the editable form but are genuinely useful in an export.
+const COMMITMENT_EXPORT_COLUMNS = [
+  { key: "display_id", label: "ID" },
+  ...COMMITMENT_FIELDS.map((f) => ({
+    key: f.key,
+    label: f.label,
+    format: f.type === "date" ? (row) => fmtDate(row[f.key]) : undefined,
+  })),
+  { key: "current_due", label: "Current Due", format: (row) => fmtDate(row.current_due) },
+  { key: "report_cue", label: "Report Cue" },
+  { key: "created_at", label: "Created", format: (row) => fmtCreatedDate(row.created_at) },
+];
 
 // ── Small shared presentational bits — see SltDecisionBoard.jsx's header
 // comment for why these are duplicated rather than imported. ──
@@ -307,6 +326,75 @@ function CommitmentFormModal({ title, initialValues, onClose, onSubmit, submitLa
   );
 }
 
+// Read-only value for one field in the "view details" popup below — see
+// the matching helper in SltActionTrackerBoard.jsx for why dates go
+// through fmtDate and an empty value reads as "—".
+function fieldDisplayValue(def, item) {
+  const v = item[def.key];
+  if (def.type === "date") return fmtDate(v);
+  if (v === null || v === undefined || String(v).trim() === "") return "—";
+  return v;
+}
+
+// Clicking a row opens this read-only view of every field, since the
+// table itself only has room for a handful of columns. "Commitment" is
+// pulled out of the grid and shown big up top; everything else follows
+// in the same two-column layout the Add/Edit form uses, plus Current Due
+// and Report Cue (server-computed, not part of the editable
+// COMMITMENT_FIELDS list — same two fields COMMITMENT_EXPORT_COLUMNS adds
+// for the same reason) and Created, just not editable.
+function CommitmentViewModal({ item, canEdit, onEdit, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-white p-4 shadow-xl dark:bg-slate-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{item.display_id}</p>
+            <h3 className="break-words text-sm font-semibold text-slate-900 dark:text-white">{item.commitment}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {COMMITMENT_FIELDS.filter((def) => def.key !== "commitment").map((def) => (
+            <div key={def.key} className={def.type === "textarea" ? "sm:col-span-2 lg:col-span-3" : ""}>
+              <p className="mb-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">{def.label}</p>
+              <p className="whitespace-pre-wrap break-words text-xs text-slate-900 dark:text-slate-100">{fieldDisplayValue(def, item)}</p>
+            </div>
+          ))}
+          <div>
+            <p className="mb-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">Current Due</p>
+            <p className="text-xs text-slate-900 dark:text-slate-100">{fmtDate(item.current_due)}</p>
+          </div>
+          <div>
+            <p className="mb-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">Report Cue</p>
+            <p className="text-xs text-slate-900 dark:text-slate-100">{item.report_cue || "—"}</p>
+          </div>
+          <div>
+            <p className="mb-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">Created</p>
+            <p className="text-xs text-slate-900 dark:text-slate-100">{fmtCreatedDate(item.created_at)}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <GhostButton onClick={onClose}>Close</GhostButton>
+          {canEdit ? <PrimaryButton onClick={onEdit}>Edit</PrimaryButton> : null}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ── Excel-style column filters — see SltDecisionBoard.jsx for the full
 // explanation; duplicated here verbatim. ──
 
@@ -357,15 +445,20 @@ function ColumnFilterHeader({ label, active, align = "left", children }) {
 
   return (
     <>
+      {/* flex w-full + flex-wrap (not inline-flex): an inline-flex button
+          sizes to its content and was overflowing past its <th> into the
+          next column on narrower columns like Created/Escalation — a
+          full-width, wrappable button lets a long label drop to a second
+          line instead, which just grows the header row's height. */}
       <button
         type="button"
         ref={btnRef}
         onClick={() => (open ? setOpen(false) : openMenu())}
-        className={`inline-flex items-center gap-1 rounded px-1 py-0.5 normal-case transition hover:bg-black/5 dark:hover:bg-white/10 ${
+        className={`flex w-full flex-wrap items-center gap-1 rounded px-1 py-0.5 text-left normal-case transition hover:bg-black/5 dark:hover:bg-white/10 ${
           active ? "text-[#0B3EAF] dark:text-[#A7D344]" : ""
         }`}
       >
-        <span className="uppercase">{label}</span>
+        <span className="break-words uppercase">{label}</span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8" fill="none" className="h-2 w-2.5 shrink-0 opacity-60" aria-hidden>
           <path d="M1 1l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -504,6 +597,57 @@ function TextFilterContent({ value, onChange, placeholder }) {
   );
 }
 
+function DateRangeFilterContent({ from, to, onChange }) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">From</label>
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => onChange({ from: e.target.value, to })}
+          className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-normal outline-none focus:border-[#0B3EAF] dark:border-slate-700 dark:bg-[#141414] dark:focus:border-[#A7D344]"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">To</label>
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => onChange({ from, to: e.target.value })}
+          className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-normal outline-none focus:border-[#0B3EAF] dark:border-slate-700 dark:bg-[#141414] dark:focus:border-[#A7D344]"
+        />
+      </div>
+      {from || to ? (
+        <button type="button" onClick={() => onChange({ from: "", to: "" })} className="text-[10px] font-semibold text-[#0B3EAF] hover:underline dark:text-[#A7D344]">
+          Clear
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+// created_at is a real timestamp (unlike the plain YYYY-MM-DD business-date
+// fields like current_due), so it needs its own formatter and its own
+// range-matching logic rather than reusing fmtDate/dateMatchesRange above,
+// which assume local-midnight YYYY-MM-DD.
+function fmtCreatedDate(v) {
+  if (!v) return "—";
+  const dt = new Date(v);
+  if (Number.isNaN(dt.getTime())) return "—";
+  return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function createdAtMatchesRange(createdAt, from, to) {
+  if (!from && !to) return true;
+  if (!createdAt) return false;
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return false;
+  if (from && created < new Date(`${from}T00:00:00`)) return false;
+  if (to && created > new Date(`${to}T23:59:59.999`)) return false;
+  return true;
+}
+
 // ── Option-list builders ──
 
 function fixedOptionsWithCounts(items, field, knownOptions) {
@@ -561,7 +705,10 @@ const HEADER_COL_BG = {
   rag: "bg-amber-100/50 dark:bg-amber-950/30",
   due: "bg-slate-200/55 dark:bg-slate-800/80",
   completion: "bg-sky-100/55 dark:bg-sky-950/35",
+  checkin30: "bg-teal-100/50 dark:bg-teal-950/30",
+  checkin60: "bg-indigo-100/50 dark:bg-indigo-950/30",
   report: "bg-red-100/45 dark:bg-red-950/30",
+  created: "bg-cyan-100/45 dark:bg-cyan-950/25",
   actions: "bg-slate-200/60 dark:bg-slate-800",
 };
 
@@ -574,7 +721,10 @@ function bodyColBg(col, rowIdx) {
     rag: alt ? "bg-amber-50/85 dark:bg-amber-950/18" : "bg-amber-50/45 dark:bg-amber-950/10",
     due: alt ? "bg-slate-100 dark:bg-slate-800/55" : "bg-slate-50 dark:bg-slate-800/35",
     completion: alt ? "bg-sky-50/95 dark:bg-sky-950/20" : "bg-sky-50/55 dark:bg-sky-950/10",
+    checkin30: alt ? "bg-teal-50/85 dark:bg-teal-950/18" : "bg-teal-50/45 dark:bg-teal-950/10",
+    checkin60: alt ? "bg-indigo-50/85 dark:bg-indigo-950/18" : "bg-indigo-50/45 dark:bg-indigo-950/10",
     report: alt ? "bg-red-50/85 dark:bg-red-950/18" : "bg-red-50/45 dark:bg-red-950/10",
+    created: alt ? "bg-cyan-50/90 dark:bg-cyan-950/20" : "bg-cyan-50/50 dark:bg-cyan-950/10",
     actions: alt ? "bg-[#eef3fa] dark:bg-[#1e2433]" : "bg-white dark:bg-[#141414]",
   };
   return `${map[col] || (alt ? "bg-[#eef3fa]" : "bg-white")} group-hover:brightness-[0.98] dark:group-hover:brightness-110`;
@@ -606,9 +756,14 @@ function StatPill({ label, value, accent }) {
   );
 }
 
+// No longer independently rounded/shadowed/margined — this now sits as
+// the top strip of the unified white <section> card SltCommitmentBoard
+// wraps itself in (header → filter band → table all one card, same shape
+// as the Master Calendar's <section> in SltTrackerV2.jsx), instead of
+// floating as its own gradient banner above a separately-boxed table.
 function BoardHeader({ title, pills, right }) {
   return (
-    <div className="relative mb-5 overflow-hidden rounded-xl border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] text-white shadow-lg">
+    <div className="relative border-b border-[#082d82]/30 bg-gradient-to-r from-[#0B3EAF] via-[#0d4bc4] to-[#1a5fd4] text-white">
       <div className="relative flex flex-col gap-3 px-4 py-4 sm:px-5 sm:py-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl" style={{ color: "#ffffff" }}>
@@ -690,13 +845,16 @@ function kpiPills(kpis) {
   return Object.keys(KPI_LABELS).map((k) => <StatPill key={k} label={KPI_LABELS[k]} value={kpis[k]} accent={KPI_PILL_ACCENTS[k]} />);
 }
 
-function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = false, onRestore, restoringId }) {
+function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = false, onRestore, restoringId, onView, onExportDataChange }) {
   const [commitmentQuery, setCommitmentQuery] = useState("");
   const [ownerFilter, setOwnerFilter] = useState(() => new Set());
   const [ragFilter, setRagFilter] = useState(() => new Set());
   const [completionFilter, setCompletionFilter] = useState(() => new Set());
   const [dueFilter, setDueFilter] = useState("all");
-  const [idSortDir, setIdSortDir] = useState("asc");
+  const [createdRange, setCreatedRange] = useState({ from: "", to: "" });
+  // Newest-created first by default — see the matching comment in
+  // SltActionTrackerBoard.jsx's ActionRegisterView.
+  const [idSortDir, setIdSortDir] = useState("desc");
 
   const ownerOptions = useMemo(() => dynamicOptionsWithCounts(items, "owner"), [items]);
   const ragOptions = useMemo(() => fixedOptionsWithCounts(items, "rag_status", RAG_STATUS_OPTIONS), [items]);
@@ -708,6 +866,7 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = fal
     ragFilter.size > 0,
     completionFilter.size > 0,
     dueFilter !== "all",
+    createdRange.from !== "" || createdRange.to !== "",
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
@@ -716,6 +875,7 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = fal
     setRagFilter(new Set());
     setCompletionFilter(new Set());
     setDueFilter("all");
+    setCreatedRange({ from: "", to: "" });
   };
 
   const filtered = useMemo(() => {
@@ -725,16 +885,35 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = fal
       if (ragFilter.size > 0 && !ragFilter.has(i.rag_status)) return false;
       if (completionFilter.size > 0 && !completionFilter.has(i.completion_status)) return false;
       if (!dateMatchesRange(i.current_due, dueFilter)) return false;
+      if (!createdAtMatchesRange(i.created_at, createdRange.from, createdRange.to)) return false;
       return true;
     });
     list = [...list].sort((a, b) => (idSortDir === "asc" ? a.id - b.id : b.id - a.id));
     return list;
-  }, [items, commitmentQuery, ownerFilter, ragFilter, completionFilter, dueFilter, idSortDir]);
+  }, [items, commitmentQuery, ownerFilter, ragFilter, completionFilter, dueFilter, createdRange, idSortDir]);
 
+  const exportFilenameBase = archivedMode ? "90-day-commitments-archived" : "90-day-commitments";
+  const exportTitle = archivedMode ? "90 Day Commitments — Archived" : "90 Day Commitments";
+
+  // The Export button itself now lives in the page-level BoardHeader (the
+  // blue bar), alongside Show Archived / + Add Commitment, not down here —
+  // but `filtered` only exists in this component, so it's reported up on
+  // every change via this callback instead. onExportDataChange is a
+  // useCallback with an empty dep array at the call site, so this effect
+  // only re-fires when the export data itself actually changes, not on
+  // every parent render.
+  useEffect(() => {
+    onExportDataChange?.({ rows: filtered, filenameBase: exportFilenameBase, title: exportTitle });
+  }, [filtered, exportFilenameBase, exportTitle, onExportDataChange]);
+
+  // Returns the rest of the page-level <section> card (the filter band +
+  // the padded table area) as a fragment — BoardHeader (the top strip) is
+  // rendered once at the page level, above this table, so this component
+  // only needs to contribute the pieces that come after it.
   return (
-    <div>
+    <>
       {activeFilterCount > 0 ? (
-        <div className="mb-4 flex items-center justify-end gap-2 text-xs">
+        <div className="flex items-center justify-end gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-2.5 text-xs dark:border-slate-700 dark:bg-slate-900/40 sm:px-5">
           <span className="text-slate-500 dark:text-slate-400">
             {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"} active
           </span>
@@ -748,13 +927,13 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = fal
         </div>
       ) : null}
 
+      <div className="p-3 sm:p-4">
       {items.length === 0 ? (
         <div className="rounded-lg border border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
           {archivedMode ? "No archived commitments." : "No 90-day commitments yet."}
         </div>
       ) : (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-600/50">
-          <table className="w-full table-fixed border-collapse text-left text-xs">
+        <table className="w-full table-fixed border-collapse border border-slate-200 text-left text-xs dark:border-slate-600/50">
             <thead className="border-b-2 border-slate-300 dark:border-slate-600">
               <tr>
                 <th className={thClass("id", "w-[7%]")}>
@@ -776,45 +955,59 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = fal
                     </svg>
                   </button>
                 </th>
-                <th className={thClass("commitment", "w-[26%]")}>
+                <th className={thClass("commitment", "w-[16%]")}>
                   <ColumnFilterHeader label="Commitment" active={commitmentQuery.trim() !== ""}>
                     <TextFilterContent value={commitmentQuery} onChange={setCommitmentQuery} placeholder="Contains…" />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("owner", "w-[11%]")}>
+                <th className={thClass("owner", "w-[8%]")}>
                   <ColumnFilterHeader label="Owner" active={ownerFilter.size > 0}>
                     <CheckboxFilterContent options={ownerOptions} selected={ownerFilter} onChange={setOwnerFilter} searchable />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("rag", "w-[15%]")}>
+                <th className={thClass("rag", "w-[10%]")}>
                   <ColumnFilterHeader label="RAG Status" active={ragFilter.size > 0}>
                     <CheckboxFilterContent options={ragOptions} selected={ragFilter} onChange={setRagFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("due", "w-[11%]")}>
+                <th className={thClass("due", "w-[8%]")}>
                   <ColumnFilterHeader label="Current Due" active={dueFilter !== "all"}>
                     <RadioFilterContent name="commitment-due" options={DUE_DATE_RANGE_OPTIONS} value={dueFilter} onChange={setDueFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("completion", "w-[10%]")}>
+                <th className={thClass("completion", "w-[7%]")}>
                   <ColumnFilterHeader label="Status" active={completionFilter.size > 0}>
                     <CheckboxFilterContent options={completionOptions} selected={completionFilter} onChange={setCompletionFilter} />
                   </ColumnFilterHeader>
                 </th>
-                <th className={thClass("report", "w-[10%]")}>Report Cue</th>
-                {canEdit ? <th className={thClass("actions", "w-[10%]", true)}>{archivedMode ? "Restore" : "Actions"}</th> : null}
+                <th className={thClass("checkin30", "w-[11%]")}>30-Day Notes</th>
+                <th className={thClass("checkin60", "w-[11%]")}>60-Day Notes</th>
+                <th className={thClass("report", "w-[7%]")}>Report Cue</th>
+                <th className={thClass("created", "w-[7%]")}>
+                  {/* align="right" — this column sits near the right edge of
+                      the table, so the default left-anchored 240px-wide
+                      popover would run off the edge of the screen. */}
+                  <ColumnFilterHeader label="Created" align="right" active={createdRange.from !== "" || createdRange.to !== ""}>
+                    <DateRangeFilterContent from={createdRange.from} to={createdRange.to} onChange={setCreatedRange} />
+                  </ColumnFilterHeader>
+                </th>
+                {canEdit ? <th className={thClass("actions", "w-[9%]", true)}>{archivedMode ? "Restore" : "Actions"}</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit ? 8 : 7} className="px-6 py-8 text-center text-sm text-slate-400">
+                  <td colSpan={canEdit ? 11 : 10} className="px-6 py-8 text-center text-sm text-slate-400">
                     Nothing matches this filter.
                   </td>
                 </tr>
               ) : (
                 filtered.map((i, rowIdx) => (
-                  <tr key={i.id} className="group">
+                  <tr
+                    key={i.id}
+                    className="group cursor-pointer transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                    onClick={() => onView(i)}
+                  >
                     <td className={tdClass("id", rowIdx, "font-mono text-slate-500 dark:text-slate-400")}>{i.display_id}</td>
                     <td className={tdClass("commitment", rowIdx, "font-semibold text-slate-900 dark:text-slate-100")}>{i.commitment}</td>
                     <td className={tdClass("owner", rowIdx, "text-slate-600 dark:text-slate-300")}>{i.owner || "—"}</td>
@@ -827,11 +1020,14 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = fal
                     <td className={tdClass("completion", rowIdx)}>
                       <CompletionBadge value={i.completion_status} />
                     </td>
+                    <td className={tdClass("checkin30", rowIdx, "text-slate-600 dark:text-slate-300")}>{i.checkin_30_notes || "—"}</td>
+                    <td className={tdClass("checkin60", rowIdx, "text-slate-600 dark:text-slate-300")}>{i.checkin_60_notes || "—"}</td>
                     <td className={tdClass("report", rowIdx)}>
                       <ReportCueBadge item={i} />
                     </td>
+                    <td className={tdClass("created", rowIdx, "text-slate-600 dark:text-slate-300")}>{fmtCreatedDate(i.created_at)}</td>
                     {canEdit ? (
-                      <td className={tdClass("actions", rowIdx, "", true)}>
+                      <td className={tdClass("actions", rowIdx, "", true)} onClick={(e) => e.stopPropagation()}>
                         {archivedMode ? (
                           <button
                             type="button"
@@ -866,9 +1062,9 @@ function CommitmentTable({ items, canEdit, onEdit, onArchive, archivedMode = fal
               )}
             </tbody>
           </table>
-        </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -888,6 +1084,17 @@ export default function SltCommitmentBoard({ canEdit }) {
   // with no way to reach it.
   const [showArchived, setShowArchived] = useState(false);
   const [restoringId, setRestoringId] = useState(null);
+  // Row click → read-only "view details" popup (see CommitmentViewModal).
+  // Edit from inside that popup is only offered while looking at the live
+  // list, same as the row's own Edit button being swapped out for Restore.
+  const [viewItem, setViewItem] = useState(null);
+
+  // Export button data — reported up from CommitmentTable (see the
+  // matching comment there). useCallback with an empty dep array keeps
+  // this handler's identity stable so CommitmentTable's effect doesn't
+  // re-fire on every render of this component.
+  const [exportData, setExportData] = useState({ rows: [], filenameBase: "90-day-commitments", title: "90 Day Commitments" });
+  const handleExportDataChange = useCallback((data) => setExportData(data), []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -946,8 +1153,17 @@ export default function SltCommitmentBoard({ canEdit }) {
     }
   };
 
+  // "card p-4 sm:p-6" — the same page-level white panel wrapper
+  // SltTrackerV2's default export uses behind its own SubTabBar + content,
+  // for visual consistency with the other SLT boards (this one has no
+  // sub-tabs of its own, just the single commitments table below).
   return (
-    <div>
+    <div className="card p-4 sm:p-6">
+      {/* One unified white card (header → filter band → table), same shape
+          as the Master Calendar's <section> in SltTrackerV2.jsx, instead of
+          a floating gradient banner sitting above a separately-boxed
+          table. */}
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg ring-1 ring-slate-200/80 dark:border-slate-700 dark:bg-[#141414] dark:ring-white/10">
       <BoardHeader
         title={showArchived ? "90 Day Commitments — Archived" : "90 Day Commitments"}
         pills={[<StatPill key="total" label="Total" value={kpis.total} accent="bg-white/15 ring-1 ring-white/20" />, ...kpiPills(kpis)]}
@@ -962,20 +1178,27 @@ export default function SltCommitmentBoard({ canEdit }) {
               </GhostButton>
             ) : null}
             {canEdit && !showArchived ? <PrimaryButton onClick={() => setModal({ mode: "add" })}>+ Add Commitment</PrimaryButton> : null}
+            {/* Exports exactly `filtered` from CommitmentTable — see
+                handleExportDataChange and the matching comment there. */}
+            <ExportMenu columns={COMMITMENT_EXPORT_COLUMNS} rows={exportData.rows} filenameBase={exportData.filenameBase} title={exportData.title} variant="onBlue" />
           </div>
         }
       />
 
       {loading ? (
-        <div className="flex items-center justify-center gap-3 px-6 py-16">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
-          <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading…</p>
+        <div className="p-3 sm:p-4">
+          <div className="flex items-center justify-center gap-3 px-6 py-16">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] dark:bg-[#A7D344]" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#A7D344] [animation-delay:150ms]" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#0B3EAF] [animation-delay:300ms] dark:bg-[#A7D344]" />
+            <p className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">Loading…</p>
+          </div>
         </div>
       ) : error ? (
-        <div className="rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-          {error}
+        <div className="p-3 sm:p-4">
+          <div className="rounded border border-red-200 bg-red-50 p-2.5 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+            {error}
+          </div>
         </div>
       ) : (
         <CommitmentTable
@@ -986,8 +1209,11 @@ export default function SltCommitmentBoard({ canEdit }) {
           archivedMode={showArchived}
           onRestore={handleRestore}
           restoringId={restoringId}
+          onView={(item) => setViewItem(item)}
+          onExportDataChange={handleExportDataChange}
         />
       )}
+      </section>
 
       {modal ? (
         <CommitmentFormModal
@@ -1007,6 +1233,18 @@ export default function SltCommitmentBoard({ canEdit }) {
           busy={archiving}
           onConfirm={confirmArchive}
           onCancel={() => setArchiveTarget(null)}
+        />
+      ) : null}
+
+      {viewItem ? (
+        <CommitmentViewModal
+          item={viewItem}
+          canEdit={canEdit && !showArchived}
+          onEdit={() => {
+            setModal({ mode: "edit", item: viewItem });
+            setViewItem(null);
+          }}
+          onClose={() => setViewItem(null)}
         />
       ) : null}
     </div>
