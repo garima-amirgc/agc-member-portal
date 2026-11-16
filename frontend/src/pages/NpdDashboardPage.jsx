@@ -45,13 +45,14 @@ function ScorecardKpis({ requests }) {
 
 // "Needs my decision" — mirrors the IT Ticket "assigned to me" pattern.
 // Only renders for people who actually have something pending; nobody else
-// ever sees this section.
-function PendingDecisionsPanel({ pending }) {
+// ever sees this section. Reused for both Gate 1 SLT review and Gate 2
+// sign-off — same shape of list, different title and endpoint behind it.
+function PendingDecisionsPanel({ pending, title }) {
   if (pending.length === 0) return null;
   return (
     <section className="card border-2 border-[#0B3EAF]/30 p-4 sm:p-6 dark:border-[#A7D344]/30">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-[#000000] dark:text-white">Needs my decision</h2>
+        <h2 className="text-base font-semibold text-[#000000] dark:text-white">{title}</h2>
         <span className="rounded-full bg-[#E02B20] px-2.5 py-0.5 text-xs font-bold text-white">{pending.length}</span>
       </div>
       <ul className="space-y-2">
@@ -82,6 +83,7 @@ export default function NpdDashboardPage() {
 
   const [requests, setRequests] = useState([]);
   const [pending, setPending] = useState([]);
+  const [pendingGate2, setPendingGate2] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
@@ -107,15 +109,26 @@ export default function NpdDashboardPage() {
     }
   };
 
+  const loadPendingGate2 = async () => {
+    try {
+      const { data } = await api.get("/npd/gate2/my-pending-decisions");
+      setPendingGate2(Array.isArray(data) ? data : []);
+    } catch {
+      setPendingGate2([]);
+    }
+  };
+
   useEffect(() => {
     void load();
     void loadPending();
+    void loadPendingGate2();
   }, []);
 
   useEffect(() => {
     const onRefresh = () => {
       void load();
       void loadPending();
+      void loadPendingGate2();
     };
     window.addEventListener("agc-npd-changed", onRefresh);
     return () => window.removeEventListener("agc-npd-changed", onRefresh);
@@ -149,6 +162,13 @@ export default function NpdDashboardPage() {
               Manage access
             </Link>
           ) : null}
+          {/* No isAdmin gate here on purpose — anyone with general NPD
+              access can view and edit the Gate 1 scoring rules, per explicit
+              request ("who so ever are given edit access they should be
+              able to edit those details too"). */}
+          <Link to="/npd/scoring-rules" className="btn-outline">
+            Scoring Rules
+          </Link>
           <Link to="/npd/new" className="btn-primary">
             + New Request
           </Link>
@@ -161,7 +181,9 @@ export default function NpdDashboardPage() {
         </div>
       ) : null}
 
-      <PendingDecisionsPanel pending={pending} />
+      <PendingDecisionsPanel pending={pending} title="Needs my decision" />
+
+      <PendingDecisionsPanel pending={pendingGate2} title="Needs my Gate 2 decision" />
 
       <ScorecardKpis requests={requests} />
 

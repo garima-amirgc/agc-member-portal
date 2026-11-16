@@ -65,6 +65,7 @@ const NpdDashboardPage = lazy(() => import("./pages/NpdDashboardPage"));
 const NpdNewRequestPage = lazy(() => import("./pages/NpdNewRequestPage"));
 const NpdRequestDetailPage = lazy(() => import("./pages/NpdRequestDetailPage"));
 const NpdAdminPage = lazy(() => import("./pages/NpdAdminPage"));
+const NpdScoringRulesPage = lazy(() => import("./pages/NpdScoringRulesPage"));
 const SharePointPage = lazy(() => import("./pages/SharePointPage"));
 const CfoReportsPage = lazy(() => import("./pages/CfoReportsPage"));
 const IncidentTrackerPage = lazy(() => import("./pages/IncidentTrackerPage"));
@@ -191,6 +192,17 @@ export default function App() {
           element={
             <ProtectedRoute adminGrant={ADMIN_GRANT_KEYS.NPD}>
               <NpdAdminPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="npd/scoring-rules"
+          element={
+            // General NPD access, NOT adminGrant — matching the explicit
+            // request that whoever has edit access to this module (not
+            // just admins) can view and change the Gate 1 scoring rules.
+            <ProtectedRoute npdAccess>
+              <NpdScoringRulesPage />
             </ProtectedRoute>
           }
         />

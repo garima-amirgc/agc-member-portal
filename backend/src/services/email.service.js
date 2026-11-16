@@ -1208,6 +1208,136 @@ async function sendSltDecisionEmail({
   return sendMail({ to, subject, text, html });
 }
 
+/**
+ * Gate 2 counterpart of sendSltReviewRequestedEmail above. Sent per approver
+ * when a request is submitted for Gate 2 sign-off (npdGate2.service.js's
+ * submitForGate2Review), same fire-and-forget pattern. Gate 2 uses a richer
+ * decision vocabulary (Approve / Conditional Approval / Needs Rework / Hold
+ * / Reject — see NPD_GATE2_DECISION_OPTIONS in the frontend), so the wording
+ * here says "sign-off" rather than "review" to match the product's own UI.
+ */
+async function sendGate2ReviewRequestedEmail({
+  to,
+  recipientName,
+  requesterName,
+  requestNumber,
+  customerName,
+  productName,
+  requestId,
+}) {
+  if (!to) return { skipped: true };
+
+  const base = String(process.env.APP_BASE_URL || process.env.FRONTEND_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  const requestUrl = `${base}/npd/requests/${encodeURIComponent(requestId)}`;
+
+  const subject = `Gate 2 sign-off needed: ${requestNumber} — ${productName}`;
+  const text = [
+    `Hello${recipientName ? ` ${recipientName}` : ""},`,
+    "",
+    `${requesterName || "Someone"} sent a New Product Development Gate 2 action tracker to you for sign-off — all of its tasks are now Completed.`,
+    "",
+    `Request: ${requestNumber} — ${productName}`,
+    `Customer: ${customerName || "—"}`,
+    "",
+    "Any one of the people this was sent to recording a decision settles it for everyone.",
+    "",
+    `Review it: ${requestUrl}`,
+    "",
+    `This message was sent by ${APP_MAIL_BRAND}.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const bodyHtml = `
+  <p style="margin:0 0 12px 0;font-size:18px;font-weight:600;color:#0f172a;">Gate 2 sign-off needed</p>
+  <p style="margin:0 0 16px 0;">Hello${recipientName ? ` ${escapeHtml(recipientName)}` : ""},</p>
+  <p style="margin:0 0 16px 0;"><strong>${escapeHtml(requesterName || "Someone")}</strong> sent a New Product Development Gate 2 action tracker to you for sign-off — all of its tasks are now Completed.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f8fafc;border-radius:10px;padding:16px 20px;border:1px solid #e2e8f0;margin-bottom:20px;">
+    <tr><td style="padding:5px 0;font-size:13px;color:#64748b;width:160px;vertical-align:top;">Request</td><td style="padding:5px 0;font-size:13px;color:#0f172a;font-weight:600;">${escapeHtml(requestNumber)} — ${escapeHtml(productName)}</td></tr>
+    <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Customer</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(customerName || "—")}</td></tr>
+  </table>
+  <p style="margin:0 0 16px 0;font-size:13px;color:#475569;">Any one of the people this was sent to recording a decision settles it for everyone — this isn't a unanimous vote.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:8px;">
+    <tr><td align="center">
+      <a href="${escapeHtml(requestUrl)}" style="display:inline-block;padding:12px 28px;background:#0B3EAF;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Review request →</a>
+    </td></tr>
+  </table>`;
+
+  const html = emailShell({
+    title: subject,
+    preheader: `${requesterName || "Someone"} sent ${requestNumber} for your Gate 2 sign-off`,
+    bodyHtml,
+  });
+
+  return sendMail({ to, subject, text, html });
+}
+
+/**
+ * Sent to the person who submitted a Gate 2 request once any one of its
+ * approvers records a decision — closes the loop started by
+ * sendGate2ReviewRequestedEmail above. Fired from npdGate2.service.js's
+ * recordGate2Decision, same fire-and-forget pattern.
+ */
+async function sendGate2DecisionEmail({
+  to,
+  recipientName,
+  decidedByName,
+  requestNumber,
+  customerName,
+  productName,
+  decisionLabel,
+  requestId,
+}) {
+  if (!to) return { skipped: true };
+
+  const base = String(process.env.APP_BASE_URL || process.env.FRONTEND_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  const requestUrl = `${base}/npd/requests/${encodeURIComponent(requestId)}`;
+
+  const subject = `Gate 2 decision on ${requestNumber}: ${decisionLabel}`;
+  const text = [
+    `Hello${recipientName ? ` ${recipientName}` : ""},`,
+    "",
+    `${decidedByName || "An approver"} recorded a Gate 2 decision on your New Product Development request.`,
+    "",
+    `Request: ${requestNumber} — ${productName}`,
+    `Customer: ${customerName || "—"}`,
+    `Decision: ${decisionLabel}`,
+    "",
+    `View it: ${requestUrl}`,
+    "",
+    `This message was sent by ${APP_MAIL_BRAND}.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const bodyHtml = `
+  <p style="margin:0 0 12px 0;font-size:18px;font-weight:600;color:#0f172a;">Gate 2 decision recorded</p>
+  <p style="margin:0 0 16px 0;">Hello${recipientName ? ` ${escapeHtml(recipientName)}` : ""},</p>
+  <p style="margin:0 0 16px 0;"><strong>${escapeHtml(decidedByName || "An approver")}</strong> recorded a Gate 2 decision on your New Product Development request.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f8fafc;border-radius:10px;padding:16px 20px;border:1px solid #e2e8f0;margin-bottom:20px;">
+    <tr><td style="padding:5px 0;font-size:13px;color:#64748b;width:160px;vertical-align:top;">Request</td><td style="padding:5px 0;font-size:13px;color:#0f172a;font-weight:600;">${escapeHtml(requestNumber)} — ${escapeHtml(productName)}</td></tr>
+    <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Customer</td><td style="padding:5px 0;font-size:13px;color:#0f172a;">${escapeHtml(customerName || "—")}</td></tr>
+    <tr><td style="padding:5px 0;font-size:13px;color:#64748b;vertical-align:top;">Decision</td><td style="padding:5px 0;font-size:13px;color:#0f172a;font-weight:600;">${escapeHtml(decisionLabel)}</td></tr>
+  </table>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:8px;">
+    <tr><td align="center">
+      <a href="${escapeHtml(requestUrl)}" style="display:inline-block;padding:12px 28px;background:#0B3EAF;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">View request →</a>
+    </td></tr>
+  </table>`;
+
+  const html = emailShell({
+    title: subject,
+    preheader: `${decidedByName || "An approver"} — ${decisionLabel} on ${requestNumber}`,
+    bodyHtml,
+  });
+
+  return sendMail({ to, subject, text, html });
+}
+
 module.exports = {
   EMAIL_TEMPLATE_VERSION,
   isEmailConfigured,
@@ -1232,4 +1362,6 @@ module.exports = {
   sendCalendarDigestEmail,
   sendSltReviewRequestedEmail,
   sendSltDecisionEmail,
+  sendGate2ReviewRequestedEmail,
+  sendGate2DecisionEmail,
 };

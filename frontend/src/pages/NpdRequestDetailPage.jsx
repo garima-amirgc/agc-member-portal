@@ -5,13 +5,16 @@ import { PAGE_SHELL } from "../constants/pageLayout";
 import api, { postNpdAttachment } from "../services/api";
 import { friendlyErrorMessage } from "../services/friendlyError";
 import NpdScorecardForm, { npdRequestToForm } from "../components/npd/NpdScorecardForm";
+import NpdGate2Panel from "../components/npd/NpdGate2Panel";
 import { npdPriorityBadgeClass } from "../utils/npdScoring";
+import { npdGate2DecisionBadge } from "../constants/npd";
 import { useAuth } from "../context/AuthContext";
 
 const FIELD = "rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900";
 
 const TABS = [
   { key: "overview", label: "Overview" },
+  { key: "gate2", label: "Gate 2" },
   { key: "documents", label: "Documents" },
   { key: "comments", label: "Comments" },
   { key: "activity", label: "Activity History" },
@@ -99,6 +102,12 @@ export default function NpdRequestDetailPage() {
               {request.priority_tier} ({request.weighted_score})
             </span>
           ) : null}
+          {request.review_status === "approved"
+            ? (() => {
+                const [label, cls] = npdGate2DecisionBadge(request.gate2_status);
+                return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${cls}`}>{label}</span>;
+              })()
+            : null}
           <button
             type="button"
             onClick={deleteRequest}
@@ -152,6 +161,7 @@ export default function NpdRequestDetailPage() {
       </div>
 
       {tab === "overview" ? <OverviewTab request={request} onUpdated={setRequest} /> : null}
+      {tab === "gate2" ? <NpdGate2Panel requestId={request.id} onRequestChanged={setRequest} /> : null}
       {tab === "documents" ? <DocumentsTab request={request} onUpdated={setRequest} /> : null}
       {tab === "comments" ? <CommentsTab request={request} onUpdated={setRequest} /> : null}
       {tab === "activity" ? <ActivityTab request={request} /> : null}

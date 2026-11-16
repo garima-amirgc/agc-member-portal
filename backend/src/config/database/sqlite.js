@@ -806,6 +806,18 @@ async function initDb() {
   } catch {
   }
 
+  // 90 Day Commitments delegated-edit access — same mechanism as Master
+  // Calendar's calendar_edit_delegates just above, but a SEPARATE column/
+  // list: being delegated on someone's calendar does not imply being
+  // delegated on their commitments, or vice versa — an admin grants each
+  // independently on the Manage Users screen. See adminGrants.js's
+  // parseCommitmentEditDelegatesColumn/sanitizeCommitmentEditDelegatesPayload
+  // and cfo.routes.js's canEditCommitment().
+  try {
+    rawDb.exec("ALTER TABLE users ADD COLUMN commitment_edit_delegates TEXT");
+  } catch {
+  }
+
   try {
     rawDb.exec(`
       CREATE TABLE IF NOT EXISTS employee_of_month (
@@ -1930,6 +1942,121 @@ async function initDb() {
     console.log("[sqlite] npd_request_approvers: OK");
   } catch (e) { console.error("[sqlite] npd_request_approvers table:", e.message); }
 
+  // Gate 1 scoring rules (2026-11-15) — see the matching migration (same
+  // name, same rationale) in config/database/postgres.js for the full
+  // explanation of why this table is append-only and why NULL on
+  // npd_requests.scoring_config_version_id needs no backfill.
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_scoring_config_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        config_json TEXT NOT NULL,
+        note TEXT,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+    console.log("[sqlite] npd_scoring_config_versions: OK");
+  } catch (e) { console.error("[sqlite] npd_scoring_config_versions table:", e.message); }
+  try {
+    rawDb.exec("ALTER TABLE npd_requests ADD COLUMN scoring_config_version_id INTEGER REFERENCES npd_scoring_config_versions(id)");
+  } catch {}
+
+  // Gate 2 — Launch readiness checklist (2026-11-15). See the matching
+  // migration (same names, same rationale) in config/database/postgres.js,
+  // and the big design comment at the top of
+  // backend/src/services/npdGate2.service.js.
+  try {
+    rawDb.exec(
+      "ALTER TABLE npd_requests ADD COLUMN gate2_status TEXT CHECK(gate2_status IS NULL OR gate2_status IN ('pending_review','approved','conditional_approval','rework','hold','rejected'))"
+    );
+  } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN gate2_submitted_for_review_at TEXT"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN gate2_submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN gate2_decision_by INTEGER REFERENCES users(id) ON DELETE SET NULL"); } catch {}
+  try { rawDb.exec("ALTER TABLE npd_requests ADD COLUMN gate2_decision_at TEXT"); } catch {}
+
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_gate2_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+        item_key TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'not_started' CHECK(status IN ('not_started','in_progress','ready','blocked','not_applicable')),
+        owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        target_date TEXT,
+        actual_date TEXT,
+        notes TEXT,
+        updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(request_id, item_key)
+      )`
+    );
+    console.log("[sqlite] npd_gate2_items: OK");
+  } catch (e) { console.error("[sqlite] npd_gate2_items table:", e.message); }
+
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_gate2_approvers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        assigned_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        decided_at TEXT,
+        UNIQUE(request_id, user_id)
+      )`
+    );
+    console.log("[sqlite] npd_gate2_approvers: OK");
+  } catch (e) { console.error("[sqlite] npd_gate2_approvers table:", e.message); }
+
+  // Gate 2 — Action Tracker (2026-11-15, same day, REPLACES the 8-item
+  // checklist above as Gate 2). See the matching migration (same names,
+  // same rationale) in config/database/postgres.js, and the big design
+  // comment at the top of backend/src/services/npdGate2.service.js.
+  // npd_gate2_items above is left in place, untouched and no longer read by
+  // anything — not dropped. npd_gate2_approvers above IS reused as-is.
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_gate2_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+        task_code TEXT NOT NULL,
+        title TEXT NOT NULL,
+        owner_name TEXT,
+        department TEXT,
+        status TEXT NOT NULL DEFAULT 'not_started' CHECK(status IN ('not_started','in_progress','on_hold','blocked','completed')),
+        priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low','medium','high','critical')),
+        start_date TEXT,
+        end_date TEXT,
+        progress_percent INTEGER NOT NULL DEFAULT 0 CHECK(progress_percent >= 0 AND progress_percent <= 100),
+        is_milestone INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TEXT,
+        deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        UNIQUE(request_id, task_code)
+      )`
+    );
+    console.log("[sqlite] npd_gate2_tasks: OK");
+  } catch (e) { console.error("[sqlite] npd_gate2_tasks table:", e.message); }
+
+  try {
+    rawDb.exec(
+      `CREATE TABLE IF NOT EXISTS npd_gate2_task_dependencies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER NOT NULL REFERENCES npd_gate2_tasks(id) ON DELETE CASCADE,
+        depends_on_task_id INTEGER NOT NULL REFERENCES npd_gate2_tasks(id) ON DELETE CASCADE,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(task_id, depends_on_task_id),
+        CHECK (task_id <> depends_on_task_id)
+      )`
+    );
+    console.log("[sqlite] npd_gate2_task_dependencies: OK");
+  } catch (e) { console.error("[sqlite] npd_gate2_task_dependencies table:", e.message); }
+
   // Master Calendar email subscription — one admin-configured row (always
   // id=1) controlling an automatic "send the whole calendar as an Excel
   // attachment" digest email. See sltCalendar.service.js. Mirrors the
@@ -2044,6 +2171,14 @@ async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_npd_activity_log_request ON npd_activity_log (request_id);
       CREATE INDEX IF NOT EXISTS idx_npd_request_approvers_request ON npd_request_approvers (request_id);
       CREATE INDEX IF NOT EXISTS idx_npd_request_approvers_user ON npd_request_approvers (user_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_scoring_config_versions_created_at ON npd_scoring_config_versions (created_at);
+      CREATE INDEX IF NOT EXISTS idx_npd_gate2_items_request ON npd_gate2_items (request_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_gate2_approvers_request ON npd_gate2_approvers (request_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_gate2_approvers_user ON npd_gate2_approvers (user_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_requests_gate2_status ON npd_requests (gate2_status);
+      CREATE INDEX IF NOT EXISTS idx_npd_gate2_tasks_request ON npd_gate2_tasks (request_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_gate2_task_deps_task ON npd_gate2_task_dependencies (task_id);
+      CREATE INDEX IF NOT EXISTS idx_npd_gate2_task_deps_depends_on ON npd_gate2_task_dependencies (depends_on_task_id);
     `);
   } catch {}
 

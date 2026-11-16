@@ -75,3 +75,95 @@ export const NPD_CHANNEL_OPTIONS = [
   { value: "Foodservice", label: "Foodservice" },
   { value: "Industrial Sales", label: "Industrial Sales" },
 ];
+
+// Gate 2 — Action Tracker (rebuilt 2026-11-15, same day, from Garima's
+// dedicated Second_Gate_Action_Tracker.xlsx). This REPLACES the earlier
+// fixed 8-item "Launch Gate" checklist (NPD_GATE2_ITEM_DEFS, now removed)
+// with a flexible task/action tracker: any number of tasks per request,
+// each with a free-text owner/department, a status, a priority, dates, a
+// progress percentage, dependencies on other tasks, and a milestone flag.
+// Mirror the status/priority value lists exactly against the backend's
+// GATE2_TASK_STATUSES / GATE2_TASK_PRIORITIES in npdGate2.service.js.
+export const NPD_GATE2_TASK_STATUS_OPTIONS = [
+  { value: "not_started", label: "Not Started" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "on_hold", label: "On Hold" },
+  { value: "blocked", label: "Blocked" },
+  { value: "completed", label: "Completed" },
+];
+
+export function npdGate2TaskStatusBadgeClass(status) {
+  switch (status) {
+    case "completed":
+      return "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200";
+    case "blocked":
+      return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200";
+    case "on_hold":
+      return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200";
+    case "in_progress":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200";
+    default:
+      return "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+  }
+}
+
+export const NPD_GATE2_TASK_PRIORITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "critical", label: "Critical" },
+];
+
+export function npdGate2TaskPriorityBadgeClass(priority) {
+  switch (priority) {
+    case "critical":
+      return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200";
+    case "high":
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200";
+    case "low":
+      return "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+    default:
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+  }
+}
+
+// Gantt-bar coloring by status, used by the mini Gantt view in
+// NpdGate2Panel.jsx — mirrors the source workbook's "Legend" row on its
+// Gantt View tab (Not Started/In Progress/On Hold/Blocked/Completed).
+export function npdGate2TaskBarColor(status) {
+  switch (status) {
+    case "completed":
+      return "#16A34A";
+    case "blocked":
+      return "#DC2626";
+    case "on_hold":
+      return "#D97706";
+    case "in_progress":
+      return "#2563EB";
+    default:
+      return "#94A3B8";
+  }
+}
+
+// The fuller decision vocabulary the workbook's own "Decision" field
+// describes (richer than Gate 1's Approved/Rejected/Hold) — used for the
+// formal Gate 2 sign-off once all 8 items above are Ready/Not Applicable.
+export const NPD_GATE2_DECISION_OPTIONS = [
+  { value: "approved", label: "Approve", className: "bg-emerald-600 text-white hover:opacity-90" },
+  { value: "conditional_approval", label: "Conditional Approval", className: "bg-teal-600 text-white hover:opacity-90" },
+  { value: "rework", label: "Needs Rework", className: "bg-amber-500 text-white hover:opacity-90" },
+  { value: "hold", label: "Hold", className: "border border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300" },
+  { value: "rejected", label: "Reject", className: "border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300" },
+];
+
+export function npdGate2DecisionBadge(status) {
+  const labels = {
+    pending_review: ["Pending Gate 2 review", "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"],
+    approved: ["Gate 2 Approved", "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"],
+    conditional_approval: ["Gate 2 — Conditional Approval", "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300"],
+    rework: ["Gate 2 — Needs Rework", "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"],
+    hold: ["Gate 2 — Hold", "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"],
+    rejected: ["Gate 2 Rejected", "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"],
+  };
+  return labels[status] || ["Not yet submitted for Gate 2", "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300"];
+}

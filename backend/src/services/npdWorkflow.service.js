@@ -298,13 +298,202 @@ async function generateRequestNumber() {
   return `NPD-${year}-${String(next).padStart(4, "0")}`;
 }
 
+// ─── Gate 1 scoring rules (weights / thresholds / priority cutoffs) ────────
+// 2026-11-15, by explicit request: the Gate 1 scoring methodology (the 8
+// metrics' weights, the 4 auto-scored metrics' dollar/kg thresholds, and the
+// Priority 1/2/Review cutoffs — all hardcoded in npdScoring.js) needed to be
+// (1) visible from within the NPD module, (2) editable by anyone with
+// general NPD access (not just admins — that's the literal request: "who so
+// ever are given edit access they should be able to edit those details
+// too"), and (3) changed WITHOUT retroactively altering the score on any
+// request already saved, even if that old request is edited again later.
+//
+// How the "never retroactive" guarantee actually works: npd_scoring_config_
+// versions is append-only — saving new rules always INSERTs a new row, it
+// never updates an existing one, so a past version's numbers can never
+// change under a request that's locked to it. Every npd_requests row stores
+// which version id it was scored with (scoring_config_version_id). A brand
+// new request always uses whatever the CURRENT/latest version is (see
+// createRequest). Editing an EXISTING request re-scores it using THAT
+// REQUEST'S OWN locked version id — never the current/latest one — so
+// editing an old request's inputs after the rules changed still scores it
+// by the rules that were in effect (or last in effect for it) when it was
+// first scored (see updateRequest). A NULL version id means "scored before
+// this feature existed" / "never customized" — that correctly resolves to
+// the original hardcoded defaults with no backfill needed, since those
+// defaults are exactly what every request was scored with before now.
+//
+// No boot-time seed row either (same convention as slt_calendar_subscription
+// elsewhere in this codebase): until someone actually edits the rules,
+// getActiveScoringConfig() just returns npdScoring.DEFAULT_SCORING_CONFIG
+// with isDefault:true and id:null.
+
+// Accepts either an already-parsed object or a JSON string (defensive —
+// db drivers can hand back either depending on column type/dialect).
+function parseConfigJson(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+// Validates a submitted scoring-config payload and returns the clean,
+// normalized object that actually gets persisted. Throws a 400 with a
+// specific, user-facing message on anything invalid — this is the ONLY
+// gate on what can be saved, so it has to be strict: weights must add to
+// 100 (so the weighted score still maxes out at 100 exactly like the source
+// workbook), each metric's 4 thresholds must strictly increase (otherwise
+// "below threshold N" stops meaning anything), and the 3 priority cutoffs
+// must strictly decrease (Priority 1 > Priority 2 > Review) so the tiers
+// stay a well-ordered ladder.
+function validateScoringConfig(input) {
+  const weightKeys = Object.keys(npdScoring.DEFAULT_SCORING_CONFIG.weights);
+  const submittedWeights = input?.weights || {};
+  const weights = {};
+  let weightSum = 0;
+  for (const key of weightKeys) {
+    const n = npdScoring.toFiniteNumber(submittedWeights[key]);
+    if (n === null || n < 0) throw httpError(400, `The weight for "${key}" must be a number of 0 or more.`);
+    weights[key] = n;
+    weightSum += n;
+  }
+  // Rounded to 2dp before comparing so ordinary floating-point noise
+  // (e.g. 14.999999999999998) doesn't falsely reject an exact 100.
+  if (Math.round(weightSum * 100) / 100 !== 100) {
+    throw httpError(400, `The 8 weights must add up to exactly 100 — they currently add up to ${weightSum}.`);
+  }
+
+  function ascendingThresholds(label, arr) {
+    const list = Array.isArray(arr) ? arr.map((x) => npdScoring.toFiniteNumber(x)) : [];
+    if (list.length !== 4 || list.some((x) => x === null)) {
+      throw httpError(400, `${label} needs exactly 4 numeric thresholds.`);
+    }
+    for (let i = 1; i < list.length; i++) {
+      if (!(list[i] > list[i - 1])) throw httpError(400, `${label}'s thresholds must strictly increase (each one bigger than the last).`);
+    }
+    return list;
+  }
+
+  const submittedThresholds = input?.thresholds || {};
+  const volumeThresholds = ascendingThresholds("Annual Volume (kg)", submittedThresholds.volumeThresholds);
+  const revenueThresholds = ascendingThresholds("Annual Revenue ($)", submittedThresholds.revenueThresholds);
+  const gpDollarThresholds = ascendingThresholds("Annual GP$ ($)", submittedThresholds.gpDollarThresholds);
+  const gpPercentThresholds = ascendingThresholds("GP% (as a decimal, e.g. 0.12 for 12%)", submittedThresholds.gpPercentThresholds);
+
+  const submittedCutoffs = input?.priorityCutoffs || {};
+  const priority1 = npdScoring.toFiniteNumber(submittedCutoffs.priority1);
+  const priority2 = npdScoring.toFiniteNumber(submittedCutoffs.priority2);
+  const review = npdScoring.toFiniteNumber(submittedCutoffs.review);
+  if (priority1 === null || priority2 === null || review === null) {
+    throw httpError(400, "The Priority 1 / Priority 2 / Review cutoffs are all required.");
+  }
+  if (!(priority1 > priority2 && priority2 > review)) {
+    throw httpError(400, "The cutoffs must strictly decrease: Priority 1 must be higher than Priority 2, and Priority 2 higher than Review.");
+  }
+
+  return {
+    weights,
+    volumeThresholds,
+    revenueThresholds,
+    gpDollarThresholds,
+    gpPercentThresholds,
+    priorityCutoffs: { priority1, priority2, review },
+  };
+}
+
+// Shapes a npd_scoring_config_versions row (or its absence) into what the
+// frontend/callers actually want: the parsed config object plus display
+// metadata. A missing row (id undefined/null) means "nobody has customized
+// this yet" — resolves to the built-in defaults, matching every request
+// scored before this feature existed.
+function rowToScoringConfig(row) {
+  if (!row || !row.id) {
+    return {
+      id: null,
+      config: npdScoring.DEFAULT_SCORING_CONFIG,
+      note: null,
+      created_by_name: null,
+      created_at: null,
+      isDefault: true,
+    };
+  }
+  return {
+    id: row.id,
+    config: parseConfigJson(row.config_json) || npdScoring.DEFAULT_SCORING_CONFIG,
+    note: row.note || null,
+    created_by_name: row.created_by_name || null,
+    created_at: row.created_at,
+    isDefault: false,
+  };
+}
+
+// The version currently in effect for any BRAND NEW request (the most
+// recently saved row, or the built-in defaults if the rules have never
+// been customized).
+async function getActiveScoringConfig() {
+  const row = await db
+    .prepare(
+      `SELECT scc.*, u.name AS created_by_name FROM npd_scoring_config_versions scc
+       LEFT JOIN users u ON u.id = scc.created_by
+       ORDER BY scc.id DESC LIMIT 1`
+    )
+    .get();
+  return rowToScoringConfig(row);
+}
+
+// A specific locked-in version by id — this is what an EXISTING request's
+// edit path must use (never getActiveScoringConfig) so its score doesn't
+// silently shift just because someone else changed the rules in the
+// meantime. id of null/undefined correctly resolves to the defaults.
+async function getScoringConfigById(id) {
+  if (!id) return rowToScoringConfig(null);
+  const row = await db
+    .prepare(
+      `SELECT scc.*, u.name AS created_by_name FROM npd_scoring_config_versions scc
+       LEFT JOIN users u ON u.id = scc.created_by WHERE scc.id = ?`
+    )
+    .get(id);
+  return rowToScoringConfig(row);
+}
+
+async function listScoringConfigHistory() {
+  const rows = await db
+    .prepare(
+      `SELECT scc.*, u.name AS created_by_name FROM npd_scoring_config_versions scc
+       LEFT JOIN users u ON u.id = scc.created_by ORDER BY scc.id DESC`
+    )
+    .all();
+  return rows.map(rowToScoringConfig);
+}
+
+// Always INSERTs a new immutable version — never updates an existing row.
+// That's what makes the "already-scored requests never silently change"
+// guarantee hold: anything that locked onto an older version id keeps
+// reading that exact row, untouched, forever.
+async function updateScoringConfig({ user, body }) {
+  const validated = validateScoringConfig(body);
+  const note = body?.note ? String(body.note).trim().slice(0, 1000) : null;
+  const now = new Date().toISOString();
+  const result = await db
+    .prepare("INSERT INTO npd_scoring_config_versions (config_json, note, created_by, created_at) VALUES (?, ?, ?, ?)")
+    .run(JSON.stringify(validated), note, user?.id || null, now);
+  return getScoringConfigById(result.lastInsertRowid);
+}
+
 // ─── Gate 1 scorecard ───────────────────────────────────────────────────────
 // Mirrors the source "New Product Launch Scorecard" workbook's Launch
 // Scorecard tab exactly: 4 metrics auto-scored from dollar/kg thresholds, 4
 // scored manually 1-5, blended into one weighted 0-100 score, classified
 // into a priority tier. See npdScoring.js for the actual math.
 
-function buildScorecardFields(source) {
+// `config` is the Gate 1 scoring-rules version to use for this calculation —
+// see createRequest/updateRequest below for which one each path passes in.
+// Omitting it falls back to the original hardcoded defaults, same as before
+// scoring became configurable.
+function buildScorecardFields(source, config = npdScoring.DEFAULT_SCORING_CONFIG) {
   const annual_volume_kg = npdScoring.toFiniteNumber(source?.annual_volume_kg);
   const annual_revenue = npdScoring.toFiniteNumber(source?.annual_revenue);
   const annual_gp_dollars = npdScoring.toFiniteNumber(source?.annual_gp_dollars);
@@ -324,16 +513,19 @@ function buildScorecardFields(source) {
   const key_risks_comments = source?.key_risks_comments ? String(source.key_risks_comments).trim() : null;
   const decision = source?.decision ? String(source.decision).trim() : null;
 
-  const computed = npdScoring.computeScorecard({
-    annualVolumeKg: annual_volume_kg,
-    annualRevenue: annual_revenue,
-    annualGpDollars: annual_gp_dollars,
-    gpPercent: gp_percent,
-    strategicFitScore: strategic_fit_score,
-    customerMarketValueScore: customer_market_value_score,
-    complexityScore: complexity_score,
-    speedToMarketScore: speed_to_market_score,
-  });
+  const computed = npdScoring.computeScorecard(
+    {
+      annualVolumeKg: annual_volume_kg,
+      annualRevenue: annual_revenue,
+      annualGpDollars: annual_gp_dollars,
+      gpPercent: gp_percent,
+      strategicFitScore: strategic_fit_score,
+      customerMarketValueScore: customer_market_value_score,
+      complexityScore: complexity_score,
+      speedToMarketScore: speed_to_market_score,
+    },
+    config
+  );
 
   return {
     annual_volume_kg,
@@ -378,7 +570,12 @@ async function createRequest({ user, body }) {
   if (!identity.customer_name) throw httpError(400, "Customer name is required.");
   if (!identity.product_name) throw httpError(400, "Product name is required.");
 
-  const scorecard = buildScorecardFields(body);
+  // A brand new request always scores against whatever the CURRENT scoring
+  // rules are, and locks its scoring_config_version_id to that version so a
+  // later rule change never silently moves its score (see the big comment
+  // above getActiveScoringConfig for the full rationale).
+  const activeConfig = await getActiveScoringConfig();
+  const scorecard = buildScorecardFields(body, activeConfig.config);
   const requestNumber = await generateRequestNumber();
   const now = new Date().toISOString();
 
@@ -391,8 +588,9 @@ async function createRequest({ user, body }) {
          strategic_fit_score, customer_market_value_score, complexity_score, speed_to_market_score,
          volume_score, revenue_score, gp_dollar_score, gp_percent_score, weighted_score, priority_tier,
          capex_required, customer_commitment, key_strategic_rationale, key_risks_comments, decision,
+         scoring_config_version_id,
          status, current_step, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', 1, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', 1, ?, ?, ?)`
     )
     .run(
       requestNumber,
@@ -422,6 +620,7 @@ async function createRequest({ user, body }) {
       scorecard.key_strategic_rationale,
       scorecard.key_risks_comments,
       scorecard.decision,
+      activeConfig.id,
       user.id,
       now,
       now
@@ -445,7 +644,17 @@ async function updateRequest({ requestId, user, body }) {
   const identity = buildIdentityFields(body);
   if (!identity.customer_name) throw httpError(400, "Customer name is required.");
   if (!identity.product_name) throw httpError(400, "Product name is required.");
-  const scorecard = buildScorecardFields(body);
+
+  // Re-score using THIS REQUEST'S OWN locked scoring rules — never the
+  // current/latest ones. That's what guarantees editing an old request's
+  // numbers never pulls in a rules change made after it was first scored,
+  // even if the request itself gets edited again and again later.
+  // request.scoring_config_version_id is null for requests scored before
+  // this feature existed or while the rules had never been customized —
+  // getScoringConfigById(null) correctly resolves that to the original
+  // hardcoded defaults, which is exactly what scored it the first time.
+  const lockedConfig = await getScoringConfigById(request.scoring_config_version_id);
+  const scorecard = buildScorecardFields(body, lockedConfig.config);
   const now = new Date().toISOString();
 
   await db
@@ -580,6 +789,12 @@ async function addAttachment({ requestId, user, fileName, originalFileName, file
 }
 
 module.exports = {
+  // Exported for npdGate2.service.js to reuse rather than duplicate — same
+  // admin-override convention, same error-shaping helper, same activity-log
+  // writer used everywhere else in this module.
+  httpError,
+  canOverride,
+  logActivity,
   hasNpdAccess,
   listAccessUsers,
   grantAccess,
@@ -594,6 +809,10 @@ module.exports = {
   submitForReview,
   recordDecision,
   listMyPendingDecisions,
+  getActiveScoringConfig,
+  getScoringConfigById,
+  listScoringConfigHistory,
+  updateScoringConfig,
   buildScorecardFields,
   createRequest,
   updateRequest,

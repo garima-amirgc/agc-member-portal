@@ -507,6 +507,16 @@ async function migrateColumns(client) {
     // Master Calendar delegated-edit access (SLT Tracker v2) — see the
     // matching comment in config/database/sqlite.js.
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_edit_delegates TEXT",
+    // 90 Day Commitments delegated-edit access — same mechanism as Master
+    // Calendar's calendar_edit_delegates just above (a nullable JSON array
+    // of other users' ids an admin has granted "edit on behalf of" rights
+    // for), but a SEPARATE column/list: being delegated on someone's
+    // calendar does not imply being delegated on their commitments, or vice
+    // versa — an admin grants each independently on the Manage Users
+    // screen. See adminGrants.js's parseCommitmentEditDelegatesColumn/
+    // sanitizeCommitmentEditDelegatesPayload and cfo.routes.js's
+    // canEditCommitment().
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS commitment_edit_delegates TEXT",
     `CREATE TABLE IF NOT EXISTS polls (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
@@ -1157,6 +1167,126 @@ async function migrateColumns(client) {
     "CREATE INDEX IF NOT EXISTS idx_npd_activity_log_request ON npd_activity_log (request_id)",
     "CREATE INDEX IF NOT EXISTS idx_npd_request_approvers_request ON npd_request_approvers (request_id)",
     "CREATE INDEX IF NOT EXISTS idx_npd_request_approvers_user ON npd_request_approvers (user_id)",
+    // Gate 1 scoring rules (2026-11-15) — the weights/thresholds/priority
+    // cutoffs npdScoring.js used to have hardcoded, now editable by anyone
+    // with NPD access. Append-only: updateScoringConfig() in
+    // npdWorkflow.service.js always INSERTs a new row here, never UPDATEs
+    // an existing one, so a request locked onto an older version's id keeps
+    // reading that exact, unchanged row forever — that's what makes "rule
+    // changes only ever apply going forward" actually hold. config_json is
+    // one JSON blob (weights + the 4 metrics' thresholds + the 3 priority
+    // cutoffs) rather than ~27 separate columns — same "store structured
+    // settings as a JSON TEXT column" convention sltCalendar.service.js
+    // already uses for recipient_emails. No boot-time seed row: see
+    // getActiveScoringConfig(), which returns npdScoring.DEFAULT_SCORING_
+    // CONFIG with isDefault:true until someone actually saves a change.
+    `CREATE TABLE IF NOT EXISTS npd_scoring_config_versions (
+      id SERIAL PRIMARY KEY,
+      config_json TEXT NOT NULL,
+      note TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // Which scoring-rules version a request was (first) scored with. NULL
+    // means "scored before this feature existed" / "rules were never
+    // customized yet" — both correctly resolve to the original hardcoded
+    // defaults, so no backfill is needed for existing rows.
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS scoring_config_version_id INTEGER REFERENCES npd_scoring_config_versions(id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_scoring_config_versions_created_at ON npd_scoring_config_versions (created_at)",
+    // Gate 2 — Launch readiness checklist (2026-11-15). See the big comment
+    // at the top of backend/src/services/npdGate2.service.js for the full
+    // design (8 fixed items from the workbook's "Launch Gate" section,
+    // named per-item ownership, formal sign-off exit reusing npd_slt_users
+    // and a fuller Approve/Conditional Approval/Rework/Hold/Reject
+    // vocabulary than Gate 1's). gate2_status mirrors review_status's
+    // shape (nullable = not submitted yet). Additive/nullable only.
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS gate2_status TEXT CHECK (gate2_status IS NULL OR gate2_status IN ('pending_review','approved','conditional_approval','rework','hold','rejected'))",
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS gate2_submitted_for_review_at TIMESTAMPTZ",
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS gate2_submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS gate2_decision_by INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE npd_requests ADD COLUMN IF NOT EXISTS gate2_decision_at TIMESTAMPTZ",
+    // One row per checklist item per request (8 rows/request once touched —
+    // see ensureGate2ItemsInitialized, which lazily creates them, no
+    // boot-time seed). owner_user_id is who's accountable for THIS item
+    // (see the ownership design note in npdGate2.service.js); NULL means
+    // unassigned and anyone with NPD access can still set its status.
+    `CREATE TABLE IF NOT EXISTS npd_gate2_items (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+      item_key TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'not_started' CHECK (status IN ('not_started','in_progress','ready','blocked','not_applicable')),
+      owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      target_date TEXT,
+      actual_date TEXT,
+      notes TEXT,
+      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(request_id, item_key)
+    )`,
+    // A separate table from npd_request_approvers (Gate 1's own approver
+    // list) rather than extending that table with a "gate" column — avoids
+    // any migration risk to Gate 1's existing live approver data/unique
+    // constraint. Identical shape/semantics to npd_request_approvers:
+    // whoever this request's Gate 2 round was sent to, and whether/when
+    // they decided (any ONE deciding settles it for everyone).
+    `CREATE TABLE IF NOT EXISTS npd_gate2_approvers (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      assigned_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      decided_at TIMESTAMPTZ,
+      UNIQUE(request_id, user_id)
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_npd_gate2_items_request ON npd_gate2_items (request_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_gate2_approvers_request ON npd_gate2_approvers (request_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_gate2_approvers_user ON npd_gate2_approvers (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_requests_gate2_status ON npd_requests (gate2_status)",
+    // Gate 2 — Action Tracker (2026-11-15, same day, REPLACES the 8-item
+    // checklist above as Gate 2). Source: Second_Gate_Action_Tracker.xlsx —
+    // a real flexible task/action tracker with dependencies and a Gantt
+    // view, not a fixed checklist. See the big design comment at the top of
+    // npdGate2.service.js. npd_gate2_items/npd_gate2_items' data above is
+    // left in place, untouched and no longer read by anything — not
+    // dropped, per this app's standing "never destroy data without an
+    // explicit separate yes" rule. npd_gate2_approvers (just above) IS
+    // reused as-is for this version's sign-off; no change needed there.
+    `CREATE TABLE IF NOT EXISTS npd_gate2_tasks (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES npd_requests(id) ON DELETE CASCADE,
+      task_code TEXT NOT NULL,
+      title TEXT NOT NULL,
+      owner_name TEXT,
+      department TEXT,
+      status TEXT NOT NULL DEFAULT 'not_started' CHECK (status IN ('not_started','in_progress','on_hold','blocked','completed')),
+      priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low','medium','high','critical')),
+      start_date TEXT,
+      end_date TEXT,
+      progress_percent INTEGER NOT NULL DEFAULT 0 CHECK (progress_percent >= 0 AND progress_percent <= 100),
+      is_milestone BOOLEAN NOT NULL DEFAULT FALSE,
+      notes TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TIMESTAMPTZ,
+      deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      UNIQUE(request_id, task_code)
+    )`,
+    // One row per "this task depends on that task" edge. A separate edge
+    // table (rather than parsing the workbook's comma-separated Dependency
+    // text) is what lets updateGate2Task's dependency-enforcement query and
+    // setTaskDependencies' cycle guard both be exact.
+    `CREATE TABLE IF NOT EXISTS npd_gate2_task_dependencies (
+      id SERIAL PRIMARY KEY,
+      task_id INTEGER NOT NULL REFERENCES npd_gate2_tasks(id) ON DELETE CASCADE,
+      depends_on_task_id INTEGER NOT NULL REFERENCES npd_gate2_tasks(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(task_id, depends_on_task_id),
+      CHECK (task_id <> depends_on_task_id)
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_npd_gate2_tasks_request ON npd_gate2_tasks (request_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_gate2_task_deps_task ON npd_gate2_task_dependencies (task_id)",
+    "CREATE INDEX IF NOT EXISTS idx_npd_gate2_task_deps_depends_on ON npd_gate2_task_dependencies (depends_on_task_id)",
     // Master Calendar email subscription — one admin-configured row (always
     // id=1) controlling an automatic "send the whole calendar as an Excel
     // attachment" digest email. See sltCalendar.service.js's
