@@ -448,7 +448,21 @@ function useClosePopover(open, onClose, extraRefs) {
       const insideAny = extraRefs.some((r) => r.current && r.current.contains(e.target));
       if (!insideAny) onClose();
     };
-    const onScrollOrResize = () => onClose();
+    // A scroll INSIDE the dropdown's own panel (e.g. a long checkbox list
+    // scrolled with the mouse wheel) also reaches this listener, because
+    // native "scroll" events fire on capturing-phase ancestors even though
+    // they don't bubble — this is a window-level capture listener, so it
+    // sees every descendant's scroll, not just the page's. Without this
+    // guard, trying to scroll the list itself closed the dropdown on the
+    // very first wheel tick instead of actually scrolling it. Only close
+    // for a scroll that happens OUTSIDE the panel/button (e.g. scrolling
+    // the page behind it); a window resize has no useful target to check,
+    // so it still always closes the popover.
+    const onScrollOrResize = (e) => {
+      const insideAny = extraRefs.some((r) => r.current && e?.target && r.current.contains(e.target));
+      if (insideAny) return;
+      onClose();
+    };
     const onKeyDown = (e) => {
       if (e.key === "Escape") onClose();
     };
@@ -1318,7 +1332,14 @@ function ActionRegisterView({ canEdit, items, loading, error, onReload }) {
     setRestoringId(item.id);
     try {
       await api.post(`/cfo/slt/v2/action-items/${item.id}/restore`);
-      await loadArchived();
+      // Bug fix: this only refreshed the archived list (correctly dropping
+      // the restored item from THIS view), but never told the parent to
+      // reload its own, separately-cached `items` list — so a restored item
+      // vanished from the Archived view but never actually reappeared back
+      // on the live board until a full page reload. onReload() (the
+      // parent's own load(), same one confirmArchive/handleCreate/
+      // handleUpdate already call) fixes that.
+      await Promise.all([loadArchived(), onReload()]);
     } catch (e) {
       window.alert(friendlyErrorMessage(e, "Could not restore this action item."));
     } finally {

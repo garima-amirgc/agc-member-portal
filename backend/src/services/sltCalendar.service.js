@@ -171,11 +171,26 @@ function daysBetween(fromIso, toIso) {
   return Math.round(ms / 86400000);
 }
 
+// A human-friendly, sequential ID for the Master Calendar — "just like" the
+// SLT-0001/C90-0001/DEC-0001 style display_id already shown on the Action
+// Tracker, Decisions, and 90 Day Commitments boards (see displayId() in
+// sltActionRegister.service.js / sltCommitmentRegister.service.js /
+// sltDecisionRegister.service.js — same pattern, same padStart(4, "0"),
+// just this module's own "CAL-" prefix). Derived from the row's own numeric
+// `id` (so it's stable and sorts chronologically with creation order), NOT
+// the same thing as `event_id` above — that's a separate internal field
+// used for de-duplication during import/backfill and has nothing to do with
+// what's shown to a person in the UI.
+function displayId(id) {
+  return `CAL-${String(id).padStart(4, "0")}`;
+}
+
 function mapCalendarEvent(row) {
   if (!row) return row;
   const today = todayIso();
   return {
     id: Number(row.id),
+    display_id: displayId(row.id),
     event_id: row.event_id,
     event_date: row.event_date_raw,
     is_text_date_range: !!row.is_text_date_range,

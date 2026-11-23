@@ -337,7 +337,21 @@ function useClosePopover(open, onClose, extraRefs) {
       const insideAny = extraRefs.some((r) => r.current && r.current.contains(e.target));
       if (!insideAny) onClose();
     };
-    const onScrollOrResize = () => onClose();
+    // A scroll INSIDE the dropdown's own panel (e.g. a long checkbox list
+    // scrolled with the mouse wheel) also reaches this listener, because
+    // native "scroll" events fire on capturing-phase ancestors even though
+    // they don't bubble — this is a window-level capture listener, so it
+    // sees every descendant's scroll, not just the page's. Without this
+    // guard, trying to scroll the list itself closed the dropdown on the
+    // very first wheel tick instead of actually scrolling it. Only close
+    // for a scroll that happens OUTSIDE the panel/button (e.g. scrolling
+    // the page behind it); a window resize has no useful target to check,
+    // so it still always closes the popover.
+    const onScrollOrResize = (e) => {
+      const insideAny = extraRefs.some((r) => r.current && e?.target && r.current.contains(e.target));
+      if (insideAny) return;
+      onClose();
+    };
     const onKeyDown = (e) => {
       if (e.key === "Escape") onClose();
     };

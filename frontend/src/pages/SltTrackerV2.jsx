@@ -187,6 +187,7 @@ function fmtEventDate(raw, isTextRange) {
 // format "Import from Excel" expects back — a client-built .xlsx from
 // just these display columns would not round-trip.
 const CALENDAR_EXPORT_COLUMNS = [
+  { key: "display_id", label: "ID" },
   { key: "event_date", label: "Event Date", format: (row) => fmtEventDate(row.event_date, row.is_text_date_range) },
   { key: "event_title", label: "Event" },
   { key: "category", label: "Category" },
@@ -580,6 +581,7 @@ function CalendarEventCard({ event, onEdit, onDelete, expanded, onToggle, highli
       {expanded ? (
         <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
           <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="ID" value={ev.display_id} />
             <DetailField label="Owner / Lead" value={ev.owner_lead} />
             <DetailField label="Executive Action Required" value={ev.executive_action_required} />
             <DetailField label="Created by" value={ev.created_by_name} />
@@ -614,6 +616,7 @@ function calVline(isLast) {
 // (same gray every other untinted column used before this per-column
 // scheme existed) rather than keep chasing it.
 const CAL_HEADER_COL_BG = {
+  id: "bg-slate-200/70 dark:bg-slate-800",
   date: "bg-slate-200/70 dark:bg-slate-800",
   title: "bg-[rgba(11,62,175,0.06)] dark:bg-[rgba(11,62,175,0.18)]",
   category: "bg-slate-100/85 dark:bg-slate-800/70",
@@ -629,6 +632,7 @@ const CAL_HEADER_COL_BG = {
 function calBodyColBg(col, rowIdx) {
   const alt = rowIdx % 2 === 1;
   const map = {
+    id: alt ? "bg-slate-200/45 dark:bg-slate-800/70" : "bg-slate-100/80 dark:bg-slate-800/45",
     date: alt ? "bg-slate-200/45 dark:bg-slate-800/70" : "bg-slate-100/80 dark:bg-slate-800/45",
     title: alt ? "bg-[#eef3fa] dark:bg-[#1e2433]" : "bg-white dark:bg-[#141414]",
     category: alt ? "bg-slate-50 dark:bg-white/[0.03]" : "bg-white dark:bg-transparent",
@@ -675,12 +679,13 @@ function CalendarEventTableRow({ event, rowIdx, onEdit, onDelete, expanded, onTo
         }`}
         onClick={onToggle}
       >
+        <td className={calTdClass("id", rowIdx, "w-[7%] font-mono text-slate-500 dark:text-slate-400")}>{ev.display_id}</td>
         <td className={calTdClass("date", rowIdx, "w-[11%]")}>
           <div className="whitespace-normal break-words font-semibold leading-snug text-slate-800 dark:text-slate-100">
             {fmtEventDate(ev.event_date, ev.is_text_date_range)}
           </div>
         </td>
-        <td className={calTdClass("title", rowIdx, "w-[20%]")}>
+        <td className={calTdClass("title", rowIdx, "w-[17%]")}>
           <div className="whitespace-normal break-words font-semibold leading-snug text-slate-900 dark:text-white">{ev.event_title}</div>
         </td>
         <td className={calTdClass("category", rowIdx, "w-[10%]")}>
@@ -689,11 +694,11 @@ function CalendarEventTableRow({ event, rowIdx, onEdit, onDelete, expanded, onTo
         <td className={calTdClass("executives", rowIdx, "w-[10%]")}>
           <PillGroup text={ev.executives} />
         </td>
-        <td className={calTdClass("owner", rowIdx, "w-[10%] whitespace-normal break-words")}>{ev.owner_lead || "—"}</td>
-        <td className={calTdClass("action", rowIdx, "w-[15%] whitespace-normal break-words")}>
+        <td className={calTdClass("owner", rowIdx, "w-[9%] whitespace-normal break-words")}>{ev.owner_lead || "—"}</td>
+        <td className={calTdClass("action", rowIdx, "w-[13%] whitespace-normal break-words")}>
           {ev.executive_action_required || "—"}
         </td>
-        <td className={calTdClass("createdBy", rowIdx, "w-[10%] whitespace-normal break-words")}>
+        <td className={calTdClass("createdBy", rowIdx, "w-[9%] whitespace-normal break-words")}>
           {ev.created_by_name || "—"}
         </td>
         <td className={calTdClass("actions", rowIdx, "w-[14%]", true)}>
@@ -714,8 +719,9 @@ function CalendarEventTableRow({ event, rowIdx, onEdit, onDelete, expanded, onTo
       </tr>
       {expanded ? (
         <tr className="border-b border-slate-200/80 dark:border-slate-700/50">
-          <td colSpan={8} className={`${calBodyColBg("title", rowIdx)} px-4 py-3`}>
+          <td colSpan={9} className={`${calBodyColBg("title", rowIdx)} px-4 py-3`}>
             <div className="grid gap-3 sm:grid-cols-2">
+              <DetailField label="ID" value={ev.display_id} />
               <DetailField label="Event" value={ev.event_title} />
               <DetailField label="Owner / Lead" value={ev.owner_lead} />
               <DetailField label="Executive Action Required" value={ev.executive_action_required} />
@@ -763,13 +769,14 @@ function CalendarEventList({ events, onEdit, onDelete, expandedIds, onToggle, em
         <table className="w-full table-fixed border-collapse border border-slate-200 text-xs dark:border-slate-600/50">
           <thead className="border-b-2 border-slate-300 dark:border-slate-600">
             <tr>
+              <th className={calThClass("id", "w-[7%]")}>ID</th>
               <th className={calThClass("date", "w-[11%]")}>Event Date</th>
-              <th className={calThClass("title", "w-[20%]")}>Event</th>
+              <th className={calThClass("title", "w-[17%]")}>Event</th>
               <th className={calThClass("category", "w-[10%]")}>Category</th>
               <th className={calThClass("executives", "w-[10%]")}>Executive(s)</th>
-              <th className={calThClass("owner", "w-[10%]")}>Owner / Lead</th>
-              <th className={calThClass("action", "w-[15%]")}>Executive Action Required</th>
-              <th className={calThClass("createdBy", "w-[10%]")}>Created by</th>
+              <th className={calThClass("owner", "w-[9%]")}>Owner / Lead</th>
+              <th className={calThClass("action", "w-[13%]")}>Executive Action Required</th>
+              <th className={calThClass("createdBy", "w-[9%]")}>Created by</th>
               <th className={calThClass("actions", "w-[14%] text-right", true)}>Actions</th>
             </tr>
           </thead>
